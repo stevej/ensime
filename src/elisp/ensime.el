@@ -392,26 +392,23 @@ the binding for `ensime-connection'."
   "Serial number of a connection.
 Bound in the connection's process-buffer.")
 
-(ensime-def-connection-var ensime-lisp-features '()
+(ensime-def-connection-var ensime-server-features '()
   "The symbol-names of Lisp's *FEATURES*.
 This is automatically synchronized from Lisp.")
-
-(ensime-def-connection-var ensime-lisp-modules '()
-  "The strings of Lisp's *MODULES*.")
 
 (ensime-def-connection-var ensime-pid nil
   "The process id of the Lisp process.")
 
-(ensime-def-connection-var ensime-lisp-implementation-type nil
+(ensime-def-connection-var ensime-server-implementation-type nil
   "The implementation type of the Lisp process.")
 
-(ensime-def-connection-var ensime-lisp-implementation-version nil
+(ensime-def-connection-var ensime-server-implementation-version nil
   "The implementation type of the Lisp process.")
 
-(ensime-def-connection-var ensime-lisp-implementation-name nil
+(ensime-def-connection-var ensime-server-implementation-name nil
   "The short name for the Lisp implementation.")
 
-(ensime-def-connection-var ensime-lisp-implementation-program nil
+(ensime-def-connection-var ensime-server-implementation-program nil
   "The argv[0] of the process running the Lisp implementation.")
 
 (ensime-def-connection-var ensime-connection-name nil
@@ -523,6 +520,37 @@ If PROCESS is not specified, `ensime-connection' is used.
     (ensime-eval-async '(swank:connection-info)
 		       (ensime-curry #'ensime-set-connection-info proc))))
 
+
+(defun ensime-set-connection-info (connection info)
+  "Initialize CONNECTION with INFO received from Lisp."
+  (let ((ensime-dispatching-connection connection)
+        (ensime-current-thread t))
+    (destructuring-bind (&key pid style server-implementation machine
+                              features package version modules
+                              &allow-other-keys) info
+      (ensime-check-version version connection)
+      (setf (ensime-pid) pid
+            (ensime-communication-style) style
+            (ensime-server-features) features)
+      (destructuring-bind (&key type name version program) server-implementation
+        (setf (ensime-server-implementation-type) type
+              (ensime-server-implementation-version) version
+              (ensime-server-implementation-name) name
+              (ensime-server-implementation-program) program
+              (ensime-connection-name) (ensime-generate-connection-name name)))
+      (destructuring-bind (&key instance type version) machine
+        (setf (ensime-machine-instance) instance)))
+    (let ((args (when-let (p (ensime-inferior-process))
+                  (ensime-inferior-lisp-args p))))
+      (when-let (name (plist-get args ':name))
+        (unless (string= (ensime-server-implementation-name) name)
+          (setf (ensime-connection-name)
+                (ensime-generate-connection-name (symbol-name name)))))
+      (ensime-load-contribs)
+      (run-hooks 'ensime-connected-hook)
+      (when-let (fun (plist-get args ':init-function))
+        (funcall fun)))
+    (message "Connected. %s" (ensime-random-words-of-encouragement))))
 
 
 ;;; `ensime-rex' is the RPC primitive which is used to implement both
@@ -690,7 +718,7 @@ This idiom is preferred over `lexical-let'."
           ((:emacs-return-string thread tag string)
            (ensime-send `(:emacs-return-string ,thread ,tag ,string)))
           ((:new-features features)
-           (setf (ensime-lisp-features) features))
+           (setf (ensime-server-features) features))
           ((:indentation-update info)
            (ensime-handle-indentation-update info))
           ((:eval-no-wait fun args)
@@ -730,5 +758,33 @@ This idiom is preferred over `lexical-let'."
 (defun ensime-send (sexp)
   "Send SEXP directly over the wire on the current connection."
   (ensime-net-send sexp (ensime-connection)))
+
+
+
+;;; Words of encouragement
+
+(defun ensime-user-first-name ()
+  (let ((name (if (string= (user-full-name) "")
+                  (user-login-name)
+                (user-full-name))))
+    (string-match "^[^ ]*" name)
+    (capitalize (match-string 0 name))))
+
+(defvar ensime-words-of-encouragement
+  `("Let the hacking commence!"
+    "Hacks and glory await!"
+    "Hack and be merry!"
+    "Your hacking starts... NOW!"
+    "May the source be with you!"
+    "Take this REPL, brother, and may it serve you well."
+    "Lemonodor-fame is but a hack away!"
+    ,(format "%s, this could be the start of a beautiful program."
+             (ensime-user-first-name)))
+  "Scientifically-proven optimal words of hackerish encouragement.")
+
+(defun ensime-random-words-of-encouragement ()
+  "Return a string of hackerish encouragement."
+  (eval (nth (random (length ensime-words-of-encouragement))
+             ensime-words-of-encouragement)))
 
 (provide 'ensime)
