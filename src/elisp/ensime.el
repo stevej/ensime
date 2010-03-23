@@ -822,14 +822,14 @@ This idiom is preferred over `lexical-let'."
 (defvar ensime-note-overlays '())
 
 (defun ensime-compilation-finished (result)
-  (save-excursion
-    (ensime-remove-old-overlays)
-    (destructuring-bind (&key notes &allow-other-keys) result
-      (dolist (note notes)
-	(destructuring-bind 
-	    (&key severity msg beg end line col file &allow-other-keys) note
-	  (when-let (buf (get-file-buffer file))
-	    (switch-to-buffer buf)
+  (ensime-remove-old-overlays)
+  (destructuring-bind (&key notes &allow-other-keys) result
+    (dolist (note notes)
+      (destructuring-bind 
+	  (&key severity msg beg end line col file &allow-other-keys) note
+	(when-let (buf (find-buffer-visiting file))
+	  (switch-to-buffer buf)
+	  (save-excursion
 	    (goto-line line)
 	    (let* ((start (point-at-bol))
 		   (stop (point-at-eol))
@@ -842,11 +842,11 @@ This idiom is preferred over `lexical-let'."
 			       start stop msg 'ensime-warnline nil))
 			     )))
 	      (push ov ensime-note-overlays)
-	      ))
-	  )
+	      )))
 	)
       )
-    ))
+    )
+  )
 
 (defface ensime-errline
   '((((class color) (background dark)) (:background "Firebrick4"))
