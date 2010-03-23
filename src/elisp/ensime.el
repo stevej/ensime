@@ -60,6 +60,7 @@
   :group 'ensime-server)
 
 
+(defvar ensime-protocol-version "0.0.1")
 
 (defvar ensime-mode-indirect-map (make-sparse-keymap)
   "Empty keymap which has `ensime-mode-map' as it's parent.
@@ -516,15 +517,13 @@ If PROCESS is not specified, `ensime-connection' is used.
   ;; function may be called from a timer, and if we setup the REPL
   ;; from a timer then it mysteriously uses the wrong keymap for the
   ;; first command.
-  (let ((ensime-current-thread t))
-    (ensime-eval-async '(swank:connection-info)
-		       (ensime-curry #'ensime-set-connection-info proc))))
+  (ensime-eval-async '(swank:connection-info)
+		     (ensime-curry #'ensime-set-connection-info proc)))
 
 
 (defun ensime-set-connection-info (connection info)
   "Initialize CONNECTION with INFO received from Lisp."
-  (let ((ensime-dispatching-connection connection)
-        (ensime-current-thread t))
+  (let ((ensime-dispatching-connection connection))
     (destructuring-bind (&key pid style server-implementation machine
                               features package version modules
                               &allow-other-keys) info
@@ -546,11 +545,40 @@ If PROCESS is not specified, `ensime-connection' is used.
         (unless (string= (ensime-server-implementation-name) name)
           (setf (ensime-connection-name)
                 (ensime-generate-connection-name (symbol-name name)))))
-      (ensime-load-contribs)
+      ;; TODO
+      ;;(ensime-load-contribs)
       (run-hooks 'ensime-connected-hook)
       (when-let (fun (plist-get args ':init-function))
         (funcall fun)))
     (message "Connected. %s" (ensime-random-words-of-encouragement))))
+
+
+(defun ensime-check-version (version conn)
+  (or (equal version ensime-protocol-version)
+      (equal ensime-protocol-version 'ignore)
+      (y-or-n-p 
+       (format "Versions differ: %s (ensime) vs. %s (swank). Continue? "
+               ensime-protocol-version version))
+      (ensime-net-close conn)
+      (top-level)))
+
+(defun ensime-generate-connection-name (server-name)
+  (loop for i from 1
+        for name = server-name then (format "%s<%d>" server-name i)
+        while (find name ensime-net-processes 
+                    :key #'ensime-connection-name :test #'equal)
+        finally (return name)))
+
+(defun ensime-connection-close-hook (process)
+  (when (eq process ensime-default-connection)
+    (when ensime-net-processes
+      (ensime-select-connection (car ensime-net-processes))
+      (message "Default connection closed; switched to #%S (%S)"
+               (ensime-connection-number)
+               (ensime-connection-name)))))
+
+(add-hook 'ensime-net-process-close-hooks 'ensime-connection-close-hook)
+
 
 
 ;;; `ensime-rex' is the RPC primitive which is used to implement both
@@ -559,10 +587,9 @@ If PROCESS is not specified, `ensime-connection' is used.
 
 (defmacro* ensime-rex ((&rest saved-vars)
 		       (sexp &optional 
-			     (package '(ensime-current-package))
-			     (thread 'ensime-current-thread))
+			     (package '(ensime-current-package)))
 		       &rest continuations)
-  "(ensime-rex (VAR ...) (SEXP &optional PACKAGE THREAD) CLAUSES ...)
+  "(ensime-rex (VAR ...) (SEXP &optional PACKAGE) CLAUSES ...)
 
 Remote EXecute SEXP.
 
@@ -588,7 +615,7 @@ versions cannot deal with that."
                                    (symbol (list var var))
                                    (cons var)))
        (ensime-dispatch-event 
-        (list :emacs-rex ,sexp ,package ,thread
+        (list :emacs-rex ,sexp ,package
               (lambda (,result)
                 (destructure-case ,result
                   ,@continuations)))))))
@@ -681,9 +708,9 @@ This idiom is preferred over `lexical-let'."
   (let ((ensime-dispatching-connection (or process (ensime-connection))))
     (or (run-hook-with-args-until-success 'ensime-event-hooks event)
         (destructure-case event
-          ((:emacs-rex form package thread continuation)
+          ((:emacs-rex form package continuation)
            (let ((id (incf (ensime-continuation-counter))))
-             (ensime-send `(:emacs-rex ,form ,package ,thread ,id))
+             (ensime-send `(:emacs-rex ,form ,package ,id))
              (push (cons id continuation) (ensime-rex-continuations))
              (ensime-recompute-modelines)))
           ((:return value id)
@@ -694,6 +721,8 @@ This idiom is preferred over `lexical-let'."
                         (funcall (cdr rec) value))
                    (t
                     (error "Unexpected reply: %S %S" id value)))))
+          ((:compilation-result result)
+           (ensime-compilation-finished result))
           ((:debug-activate thread level &optional select)
            (assert thread)
            (sldb-activate thread level select))
@@ -786,5 +815,75 @@ This idiom is preferred over `lexical-let'."
   "Return a string of hackerish encouragement."
   (eval (nth (random (length ensime-words-of-encouragement))
              ensime-words-of-encouragement)))
+
+
+;; Compiler notes
+
+(defvar ensime-note-overlays '())
+
+(defun ensime-compilation-finished (result)
+  (save-excursion
+    (ensime-remove-old-overlays)
+    (destructuring-bind (&key notes &allow-other-keys) result
+      (dolist (note notes)
+	(destructuring-bind 
+	    (&key severity msg beg end line col file &allow-other-keys) note
+	  (when-let (buf (get-file-buffer file))
+	    (switch-to-buffer buf)
+	    (goto-line line)
+	    (let* ((start (point-at-bol))
+		   (stop (point-at-eol))
+		   (ov (cond ((equal severity 'error)
+			      (ensime-make-overlay
+			       start stop msg 'ensime-errline nil))
+
+			     ((equal severity 'warn)
+			      (ensime-make-overlay
+			       start stop msg 'ensime-warnline nil))
+			     )))
+	      (push ov ensime-note-overlays)
+	      ))
+	  )
+	)
+      )
+    ))
+
+(defface ensime-errline
+  '((((class color) (background dark)) (:background "Firebrick4"))
+    (((class color) (background light)) (:background "LightPink"))
+    (t (:bold t)))
+  "Face used for marking error lines."
+  :group 'ensime-ui)
+
+(defface ensime-warnline
+  '((((class color) (background dark)) (:background "DarkBlue"))
+    (((class color) (background light)) (:background "LightBlue2"))
+    (t (:bold t)))
+  "Face used for marking warning lines."
+  :group 'ensime-ui)
+
+(defun ensime-make-overlay (beg end tooltip-text face mouse-face)
+  "Allocate a ensime overlay in range BEG and END."
+  (let ((ov (make-overlay beg end nil t t)))
+    (overlay-put ov 'face           face)
+    (overlay-put ov 'mouse-face     mouse-face)
+    (overlay-put ov 'help-echo      tooltip-text)
+    (overlay-put ov 'ensime-overlay  t)
+    (overlay-put ov 'priority 100)
+    ov)
+  )
+
+(defun ensime-remove-old-overlays ()
+  "Delete the existing note overlays."
+  (mapc #'delete-overlay ensime-note-overlays)
+  (setq ensime-note-overlays '()))
+
+
+
+;; Test compile current file
+
+(defun ensime-compile-current-file ()
+  (interactive)
+  (ensime-eval-async `(swank:compile-file ,buffer-file-name) #'identity))
 
 (provide 'ensime)
