@@ -570,6 +570,10 @@ If PROCESS is not specified, `ensime-connection' is used.
         finally (return name)))
 
 (defun ensime-connection-close-hook (process)
+
+  ;; TODO should this be per-connection?
+  (ensime-remove-old-overlays)
+
   (when (eq process ensime-default-connection)
     (when ensime-net-processes
       (ensime-select-connection (car ensime-net-processes))
@@ -885,5 +889,16 @@ This idiom is preferred over `lexical-let'."
 (defun ensime-compile-current-file ()
   (interactive)
   (ensime-eval-async `(swank:compile-file ,buffer-file-name) #'identity))
+
+(defun ensime-scope-completion ()
+  (interactive)
+  (ensime-eval-async `(swank:scope-completion ,buffer-file-name ,(point)) #'identity))
+
+(defun ensime-type-completion ()
+  (interactive)
+  (ensime-eval-async `(swank:type-completion ,buffer-file-name ,(point)) #'ensime-type-completion-finished))
+
+(defun ensime-type-completion-finished (result)
+  (message "%S" result))
 
 (provide 'ensime)
