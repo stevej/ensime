@@ -11,6 +11,7 @@
 (require 'hideshow)
 (require 'font-lock)
 (require 'easymenu)
+(require 'ido)
 (eval-when (compile)
   (require 'arc-mode)
   (require 'apropos)
@@ -24,8 +25,6 @@
       (and path (file-name-directory path)))
     "Directory containing the Ensime package.
      This is used to load the supporting Scala server."))
-
-(defvar ensime-protocol-version nil)
 
 
 (defgroup ensime-ui nil
@@ -634,6 +633,41 @@ search for and read an `in-package' form."
   "mmmmmhhhh?")
 
 
+;;; Synchronous requests are implemented in terms of asynchronous
+;;; ones. We make an asynchronous request with a continuation function
+;;; that `throw's its result up to a `catch' and then enter a loop of
+;;; handling I/O until that happens.
+
+(defvar ensime-stack-eval-tags nil
+  "List of stack-tags of continuations waiting on the stack.")
+
+(defun ensime-eval (sexp &optional package)
+  "Evaluate EXPR on the superior Lisp and return the result."
+  (when (null package) (setq package (ensime-current-package)))
+  (let* ((tag (gensym (format "ensime-result-%d-" 
+                              (1+ (ensime-continuation-counter)))))
+	 (ensime-stack-eval-tags (cons tag ensime-stack-eval-tags)))
+    (apply
+     #'funcall 
+     (catch tag
+       (ensime-rex (tag sexp)
+           (sexp package)
+         ((:ok value)
+          (unless (member tag ensime-stack-eval-tags)
+            (error "Reply to canceled synchronous eval request tag=%S sexp=%S"
+                   tag sexp))
+          (throw tag (list #'identity value)))
+         ((:abort)
+          (throw tag (list #'error "Synchronous Lisp Evaluation aborted"))))
+       (let ((debug-on-quit t)
+             (inhibit-quit nil)
+             (conn (ensime-connection)))
+         (while t 
+           (unless (eq (process-status conn) 'open)
+             (error "Lisp connection closed unexpectedly"))
+           (ensime-accept-process-output nil 0.01)))))))
+
+
 (defun ensime-eval-async (sexp &optional cont package)
   "Evaluate EXPR on the superior Lisp and call CONT with the result."
   (ensime-rex (cont (buffer (current-buffer)))
@@ -890,15 +924,80 @@ This idiom is preferred over `lexical-let'."
   (interactive)
   (ensime-eval-async `(swank:compile-file ,buffer-file-name) #'identity))
 
+
+;; Completion
+
 (defun ensime-scope-completion ()
   (interactive)
   (ensime-eval-async `(swank:scope-completion ,buffer-file-name ,(point)) #'identity))
 
-(defun ensime-type-completion ()
+(defun ensime-members-for-type-at-point ()
   (interactive)
-  (ensime-eval-async `(swank:type-completion ,buffer-file-name ,(point)) #'ensime-type-completion-finished))
+  (ensime-eval 
+   `(swank:type-completion ,buffer-file-name ,(point))))
 
-(defun ensime-type-completion-finished (result)
-  (message "%S" result))
+
+(defun ensime-choose-member ()
+  "Complete the symbol at point.  
+   Perform completion more similar to Emacs' complete-symbol."
+  (interactive)
+  (let* ((result (ensime-members-for-type-at-point)))
+    (destructuring-bind (&key members &allow-other-keys) result
+      (if (null members)
+	  (progn (ensime-minibuffer-respecting-message
+		  "Couldn't find any members")
+		 (ding))
+	(let ((choices 
+	       (mapcar 
+		(lambda (m) 
+		  (destructuring-bind (&key name type &allow-other-keys) m
+		    `(,name . ,name)))
+		members)))
+	  (let* ((key (ido-completing-read 
+		       "Members: "
+		       choices 
+		       nil t nil))
+		 (name (cdr (assoc key choices))))
+	    )
+	  )))))
+
+
+(defun ensime-maybe-complete-as-filename ()
+  "If point is at a string starting with \", complete it as filename.
+Return nil if point is not at filename."
+  (if (save-excursion (re-search-backward "\"[^ \t\n]+\\=" nil t))
+      (let ((comint-completion-addsuffix '("/" . "\"")))
+	(comint-replace-by-expanded-filename)
+	t)
+    nil))
+
+
+
+;; Ensime completions UI
+
+(defun ensime-minibuffer-respecting-message (format &rest format-args)
+  "Display TEXT as a message, without hiding any minibuffer contents."
+  (let ((text (format " [%s]" (apply #'format format format-args))))
+    (if (minibuffer-window-active-p (minibuffer-window))
+	(if (fboundp 'temp-minibuffer-message) ;; XEmacs
+	    (temp-minibuffer-message text)
+	  (minibuffer-message text))
+      (message "%s" text))))
+
+
+;; Portability
+
+(defvar ensime-accept-process-output-supports-floats 
+  (ignore-errors (accept-process-output nil 0.0) t))
+
+(defun ensime-accept-process-output (&optional process timeout)
+  "Like `accept-process-output' but the TIMEOUT argument can be a float."
+  (cond (ensime-accept-process-output-supports-floats
+	 (accept-process-output process timeout))
+	(t
+	 (accept-process-output process 
+				(if timeout (truncate timeout))
+				;; Emacs 21 uses microsecs; Emacs 22 millisecs
+				(if timeout (truncate (* timeout 1000000)))))))
 
 (provide 'ensime)
