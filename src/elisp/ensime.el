@@ -94,6 +94,202 @@ information."
   "Ensime")
 
 
+
+;; Startup
+
+(defun ensime ()
+  "Start an inferior ENSIME server and connect to its Swank server."
+  (interactive)
+  (let* ((config (ensime-load-config))
+	 (cmd (plist-get config :server-cmd))
+	 (env (plist-get config :server-env))
+	 (dir (plist-get config :server-root))
+	 (buffer "*inferior-ensime-server*")
+
+	 ;;Project-specific..
+	 (root-dir (plist-get config :root-dir))
+	 (src-dir (plist-get config :source-dir))
+	 (classpath (mapconcat
+		     'identity
+		     (plist-get config :classpath) ":"))
+
+	 (args (list (ensime-swank-port-file) root-dir src-dir classpath)))
+
+    (ensime-delete-swank-port-file 'quiet)
+    (let ((proc (ensime-maybe-start-server cmd args env dir buffer)))
+      (ensime-inferior-connect config proc))))
+
+
+(defun ensime-maybe-start-server (program program-args env directory buffer)
+  "Return a new or existing inferior server process."
+  (cond ((not (comint-check-proc buffer))
+         (ensime-start-server program program-args env directory buffer))
+        ((ensime-reinitialize-inferior-server-p program program-args env buffer)
+         (when-let (conn (find (get-buffer-process buffer) ensime-net-processes 
+                               :key #'ensime-inferior-process))
+           (ensime-net-close conn))
+         (get-buffer-process buffer))
+        (t (ensime-start-server program program-args env directory
+				(generate-new-buffer-name buffer)))))
+
+
+(defun ensime-reinitialize-inferior-server-p (program program-args env buffer)
+  (let ((args (ensime-inferior-server-args (get-buffer-process buffer))))
+    (and (equal (plist-get args :program) program)
+         (equal (plist-get args :program-args) program-args)
+         (equal (plist-get args :env) env)
+         (not (y-or-n-p "Create an additional *inferior-server*? ")))))
+
+
+(defvar ensime-inferior-process-start-hook nil
+  "Hook called whenever a new process gets started.")
+
+(defun ensime-start-server (program program-args env directory buffer)
+  "Does the same as `inferior-server' but less ugly.
+   Return the created process."
+  (with-current-buffer (get-buffer-create buffer)
+    (when directory
+      (cd (expand-file-name directory)))
+    (comint-mode)
+    (let ((process-environment (append env process-environment))
+          (process-connection-type nil))
+      (comint-exec (current-buffer) "inferior-ensime-server" program nil program-args))
+    (let ((proc (get-buffer-process (current-buffer))))
+      (ensime-set-query-on-exit-flag proc)
+      (run-hooks 'ensime-inferior-process-start-hook)
+      proc)))
+
+(defvar ensime-inferior-server-args nil
+  "A buffer local variable in the inferior proccess.
+See `slime-start'.")
+
+(defun ensime-inferior-server-args (process)
+  "Return the initial process arguments.
+   See `slime-start'."
+  (with-current-buffer (process-buffer process)
+    ensime-inferior-server-args))
+
+(defun ensime-inferior-connect (config process)
+  "Start a Swank server in the inferior Server and connect."
+  (ensime-read-port-and-connect config process nil))
+
+(defun ensime-load-config ()
+  "Load and parse the project config file."
+  (let* ((file (read-file-name "ENSIME Project file: "))
+
+	 ;; Infer the project root from the project file..
+	 (dir (expand-file-name (file-name-directory file))))
+
+    (save-excursion
+      (condition-case error
+	  (let ((config
+		 (let ((buf (find-file-read-only file ".ensime"))
+		       (src (buffer-substring-no-properties 
+			     (point-min) (point-max))))
+		   (kill-buffer buf)
+		   (read src))))
+	    (plist-put config :root-dir dir))
+	(error
+	 '())))
+    ))
+
+(defun ensime-swank-port-file ()
+  "Filename where the SWANK server writes its TCP port number."
+  (concat (file-name-as-directory (ensime-temp-directory))
+	  (format "ensime_port.%S" (emacs-pid))))
+
+(defun ensime-read-swank-port ()
+  "Read the Swank server port number from the `ensime-swank-port-file'."
+  (save-excursion
+    (with-temp-buffer
+      (insert-file-contents (ensime-swank-port-file))
+      (goto-char (point-min))
+      (let ((port (read (current-buffer))))
+	(assert (integerp port))
+	port))))
+
+(defun ensime-temp-directory ()
+  (cond ((fboundp 'temp-directory) (temp-directory))
+	((boundp 'temporary-file-directory) temporary-file-directory)
+	(t "/tmp/")))
+
+(defun ensime-delete-swank-port-file (&optional quiet)
+  (condition-case data
+      (delete-file (ensime-swank-port-file))
+    (error
+     (ecase quiet
+       ((nil) (signal (car data) (cdr data)))
+       (quiet)
+       (message (message "Unable to delete swank port file %S"
+			 (ensime-swank-port-file)))))))
+
+(defun ensime-read-port-and-connect (config inferior-process retries)
+  (ensime-cancel-connect-retry-timer)
+  (ensime-attempt-connection config inferior-process retries 1))
+
+
+(defun ensime-attempt-connection (config process retries attempt)
+  ;; A small one-state machine to attempt a connection with
+  ;; timer-based retries.
+  (let ((host (or (plist-get config :server-host) ensime-server-host))
+	(port-file (ensime-swank-port-file)))
+    (unless (active-minibuffer-window)
+      (message "Polling %S.. (Abort with `M-x ensime-abort-connection'.)" port-file))
+    (cond ((and (file-exists-p port-file)
+		(> (nth 7 (file-attributes port-file)) 0)) ; file size
+	   (ensime-cancel-connect-retry-timer)
+	   (let ((port (ensime-read-swank-port))
+		 (args (ensime-inferior-server-args process)))
+	     (ensime-delete-swank-port-file 'message)
+	     (let ((c (ensime-connect host port)))
+	       (ensime-set-inferior-process c process))))
+	  ((and retries (zerop retries))
+	   (ensime-cancel-connect-retry-timer)
+	   (message "Gave up connecting to Swank after %d attempts." attempt))
+	  ((eq (process-status process) 'exit)
+	   (ensime-cancel-connect-retry-timer)
+	   (message "Failed to connect to Swank: inferior process exited."))
+	  (t
+	   (when (and (file-exists-p port-file) 
+		      (zerop (nth 7 (file-attributes port-file))))
+	     (message "(Zero length port file)")
+	     ;; the file may be in the filesystem but not yet written
+	     (unless retries (setq retries 3)))
+	   (unless ensime-connect-retry-timer
+	     (setq ensime-connect-retry-timer
+		   (run-with-timer
+		    0.3 0.3
+		    #'ensime-timer-call #'ensime-attempt-connection 
+		    config process (and retries (1- retries)) 
+		    (1+ attempt))))))))
+
+(defvar ensime-connect-retry-timer nil
+  "Timer object while waiting for the inferior server to start.")
+
+(defun ensime-timer-call (fun &rest args)
+  "Call function FUN with ARGS, reporting all errors.
+
+The default condition handler for timer functions (see
+`timer-event-handler') ignores errors."
+  (condition-case data
+      (apply fun args)
+    (error (debug nil (list "Error in timer" fun args data)))))
+
+(defun ensime-cancel-connect-retry-timer ()
+  (when ensime-connect-retry-timer
+    (cancel-timer ensime-connect-retry-timer)
+    (setq ensime-connect-retry-timer nil)))
+
+(defun ensime-abort-connection ()
+  "Abort connection the current connection attempt."
+  (interactive)
+  (cond (ensime-connect-retry-timer
+	 (ensime-cancel-connect-retry-timer)
+	 (message "Cancelled connection attempt."))
+	(t (error "Not connecting"))))
+
+
+
 ;;;; Framework'ey bits
 ;;;
 ;;; This section contains some standard ENSIME idioms: basic macros,
@@ -126,11 +322,11 @@ corresponding values in the CDR of VALUE."
 	    (,operands (cdr ,tmp)))
        (case ,operator
 	 ,@(mapcar (lambda (clause)
-                     (if (eq (car clause) t)
-                         `(t ,@(cdr clause))
-                       (destructuring-bind ((op &rest rands) &rest body) clause
-                         `(,op (destructuring-bind ,rands ,operands
-                                 . ,body)))))
+		     (if (eq (car clause) t)
+			 `(t ,@(cdr clause))
+		       (destructuring-bind ((op &rest rands) &rest body) clause
+			 `(,op (destructuring-bind ,rands ,operands
+				 . ,body)))))
 		   patterns)
 	 ,@(if (eq (caar (last patterns)) t)
 	       '()
@@ -171,8 +367,8 @@ The functions are called with the process as their argument.")
 (defun ensime-net-connect (host port)
   "Establish a connection with a CL."
   (let* ((inhibit-quit nil)
-         (proc (open-network-stream "ENSIME Scala" nil host port))
-         (buffer (ensime-make-net-buffer " *ensime-connection*")))
+	 (proc (open-network-stream "ENSIME Scala" nil host port))
+	 (buffer (ensime-make-net-buffer " *ensime-connection*")))
     (push proc ensime-net-processes)
     (set-process-buffer proc buffer)
     (set-process-filter proc 'ensime-net-filter)
@@ -189,8 +385,8 @@ The functions are called with the process as their argument.")
   (when ensime-kill-without-query-p
     ;; avoid byte-compiler warnings
     (let ((fun (if (fboundp 'set-process-query-on-exit-flag)
-                   'set-process-query-on-exit-flag
-                 'process-kill-without-query)))
+		   'set-process-query-on-exit-flag
+		 'process-kill-without-query)))
       (funcall fun process nil))))
 
 (defun ensime-make-net-buffer (name)
@@ -206,8 +402,8 @@ The functions are called with the process as their argument.")
    This is the lowest level of communication. The sexp will be read and interpreted
    by the Ensime Server."
   (let* ((msg (concat (ensime-prin1-to-string sexp) "\n"))
-         (string (concat (ensime-net-encode-length (length msg)) msg))
-         (coding-system (cdr (process-coding-system proc))))
+	 (string (concat (ensime-net-encode-length (length msg)) msg))
+	 (coding-system (cdr (process-coding-system proc))))
     (ensime-log-event sexp)
     (process-send-string proc string)))
 
@@ -216,13 +412,13 @@ The functions are called with the process as their argument.")
   (when (eq process ensime-default-connection)
     (setq ensime-default-connection nil))
   (cond (debug         
-         (set-process-sentinel process 'ignore)
-         (set-process-filter process 'ignore)
-         (delete-process process))
-        (t
-         (run-hook-with-args 'ensime-net-process-close-hooks process)
-         ;; killing the buffer also closes the socket
-         (kill-buffer (process-buffer process)))))
+	 (set-process-sentinel process 'ignore)
+	 (set-process-filter process 'ignore)
+	 (delete-process process))
+	(t
+	 (run-hook-with-args 'ensime-net-process-close-hooks process)
+	 ;; killing the buffer also closes the socket
+	 (kill-buffer (process-buffer process)))))
 
 (defun ensime-net-sentinel (process message)
   (message "Server connection closed unexpectedly: %s" message)
@@ -243,14 +439,14 @@ The functions are called with the process as their argument.")
   (with-current-buffer (process-buffer process)
     (while (ensime-net-have-input-p)
       (let ((event (ensime-net-read-or-lose process))
-            (ok nil))
-        (ensime-log-event event)
-        (unwind-protect
-            (save-current-buffer
-              (ensime-dispatch-event event process)
-              (setq ok t))
-          (unless ok
-            (ensime-run-when-idle 'ensime-process-available-input process)))))))
+	    (ok nil))
+	(ensime-log-event event)
+	(unwind-protect
+	    (save-current-buffer
+	      (ensime-dispatch-event event process)
+	      (setq ok t))
+	  (unless ok
+	    (ensime-run-when-idle 'ensime-process-available-input process)))))))
 
 (defun ensime-net-have-input-p ()
   "Return true if a complete message is available."
@@ -261,8 +457,8 @@ The functions are called with the process as their argument.")
 (defun ensime-run-when-idle (function &rest args)
   "Call FUNCTION as soon as Emacs is idle."
   (apply #'run-at-time 
-         (if (featurep 'xemacs) itimer-short-interval 0) 
-         nil function args))
+	 (if (featurep 'xemacs) itimer-short-interval 0) 
+	 nil function args))
 
 (defun ensime-net-read-or-lose (process)
   (condition-case error
@@ -276,12 +472,12 @@ The functions are called with the process as their argument.")
   "Read a message from the network buffer."
   (goto-char (point-min))
   (let* ((length (ensime-net-decode-length))
-         (start (+ 6 (point)))
-         (end (+ start length)))
+	 (start (+ 6 (point)))
+	 (end (+ start length)))
     (assert (plusp length))
     (prog1 (save-restriction
-             (narrow-to-region start end)
-             (read (current-buffer)))
+	     (narrow-to-region start end)
+	     (read (current-buffer)))
       (delete-region (point-min) end))))
 
 (defun ensime-net-decode-length ()
@@ -297,9 +493,9 @@ The functions are called with the process as their argument.")
 This is more compatible with the CL reader."
   (with-temp-buffer
     (let (print-escape-nonascii
-          print-escape-newlines
-          print-length 
-          print-level)
+	  print-escape-newlines
+	  print-length 
+	  print-level)
       (prin1 sexp (current-buffer))
       (buffer-string))))
 
@@ -326,15 +522,15 @@ This is more compatible with the CL reader."
     (with-current-buffer (ensime-events-buffer)
       ;; trim?
       (when (> (buffer-size) 100000)
-        (goto-char (/ (buffer-size) 2))
-        (re-search-forward "^(" nil t)
-        (delete-region (point-min) (point)))
+	(goto-char (/ (buffer-size) 2))
+	(re-search-forward "^(" nil t)
+	(delete-region (point-min) (point)))
       (goto-char (point-max))
       (save-excursion
-        (ensime-pprint-event event (current-buffer)))
+	(ensime-pprint-event event (current-buffer)))
       (when (and (boundp 'outline-minor-mode)
-                 outline-minor-mode)
-        (hide-entry))
+		 outline-minor-mode)
+	(hide-entry))
       (goto-char (point-max)))))
 
 (defun ensime-pprint-event (event buffer)
@@ -348,14 +544,14 @@ This is more compatible with the CL reader."
   "Return or create the event log buffer."
   (or (get-buffer ensime-event-buffer-name)
       (let ((buffer (get-buffer-create ensime-event-buffer-name)))
-        (with-current-buffer buffer
-          (buffer-disable-undo)
-          (set (make-local-variable 'outline-regexp) "^(")
-          (set (make-local-variable 'comment-start) ";")
-          (set (make-local-variable 'comment-end) "")
-          (when ensime-outline-mode-in-events-buffer
-            (outline-minor-mode)))
-        buffer)))
+	(with-current-buffer buffer
+	  (buffer-disable-undo)
+	  (set (make-local-variable 'outline-regexp) "^(")
+	  (set (make-local-variable 'comment-start) ";")
+	  (set (make-local-variable 'comment-end) "")
+	  (when ensime-outline-mode-in-events-buffer
+	    (outline-minor-mode)))
+	buffer)))
 
 
 
@@ -374,13 +570,13 @@ the binding for `ensime-connection'."
     `(progn
        ;; Variable
        (make-variable-buffer-local
-        (defvar ,real-var ,@initial-value-and-doc))
+	(defvar ,real-var ,@initial-value-and-doc))
        ;; Accessor
        (defun ,varname (&optional process)
-         (ensime-with-connection-buffer (process) ,real-var))
+	 (ensime-with-connection-buffer (process) ,real-var))
        ;; Setf
        (defsetf ,varname (&optional process) (store)
-         `(ensime-with-connection-buffer (,process)
+	 `(ensime-with-connection-buffer (,process)
 					 (setq (\, (quote (\, real-var))) (\, store))
 					 (\, store)))
        '(\, varname))))
@@ -457,14 +653,14 @@ Return nil if there's no connection."
    Signal an error if there's no connection."
   (let ((conn (ensime-current-connection)))
     (cond ((and (not conn) ensime-net-processes)
-           (or (ensime-auto-select-connection)
-               (error "No default connection selected.")))
-          ((not conn)
-           (or (ensime-auto-connect)
-               (error "Not connected.")))
-          ((not (eq (process-status conn) 'open))
-           (error "Connection closed."))
-          (t conn))))
+	   (or (ensime-auto-select-connection)
+	       (error "No default connection selected.")))
+	  ((not conn)
+	   (or (ensime-auto-connect)
+	       (error "Not connected.")))
+	  ((not (eq (process-status conn) 'open))
+	   (error "Connection closed."))
+	  (t conn))))
 
 (defun ensime-setup-connection (process)
   "Make a connection out of PROCESS."
@@ -484,22 +680,22 @@ If PROCESS is not specified, `ensime-connection' is used.
 \(fn (&optional PROCESS) &body BODY))"
   `(with-current-buffer
        (process-buffer (or ,process (ensime-connection)
-                           (error "No connection")))
+			   (error "No connection")))
      ,@body))
 
 (defun ensime-connect (host port)
   "Connect to a running Swank server. Return the connection."
   (interactive (list (read-from-minibuffer "Host: " ensime-server-host)
-                     (read-from-minibuffer "Port: " (format "%d" ensime-port)
-                                           nil t)))
+		     (read-from-minibuffer "Port: " (format "%d" ensime-port)
+					   nil t)))
   (when (and (interactive-p) ensime-net-processes
-             (y-or-n-p "Close old connections first? "))
+	     (y-or-n-p "Close old connections first? "))
     (ensime-disconnect-all))
   (message "Connecting to Swank on port %S.." port)
   (let ()
     (message "Connecting to Swank on port %S.." port)
     (let* ((process (ensime-net-connect host port))
-           (ensime-dispatching-connection process))
+	   (ensime-dispatching-connection process))
       (ensime-setup-connection process))))
 
 
@@ -524,31 +720,31 @@ If PROCESS is not specified, `ensime-connection' is used.
   "Initialize CONNECTION with INFO received from Lisp."
   (let ((ensime-dispatching-connection connection))
     (destructuring-bind (&key pid style server-implementation machine
-                              features package version modules
-                              &allow-other-keys) info
+			      features package version modules
+			      &allow-other-keys) info
       (ensime-check-version version connection)
       (setf (ensime-pid) pid
-            (ensime-communication-style) style
-            (ensime-server-features) features)
+	    (ensime-communication-style) style
+	    (ensime-server-features) features)
       (destructuring-bind (&key type name version program) server-implementation
-        (setf (ensime-server-implementation-type) type
-              (ensime-server-implementation-version) version
-              (ensime-server-implementation-name) name
-              (ensime-server-implementation-program) program
-              (ensime-connection-name) (ensime-generate-connection-name name)))
+	(setf (ensime-server-implementation-type) type
+	      (ensime-server-implementation-version) version
+	      (ensime-server-implementation-name) name
+	      (ensime-server-implementation-program) program
+	      (ensime-connection-name) (ensime-generate-connection-name name)))
       (destructuring-bind (&key instance type version) machine
-        (setf (ensime-machine-instance) instance)))
+	(setf (ensime-machine-instance) instance)))
     (let ((args (when-let (p (ensime-inferior-process))
-                  (ensime-inferior-lisp-args p))))
+		  (ensime-inferior-server-args p))))
       (when-let (name (plist-get args ':name))
-        (unless (string= (ensime-server-implementation-name) name)
-          (setf (ensime-connection-name)
-                (ensime-generate-connection-name (symbol-name name)))))
+	(unless (string= (ensime-server-implementation-name) name)
+	  (setf (ensime-connection-name)
+		(ensime-generate-connection-name (symbol-name name)))))
       ;; TODO
       ;;(ensime-load-contribs)
       (run-hooks 'ensime-connected-hook)
       (when-let (fun (plist-get args ':init-function))
-        (funcall fun)))
+	(funcall fun)))
     (message "Connected. %s" (ensime-random-words-of-encouragement))))
 
 
@@ -557,16 +753,16 @@ If PROCESS is not specified, `ensime-connection' is used.
       (equal ensime-protocol-version 'ignore)
       (y-or-n-p 
        (format "Versions differ: %s (ensime) vs. %s (swank). Continue? "
-               ensime-protocol-version version))
+	       ensime-protocol-version version))
       (ensime-net-close conn)
       (top-level)))
 
 (defun ensime-generate-connection-name (server-name)
   (loop for i from 1
-        for name = server-name then (format "%s<%d>" server-name i)
-        while (find name ensime-net-processes 
-                    :key #'ensime-connection-name :test #'equal)
-        finally (return name)))
+	for name = server-name then (format "%s<%d>" server-name i)
+	while (find name ensime-net-processes 
+		    :key #'ensime-connection-name :test #'equal)
+	finally (return name)))
 
 (defun ensime-connection-close-hook (process)
 
@@ -577,8 +773,8 @@ If PROCESS is not specified, `ensime-connection' is used.
     (when ensime-net-processes
       (ensime-select-connection (car ensime-net-processes))
       (message "Default connection closed; switched to #%S (%S)"
-               (ensime-connection-number)
-               (ensime-connection-name)))))
+	       (ensime-connection-number)
+	       (ensime-connection-name)))))
 
 (add-hook 'ensime-net-process-close-hooks 'ensime-connection-close-hook)
 
@@ -614,14 +810,14 @@ Note: don't use backquote syntax for SEXP, because various Emacs
 versions cannot deal with that."
   (let ((result (gensym)))
     `(lexical-let ,(loop for var in saved-vars
-                         collect (etypecase var
-                                   (symbol (list var var))
-                                   (cons var)))
+			 collect (etypecase var
+				   (symbol (list var var))
+				   (cons var)))
        (ensime-dispatch-event 
-        (list :emacs-rex ,sexp ,package
-              (lambda (,result)
-                (destructure-case ,result
-                  ,@continuations)))))))
+	(list :emacs-rex ,sexp ,package
+	      (lambda (,result)
+		(destructure-case ,result
+		  ,@continuations)))))))
 
 (put 'ensime-rex 'lisp-indent-function 2)
 
@@ -645,27 +841,27 @@ search for and read an `in-package' form."
   "Evaluate EXPR on the superior Lisp and return the result."
   (when (null package) (setq package (ensime-current-package)))
   (let* ((tag (gensym (format "ensime-result-%d-" 
-                              (1+ (ensime-continuation-counter)))))
+			      (1+ (ensime-continuation-counter)))))
 	 (ensime-stack-eval-tags (cons tag ensime-stack-eval-tags)))
     (apply
      #'funcall 
      (catch tag
        (ensime-rex (tag sexp)
-           (sexp package)
-         ((:ok value)
-          (unless (member tag ensime-stack-eval-tags)
-            (error "Reply to canceled synchronous eval request tag=%S sexp=%S"
-                   tag sexp))
-          (throw tag (list #'identity value)))
-         ((:abort)
-          (throw tag (list #'error "Synchronous Lisp Evaluation aborted"))))
+	   (sexp package)
+	 ((:ok value)
+	  (unless (member tag ensime-stack-eval-tags)
+	    (error "Reply to canceled synchronous eval request tag=%S sexp=%S"
+		   tag sexp))
+	  (throw tag (list #'identity value)))
+	 ((:abort)
+	  (throw tag (list #'error "Synchronous Lisp Evaluation aborted"))))
        (let ((debug-on-quit t)
-             (inhibit-quit nil)
-             (conn (ensime-connection)))
-         (while t 
-           (unless (eq (process-status conn) 'open)
-             (error "Lisp connection closed unexpectedly"))
-           (ensime-accept-process-output nil 0.01)))))))
+	     (inhibit-quit nil)
+	     (conn (ensime-connection)))
+	 (while t 
+	   (unless (eq (process-status conn) 'open)
+	     (error "Lisp connection closed unexpectedly"))
+	   (ensime-accept-process-output nil 0.01)))))))
 
 
 (defun ensime-eval-async (sexp &optional cont package)
@@ -707,8 +903,12 @@ search for and read an `in-package' form."
 Return nil if there's no process object for the connection."
   (let ((proc (ensime-inferior-process connection)))
     (if (and proc 
-             (memq (process-status proc) '(run stop)))
-        proc)))
+	     (memq (process-status proc) '(run stop)))
+	proc)))
+
+;; Non-macro version to keep the file byte-compilable. 
+(defun ensime-set-inferior-process (connection process)
+  (setf (ensime-inferior-process connection) process))
 
 
 ;; Commonly used functions
@@ -745,82 +945,82 @@ This idiom is preferred over `lexical-let'."
 (defun ensime-dispatch-event (event &optional process)
   (let ((ensime-dispatching-connection (or process (ensime-connection))))
     (or (run-hook-with-args-until-success 'ensime-event-hooks event)
-        (destructure-case event
-          ((:emacs-rex form package continuation)
-           (let ((id (incf (ensime-continuation-counter))))
-             (ensime-send `(:emacs-rex ,form ,package ,id))
-             (push (cons id continuation) (ensime-rex-continuations))
-             (ensime-recompute-modelines)))
-          ((:return value id)
-           (let ((rec (assq id (ensime-rex-continuations))))
-             (cond (rec (setf (ensime-rex-continuations)
-                              (remove rec (ensime-rex-continuations)))
-                        (ensime-recompute-modelines)
-                        (funcall (cdr rec) value))
-                   (t
-                    (error "Unexpected reply: %S %S" id value)))))
-          ((:compilation-result result)
-           (ensime-compilation-finished result))
-          ((:debug-activate thread level &optional select)
-           (assert thread)
-           (sldb-activate thread level select))
-          ((:debug thread level condition restarts frames conts)
-           (assert thread)
-           (sldb-setup thread level condition restarts frames conts))
-          ((:debug-return thread level stepping)
-           (assert thread)
-           (sldb-exit thread level stepping))
-          ((:emacs-interrupt thread)
-           (ensime-send `(:emacs-interrupt ,thread)))
-          ((:channel-send id msg)
-           (ensime-channel-send (or (ensime-find-channel id)
+	(destructure-case event
+	  ((:emacs-rex form package continuation)
+	   (let ((id (incf (ensime-continuation-counter))))
+	     (ensime-send `(:emacs-rex ,form ,package ,id))
+	     (push (cons id continuation) (ensime-rex-continuations))
+	     (ensime-recompute-modelines)))
+	  ((:return value id)
+	   (let ((rec (assq id (ensime-rex-continuations))))
+	     (cond (rec (setf (ensime-rex-continuations)
+			      (remove rec (ensime-rex-continuations)))
+			(ensime-recompute-modelines)
+			(funcall (cdr rec) value))
+		   (t
+		    (error "Unexpected reply: %S %S" id value)))))
+	  ((:compilation-result result)
+	   (ensime-compilation-finished result))
+	  ((:debug-activate thread level &optional select)
+	   (assert thread)
+	   (sldb-activate thread level select))
+	  ((:debug thread level condition restarts frames conts)
+	   (assert thread)
+	   (sldb-setup thread level condition restarts frames conts))
+	  ((:debug-return thread level stepping)
+	   (assert thread)
+	   (sldb-exit thread level stepping))
+	  ((:emacs-interrupt thread)
+	   (ensime-send `(:emacs-interrupt ,thread)))
+	  ((:channel-send id msg)
+	   (ensime-channel-send (or (ensime-find-channel id)
 				    (error "Invalid channel id: %S %S" id msg))
 				msg))
-          ((:emacs-channel-send id msg)
-           (ensime-send `(:emacs-channel-send ,id ,msg)))
-          ((:read-from-minibuffer thread tag prompt initial-value)
-           (ensime-read-from-minibuffer-for-swank thread tag prompt initial-value))
-          ((:y-or-n-p thread tag question)
-           (ensime-y-or-n-p thread tag question))
-          ((:emacs-return-string thread tag string)
-           (ensime-send `(:emacs-return-string ,thread ,tag ,string)))
-          ((:new-features features)
-           (setf (ensime-server-features) features))
-          ((:indentation-update info)
-           (ensime-handle-indentation-update info))
-          ((:eval-no-wait fun args)
-           (apply (intern fun) args))
-          ((:eval thread tag form-string)
-           (ensime-check-eval-in-emacs-enabled)
-           (ensime-eval-for-lisp thread tag form-string))
-          ((:emacs-return thread tag value)
-           (ensime-send `(:emacs-return ,thread ,tag ,value)))
-          ((:ed what)
-           (ensime-ed what))
-          ((:inspect what wait-thread wait-tag)
-           (let ((hook (when (and wait-thread wait-tag)
-                         (lexical-let ((thread wait-thread)
-                                       (tag wait-tag))
-                           (lambda ()
-                             (ensime-send `(:emacs-return ,thread ,tag nil)))))))
-             (ensime-open-inspector what nil hook)))
-          ((:background-message message)
-           (ensime-background-message "%s" message))
-          ((:debug-condition thread message)
-           (assert thread)
-           (message "%s" message))
-          ((:ping thread tag)
-           (ensime-send `(:emacs-pong ,thread ,tag)))
-          ((:reader-error packet condition)
-           (ensime-with-popup-buffer ("*Ensime Error*")
+	  ((:emacs-channel-send id msg)
+	   (ensime-send `(:emacs-channel-send ,id ,msg)))
+	  ((:read-from-minibuffer thread tag prompt initial-value)
+	   (ensime-read-from-minibuffer-for-swank thread tag prompt initial-value))
+	  ((:y-or-n-p thread tag question)
+	   (ensime-y-or-n-p thread tag question))
+	  ((:emacs-return-string thread tag string)
+	   (ensime-send `(:emacs-return-string ,thread ,tag ,string)))
+	  ((:new-features features)
+	   (setf (ensime-server-features) features))
+	  ((:indentation-update info)
+	   (ensime-handle-indentation-update info))
+	  ((:eval-no-wait fun args)
+	   (apply (intern fun) args))
+	  ((:eval thread tag form-string)
+	   (ensime-check-eval-in-emacs-enabled)
+	   (ensime-eval-for-lisp thread tag form-string))
+	  ((:emacs-return thread tag value)
+	   (ensime-send `(:emacs-return ,thread ,tag ,value)))
+	  ((:ed what)
+	   (ensime-ed what))
+	  ((:inspect what wait-thread wait-tag)
+	   (let ((hook (when (and wait-thread wait-tag)
+			 (lexical-let ((thread wait-thread)
+				       (tag wait-tag))
+			   (lambda ()
+			     (ensime-send `(:emacs-return ,thread ,tag nil)))))))
+	     (ensime-open-inspector what nil hook)))
+	  ((:background-message message)
+	   (ensime-background-message "%s" message))
+	  ((:debug-condition thread message)
+	   (assert thread)
+	   (message "%s" message))
+	  ((:ping thread tag)
+	   (ensime-send `(:emacs-pong ,thread ,tag)))
+	  ((:reader-error packet condition)
+	   (ensime-with-popup-buffer ("*Ensime Error*")
 				     (princ (format "Invalid protocol message:\n%s\n\n%S"
 						    condition packet))
 				     (goto-char (point-min)))
-           (error "Invalid protocol message"))
-          ((:invalid-rpc id message)
-           (setf (ensime-rex-continuations)
-                 (remove* id (ensime-rex-continuations) :key #'car))
-           (error "Invalid rpc: %s" message))))))
+	   (error "Invalid protocol message"))
+	  ((:invalid-rpc id message)
+	   (setf (ensime-rex-continuations)
+		 (remove* id (ensime-rex-continuations) :key #'car))
+	   (error "Invalid rpc: %s" message))))))
 
 (defun ensime-send (sexp)
   "Send SEXP directly over the wire on the current connection."
@@ -832,8 +1032,8 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-user-first-name ()
   (let ((name (if (string= (user-full-name) "")
-                  (user-login-name)
-                (user-full-name))))
+		  (user-login-name)
+		(user-full-name))))
     (string-match "^[^ ]*" name)
     (capitalize (match-string 0 name))))
 
@@ -846,13 +1046,13 @@ This idiom is preferred over `lexical-let'."
     "Take this REPL, brother, and may it serve you well."
     "Lemonodor-fame is but a hack away!"
     ,(format "%s, this could be the start of a beautiful program."
-             (ensime-user-first-name)))
+	     (ensime-user-first-name)))
   "Scientifically-proven optimal words of hackerish encouragement.")
 
 (defun ensime-random-words-of-encouragement ()
   "Return a string of hackerish encouragement."
   (eval (nth (random (length ensime-words-of-encouragement))
-             ensime-words-of-encouragement)))
+	     ensime-words-of-encouragement)))
 
 
 ;; Compiler notes
