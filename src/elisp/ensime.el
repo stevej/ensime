@@ -1147,19 +1147,7 @@ This idiom is preferred over `lexical-let'."
 	  (progn (ensime-minibuffer-respecting-message
 		  "Couldn't find any members")
 		 (ding))
-	(let ((choices 
-	       (mapcar 
-		(lambda (m) 
-		  (destructuring-bind (&key name type &allow-other-keys) m
-		    `(,name . ,name)))
-		members)))
-	  (let* ((key (ido-completing-read 
-		       "Members: "
-		       choices 
-		       nil t nil))
-		 (name (cdr (assoc key choices))))
-	    )
-	  )))))
+	(ensime-select-from-members members)))))
 
 
 (defun ensime-maybe-complete-as-filename ()
@@ -1174,6 +1162,27 @@ Return nil if point is not at filename."
 
 
 ;; Ensime completions UI
+
+(defun ensime-select-from-members (members)
+  "Offer all members as choices."
+  (let* ((buffer-name "*ensime-type-members*")
+	 (describe-func
+	  (lambda (m)
+	    (destructuring-bind (&key name type &allow-other-keys) m
+	      (insert (format "%s : %s" name type))
+	      (insert "\n")))))
+    (progn
+      (if (get-buffer buffer-name)
+	  (kill-buffer buffer-name))
+      (switch-to-buffer-other-window buffer-name)
+      (mapc describe-func members)
+      (setq buffer-read-only t)
+      (use-local-map (make-sparse-keymap))
+      (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
+      (goto-char (point-min))
+      (forward-line 3)
+      )))
+
 
 (defun ensime-minibuffer-respecting-message (format &rest format-args)
   "Display TEXT as a message, without hiding any minibuffer contents."
