@@ -173,25 +173,45 @@ See `slime-start'.")
   "Start a Swank server in the inferior Server and connect."
   (ensime-read-port-and-connect config process nil))
 
+(defvar ensime-config-file-name ".ensime"
+  "The default file name for ensime project configurations.")
+
+(defun ensime-find-config-file (file-name)
+  "Search up the directory tree starting at file-name 
+   for a suitable config file to load, return it's path. Return nil if 
+   no such file found."
+  (let* ((dir (file-name-directory file-name))
+	 (possible-path (concat dir ensime-config-file-name)))
+    (if (file-directory-p dir)
+	(if (file-exists-p possible-path)
+	    possible-path
+	  (if (not (equal dir (directory-file-name dir)))
+	      (ensime-find-config-file (directory-file-name dir)))))))
+
 (defun ensime-load-config ()
   "Load and parse the project config file."
-  (let* ((file (read-file-name "ENSIME Project file: "))
+  (let* ((default (ensime-find-config-file buffer-file-name))
+	 (file (read-file-name "ENSIME Project file: "
+			       (if default (file-name-directory default))
+			       default
+			       nil
+			       (if default (file-name-nondirectory default))
+			       ))
+    ;; Infer the project root from the project file..
+    (dir (expand-file-name (file-name-directory file))))
 
-	 ;; Infer the project root from the project file..
-	 (dir (expand-file-name (file-name-directory file))))
-
-    (save-excursion
-      (condition-case error
-	  (let ((config
-		 (let ((buf (find-file-read-only file ".ensime"))
-		       (src (buffer-substring-no-properties 
-			     (point-min) (point-max))))
-		   (kill-buffer buf)
-		   (read src))))
-	    (plist-put config :root-dir dir))
-	(error
-	 '())))
-    ))
+  (save-excursion
+    (condition-case error
+	(let ((config
+	       (let ((buf (find-file-read-only file ensime-config-file-name))
+		     (src (buffer-substring-no-properties 
+			   (point-min) (point-max))))
+		 (kill-buffer buf)
+		 (read src))))
+	  (plist-put config :root-dir dir))
+      (error
+       '())))
+  ))
 
 (defun ensime-swank-port-file ()
   "Filename where the SWANK server writes its TCP port number."
