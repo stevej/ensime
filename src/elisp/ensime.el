@@ -11,6 +11,8 @@
 (require 'hideshow)
 (require 'font-lock)
 (require 'easymenu)
+(require 'auto-complete)
+(require 'auto-complete-ensime)
 (require 'ido)
 (eval-when (compile)
   (require 'arc-mode)
@@ -61,6 +63,26 @@
 
 (defvar ensime-protocol-version "0.0.1")
 
+
+;;;;; ensime-mode
+
+(defvar slime-lisp-modes '(scala-mode))
+
+(defun ensime-setup (&optional contribs)
+  "Setup Emacs so that scala-mode buffers always use ENSIME."
+  (when (member 'scala-mode ensime-scala-modes)
+    (add-hook 'scala-mode-hook 'ensime-scala-mode-hook)))
+
+(defgroup ensime-mode nil
+  "Settings for ensime-mode scala source buffers."
+  :prefix "ensime-"
+  :group 'ensime)
+
+(defun ensime-scala-mode-hook ()
+  (ensime-mode 1)
+  (add-to-list 'ac-sources 'ac-source-ensime)
+  (auto-complete-mode))
+
 (defvar ensime-mode-indirect-map (make-sparse-keymap)
   "Empty keymap which has `ensime-mode-map' as it's parent.
 This is a hack so that we can reinitilize the real ensime-mode-map
@@ -74,26 +96,70 @@ Full set of commands:
 \\{ensime-mode-map}"
   nil
   nil
-  ensime-mode-indirect-map
-  (ensime-recompute-modelines))
+  ensime-mode-indirect-map)
 
-(defun ensime-recompute-modelines ()
-  (force-mode-line-update t))
+(defvar ensime-mode-map nil
+  "Keymap for slime-mode.")
+
+(defvar ensime-keys
+    '(
+;;     ("\C-c\C-k"  ensime-complete-member)
+     ))
+
+(defun ensime-init-keymaps ()
+  "(Re)initialize the keymaps for `ensime-mode'."
+  (interactive)
+  (ensime-init-keymap 'ensime-mode-map nil nil ensime-keys))
+
+(defun ensime-init-keymap (keymap-name prefixp bothp bindings)
+  (set keymap-name (make-sparse-keymap))
+  (when prefixp (define-prefix-command keymap-name))
+  (ensime-bind-keys (eval keymap-name) bothp bindings))
+
+(defun ensime-bind-keys (keymap bothp bindings)
+  "Add BINDINGS to KEYMAP.
+If BOTHP is true also add bindings with control modifier."
+  (loop for (key command) in bindings do
+        (cond (bothp
+               (define-key keymap `[,key] command)
+               (unless (equal key ?h)     ; But don't bind C-h
+                 (define-key keymap `[(control ,key)] command)))
+              (t (define-key keymap key command)))))
+
+(ensime-init-keymaps)
 
 ;;;;;; Modeline
 
 (add-to-list 'minor-mode-alist
-             `(ensime-mode ,'(ensime-modeline-string)))
-
+             '(ensime-mode (:eval (ensime-modeline-string))))
 
 (defun ensime-modeline-string ()
   "Return the string to display in the modeline.
 \"Ensime\" only appears if we aren't connected.  If connected,
 include package-name, connection-name, and possibly some state
 information."
-  "Ensime")
+  (let ((conn (ensime-current-connection)))
+    ;; Bail out early in case there's no connection, so we won't
+    ;; implicitly invoke `ensime-connection' which may query the user.
+    (if (not conn)
+        (and ensime-mode " Ensime")
+      (let ((local (eq conn ensime-buffer-connection)))
+	(concat " "
+		(if local "{" "[")
+		" "
+		;; ignore errors for closed connections
+		(ignore-errors (ensime-connection-name conn))
+		(ensime-modeline-state-string conn)
+		(if local "}" "]"))))))
 
 
+(defun ensime-modeline-state-string (conn)
+  "Return a string possibly describing CONN's state."
+  (cond ((not (eq (process-status conn) 'open))
+         (format " %s" (process-status conn)))
+        ((let ((pending (length (ensime-rex-continuations conn))))
+           (cond ((zerop pending) nil)
+                 (t (format " %s" pending)))))))
 
 ;; Startup
 
@@ -161,11 +227,11 @@ information."
 
 (defvar ensime-inferior-server-args nil
   "A buffer local variable in the inferior proccess.
-See `slime-start'.")
+See `ensime-start'.")
 
 (defun ensime-inferior-server-args (process)
   "Return the initial process arguments.
-   See `slime-start'."
+   See `ensime-start'."
   (with-current-buffer (process-buffer process)
     ensime-inferior-server-args))
 
@@ -197,21 +263,21 @@ See `slime-start'.")
 			       nil
 			       (if default (file-name-nondirectory default))
 			       ))
-    ;; Infer the project root from the project file..
-    (dir (expand-file-name (file-name-directory file))))
+	 ;; Infer the project root from the project file..
+	 (dir (expand-file-name (file-name-directory file))))
 
-  (save-excursion
-    (condition-case error
-	(let ((config
-	       (let ((buf (find-file-read-only file ensime-config-file-name))
-		     (src (buffer-substring-no-properties 
-			   (point-min) (point-max))))
-		 (kill-buffer buf)
-		 (read src))))
-	  (plist-put config :root-dir dir))
-      (error
-       '())))
-  ))
+    (save-excursion
+      (condition-case error
+	  (let ((config
+		 (let ((buf (find-file-read-only file ensime-config-file-name))
+		       (src (buffer-substring-no-properties 
+			     (point-min) (point-max))))
+		   (kill-buffer buf)
+		   (read src))))
+	    (plist-put config :root-dir dir))
+	(error
+	 '())))
+    ))
 
 (defun ensime-swank-port-file ()
   "Filename where the SWANK server writes its TCP port number."
@@ -970,12 +1036,11 @@ This idiom is preferred over `lexical-let'."
 	   (let ((id (incf (ensime-continuation-counter))))
 	     (ensime-send `(:emacs-rex ,form ,package ,id))
 	     (push (cons id continuation) (ensime-rex-continuations))
-	     (ensime-recompute-modelines)))
+	     ))
 	  ((:return value id)
 	   (let ((rec (assq id (ensime-rex-continuations))))
 	     (cond (rec (setf (ensime-rex-continuations)
 			      (remove rec (ensime-rex-continuations)))
-			(ensime-recompute-modelines)
 			(funcall (cdr rec) value))
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
@@ -1151,23 +1216,21 @@ This idiom is preferred over `lexical-let'."
   (interactive)
   (ensime-eval-async `(swank:scope-completion ,buffer-file-name ,(point)) #'identity))
 
-(defun ensime-members-for-type-at-point ()
+(defun ensime-members-for-type-at-point (&optional prefix)
   (interactive)
-  (ensime-eval 
-   `(swank:type-completion ,buffer-file-name ,(point))))
-
+  (let ((result (ensime-eval 
+		 `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix "")))))
+    (plist-get result :members)))
 
 (defun ensime-choose-member ()
-  "Complete the symbol at point.  
-   Perform completion more similar to Emacs' complete-symbol."
+  "Display a list of all the members of the type under point."
   (interactive)
-  (let* ((result (ensime-members-for-type-at-point)))
-    (destructuring-bind (&key members &allow-other-keys) result
-      (if (null members)
-	  (progn (ensime-minibuffer-respecting-message
-		  "Couldn't find any members")
-		 (ding))
-	(ensime-select-from-members members)))))
+  (let ((members (ensime-members-for-type-at-point)))
+    (if (null members)
+	(progn (ensime-minibuffer-respecting-message
+		"Couldn't find any members")
+	       (ding))
+      (ensime-select-from-members members))))
 
 
 (defun ensime-maybe-complete-as-filename ()
