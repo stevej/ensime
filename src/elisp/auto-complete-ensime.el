@@ -11,14 +11,23 @@
 
 (defun ac-ensime-candidates (prefix)
   "Return candidate list."
+
+  ;; zoinks
+  (save-buffer)
+
   (save-excursion
     (ac-ensime-move-point-back-to-call-target)
     (let ((members (ensime-members-for-type-at-point prefix)))
-      (mapcar (lambda (m) (plist-get m :name)) members))))
+      (mapcar (lambda (m)
+		(let ((name (plist-get m :name))
+		      (type (plist-get m :type)))
+		  ;; Use the type as a poor man's documentation
+		  (propertize name 'scala-type type))
+		) members))))
 
 (defun ac-ensime-get-member-doc (item)
   "Return doc for given item."
-  item)
+  (get-text-property 0 'scala-type item))
 
 (ac-define-source ensime
   '((document . ac-ensime-get-member-doc)
