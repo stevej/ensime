@@ -11,6 +11,7 @@
 
 (defun ac-ensime-candidates (prefix)
   "Return candidate list."
+  (ensime-save-buffer-no-hook)
   (save-excursion
     (ac-ensime-move-point-back-to-call-target)
     (let ((members (ensime-members-for-type-at-point prefix)))
@@ -30,6 +31,19 @@
     (candidates . (ac-ensime-candidates ac-prefix))
     (prefix . c-dot)
     (requires . 0)
-    (symbol . "f")))
+    (symbol . "f")
+    (cache . t)
+    ))
+
+(defun ac-ensime-enable ()
+  (setq ac-sources '(ac-source-ensime))
+  (setq ac-quick-help-delay 0.5)
+  (auto-complete-mode 1)
+  )
+
+(defun ac-ensime-disable ()
+  (setq ac-quick-help-delay 1.5)
+  (auto-complete-mode 0)
+  )
 
 (provide 'auto-complete-ensime)

@@ -85,6 +85,11 @@
 (defun ensime-after-save-hook ()
   (ensime-compile-current-file))
 
+(defun ensime-save-buffer-no-hook ()
+  (remove-hook 'after-save-hook 'ensime-after-save-hook t)
+  (save-buffer)
+  (add-hook 'after-save-hook 'ensime-after-save-hook nil t))
+
 (defvar ensime-mode-indirect-map (make-sparse-keymap)
   "Empty keymap which has `ensime-mode-map' as it's parent.
 This is a hack so that we can reinitilize the real ensime-mode-map
@@ -102,12 +107,11 @@ Full set of commands:
 
   (if ensime-mode
       (progn
-	(setq ac-sources '(ac-source-ensime))
-	(auto-complete-mode 1)
-	(add-hook 'after-save-hook 'ensime-after-save-hook))
+	(ac-ensime-enable)
+	(add-hook 'after-save-hook 'ensime-after-save-hook nil t))
     (progn
-      (auto-complete-mode 0)
-      (remove-hook 'after-save-hook 'ensime-after-save-hook))))
+      (ac-ensime-disable)
+      (remove-hook 'after-save-hook 'ensime-after-save-hook t))))
 
 
 (defvar ensime-mode-map nil
