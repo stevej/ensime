@@ -11,10 +11,6 @@
 
 (defun ac-ensime-candidates (prefix)
   "Return candidate list."
-
-  ;; zoinks
-  (save-buffer)
-
   (save-excursion
     (ac-ensime-move-point-back-to-call-target)
     (let ((members (ensime-members-for-type-at-point prefix)))

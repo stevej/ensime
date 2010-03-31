@@ -71,7 +71,8 @@
 (defun ensime-setup (&optional contribs)
   "Setup Emacs so that scala-mode buffers always use ENSIME."
   (when (member 'scala-mode ensime-scala-modes)
-    (add-hook 'scala-mode-hook 'ensime-scala-mode-hook)))
+    (add-hook 'scala-mode-hook 'ensime-scala-mode-hook)
+    ))
 
 (defgroup ensime-mode nil
   "Settings for ensime-mode scala source buffers."
@@ -79,9 +80,10 @@
   :group 'ensime)
 
 (defun ensime-scala-mode-hook ()
-  (ensime-mode 1)
-  (add-to-list 'ac-sources 'ac-source-ensime)
-  (auto-complete-mode))
+  (ensime-mode 1))
+
+(defun ensime-after-save-hook ()
+  (ensime-compile-current-file))
 
 (defvar ensime-mode-indirect-map (make-sparse-keymap)
   "Empty keymap which has `ensime-mode-map' as it's parent.
@@ -96,15 +98,25 @@ Full set of commands:
 \\{ensime-mode-map}"
   nil
   nil
-  ensime-mode-indirect-map)
+  ensime-mode-indirect-map
+
+  (if ensime-mode
+      (progn
+	(setq ac-sources '(ac-source-ensime))
+	(auto-complete-mode 1)
+	(add-hook 'after-save-hook 'ensime-after-save-hook))
+    (progn
+      (auto-complete-mode 0)
+      (remove-hook 'after-save-hook 'ensime-after-save-hook))))
+
 
 (defvar ensime-mode-map nil
   "Keymap for slime-mode.")
 
 (defvar ensime-keys
-    '(
-;;     ("\C-c\C-k"  ensime-complete-member)
-     ))
+  '(
+    ;;     ("\C-c\C-k"  ensime-complete-member)
+    ))
 
 (defun ensime-init-keymaps ()
   "(Re)initialize the keymaps for `ensime-mode'."
@@ -120,18 +132,18 @@ Full set of commands:
   "Add BINDINGS to KEYMAP.
 If BOTHP is true also add bindings with control modifier."
   (loop for (key command) in bindings do
-        (cond (bothp
-               (define-key keymap `[,key] command)
-               (unless (equal key ?h)     ; But don't bind C-h
-                 (define-key keymap `[(control ,key)] command)))
-              (t (define-key keymap key command)))))
+	(cond (bothp
+	       (define-key keymap `[,key] command)
+	       (unless (equal key ?h)     ; But don't bind C-h
+		 (define-key keymap `[(control ,key)] command)))
+	      (t (define-key keymap key command)))))
 
 (ensime-init-keymaps)
 
 ;;;;;; Modeline
 
 (add-to-list 'minor-mode-alist
-             '(ensime-mode (:eval (ensime-modeline-string))))
+	     '(ensime-mode (:eval (ensime-modeline-string))))
 
 (defun ensime-modeline-string ()
   "Return the string to display in the modeline.
@@ -142,7 +154,7 @@ information."
     ;; Bail out early in case there's no connection, so we won't
     ;; implicitly invoke `ensime-connection' which may query the user.
     (if (not conn)
-        (and ensime-mode " Ensime")
+	(and ensime-mode " Ensime")
       (let ((local (eq conn ensime-buffer-connection)))
 	(concat " "
 		(if local "{" "[")
@@ -156,10 +168,10 @@ information."
 (defun ensime-modeline-state-string (conn)
   "Return a string possibly describing CONN's state."
   (cond ((not (eq (process-status conn) 'open))
-         (format " %s" (process-status conn)))
-        ((let ((pending (length (ensime-rex-continuations conn))))
-           (cond ((zerop pending) nil)
-                 (t (format " %s" pending)))))))
+	 (format " %s" (process-status conn)))
+	((let ((pending (length (ensime-rex-continuations conn))))
+	   (cond ((zerop pending) nil)
+		 (t (format " %s" pending)))))))
 
 ;; Startup
 
@@ -175,12 +187,15 @@ information."
 	 ;;Project-specific..
 	 (root-dir (plist-get config :root-dir))
 	 (src-dir (plist-get config :source-dir))
+	 (src-files (mapconcat
+		     'identity
+		     (plist-get config :source-files) ":"))
 	 (classpath (mapconcat
 		     'identity
 		     (plist-get config :classpath) ":"))
 
-	 (args (list (ensime-swank-port-file) root-dir src-dir classpath)))
-
+	 (args (list (ensime-swank-port-file) root-dir src-dir src-files classpath)))
+    
     (ensime-delete-swank-port-file 'quiet)
     (let ((proc (ensime-maybe-start-server cmd args env dir buffer)))
       (ensime-inferior-connect config proc))))
@@ -189,22 +204,22 @@ information."
 (defun ensime-maybe-start-server (program program-args env directory buffer)
   "Return a new or existing inferior server process."
   (cond ((not (comint-check-proc buffer))
-         (ensime-start-server program program-args env directory buffer))
-        ((ensime-reinitialize-inferior-server-p program program-args env buffer)
-         (when-let (conn (find (get-buffer-process buffer) ensime-net-processes 
-                               :key #'ensime-inferior-process))
-           (ensime-net-close conn))
-         (get-buffer-process buffer))
-        (t (ensime-start-server program program-args env directory
+	 (ensime-start-server program program-args env directory buffer))
+	((ensime-reinitialize-inferior-server-p program program-args env buffer)
+	 (when-let (conn (find (get-buffer-process buffer) ensime-net-processes 
+			       :key #'ensime-inferior-process))
+	   (ensime-net-close conn))
+	 (get-buffer-process buffer))
+	(t (ensime-start-server program program-args env directory
 				(generate-new-buffer-name buffer)))))
 
 
 (defun ensime-reinitialize-inferior-server-p (program program-args env buffer)
   (let ((args (ensime-inferior-server-args (get-buffer-process buffer))))
     (and (equal (plist-get args :program) program)
-         (equal (plist-get args :program-args) program-args)
-         (equal (plist-get args :env) env)
-         (not (y-or-n-p "Create an additional *inferior-server*? ")))))
+	 (equal (plist-get args :program-args) program-args)
+	 (equal (plist-get args :env) env)
+	 (not (y-or-n-p "Create an additional *inferior-server*? ")))))
 
 
 (defvar ensime-inferior-process-start-hook nil
@@ -218,7 +233,7 @@ information."
       (cd (expand-file-name directory)))
     (comint-mode)
     (let ((process-environment (append env process-environment))
-          (process-connection-type nil))
+	  (process-connection-type nil))
       (comint-exec (current-buffer) "inferior-ensime-server" program nil program-args))
     (let ((proc (get-buffer-process (current-buffer))))
       (ensime-set-query-on-exit-flag proc)
@@ -383,6 +398,7 @@ The default condition handler for timer functions (see
 ;;; file should use these functions when applicable.
 ;;;
 ;;;;; Syntactic sugar
+
 
 (defmacro* when-let ((var value) &rest body)
   "Evaluate VALUE, if the result is non-nil bind it to VAR and eval BODY.
@@ -1041,7 +1057,8 @@ This idiom is preferred over `lexical-let'."
 	   (let ((rec (assq id (ensime-rex-continuations))))
 	     (cond (rec (setf (ensime-rex-continuations)
 			      (remove rec (ensime-rex-continuations)))
-			(funcall (cdr rec) value))
+			(funcall (cdr rec) value)
+			(force-mode-line-update t))
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
 	  ((:compilation-result result)
