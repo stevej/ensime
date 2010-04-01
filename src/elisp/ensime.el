@@ -151,9 +151,9 @@ If BOTHP is true also add bindings with control modifier."
 
 (defun ensime-modeline-string ()
   "Return the string to display in the modeline.
-\"Ensime\" only appears if we aren't connected.  If connected,
-include package-name, connection-name, and possibly some state
-information."
+  \"Ensime\" only appears if we aren't connected.  If connected, include 
+  connection-name, and possibly some state
+  information."
   (let ((conn (ensime-current-connection)))
     ;; Bail out early in case there's no connection, so we won't
     ;; implicitly invoke `ensime-connection' which may query the user.
@@ -891,10 +891,9 @@ If PROCESS is not specified, `ensime-connection' is used.
 ;;; you need to, but the others are usually more convenient.
 
 (defmacro* ensime-rex ((&rest saved-vars)
-		       (sexp &optional 
-			     (package '(ensime-current-package)))
+		       sexp
 		       &rest continuations)
-  "(ensime-rex (VAR ...) (SEXP &optional PACKAGE) CLAUSES ...)
+  "(ensime-rex (VAR ...) SEXP CLAUSES ...)
 
 Remote EXecute SEXP.
 
@@ -902,9 +901,6 @@ VARs are a list of saved variables visible in the other forms.  Each
 VAR is either a symbol or a list (VAR INIT-VALUE).
 
 SEXP is evaluated and the princed version is sent to Lisp.
-
-PACKAGE is evaluated and Lisp binds *BUFFER-PACKAGE* to this package.
-The default value is (ensime-current-package).
 
 CLAUSES is a list of patterns with same syntax as
 `destructure-case'.  The result of the evaluation of SEXP is
@@ -920,19 +916,12 @@ versions cannot deal with that."
 				   (symbol (list var var))
 				   (cons var)))
        (ensime-dispatch-event 
-	(list :emacs-rex ,sexp ,package
+	(list :emacs-rex ,sexp
 	      (lambda (,result)
 		(destructure-case ,result
 		  ,@continuations)))))))
 
 (put 'ensime-rex 'lisp-indent-function 2)
-
-;;; Interface
-(defun ensime-current-package ()
-  "Return the Common Lisp package in the current context.
-If `ensime-buffer-package' has a value then return that, otherwise
-search for and read an `in-package' form."
-  "mmmmmhhhh?")
 
 
 ;;; Synchronous requests are implemented in terms of asynchronous
@@ -943,9 +932,8 @@ search for and read an `in-package' form."
 (defvar ensime-stack-eval-tags nil
   "List of stack-tags of continuations waiting on the stack.")
 
-(defun ensime-eval (sexp &optional package)
+(defun ensime-eval (sexp)
   "Evaluate EXPR on the superior Lisp and return the result."
-  (when (null package) (setq package (ensime-current-package)))
   (let* ((tag (gensym (format "ensime-result-%d-" 
 			      (1+ (ensime-continuation-counter)))))
 	 (ensime-stack-eval-tags (cons tag ensime-stack-eval-tags)))
@@ -953,7 +941,7 @@ search for and read an `in-package' form."
      #'funcall 
      (catch tag
        (ensime-rex (tag sexp)
-	   (sexp package)
+	   sexp
 	 ((:ok value)
 	  (unless (member tag ensime-stack-eval-tags)
 	    (error "Reply to canceled synchronous eval request tag=%S sexp=%S"
@@ -970,10 +958,10 @@ search for and read an `in-package' form."
 	   (ensime-accept-process-output nil 0.01)))))))
 
 
-(defun ensime-eval-async (sexp &optional cont package)
+(defun ensime-eval-async (sexp &optional cont)
   "Evaluate EXPR on the superior Lisp and call CONT with the result."
   (ensime-rex (cont (buffer (current-buffer)))
-      (sexp (or package (ensime-current-package)))
+      sexp
     ((:ok result)
      (when cont
        (set-buffer buffer)
@@ -1052,9 +1040,9 @@ This idiom is preferred over `lexical-let'."
   (let ((ensime-dispatching-connection (or process (ensime-connection))))
     (or (run-hook-with-args-until-success 'ensime-event-hooks event)
 	(destructure-case event
-	  ((:emacs-rex form package continuation)
+	  ((:emacs-rex form continuation)
 	   (let ((id (incf (ensime-continuation-counter))))
-	     (ensime-send `(:emacs-rex ,form ,package ,id))
+	     (ensime-send `(:emacs-rex ,form ,id))
 	     (push (cons id continuation) (ensime-rex-continuations))
 	     ))
 	  ((:return value id)
@@ -1184,6 +1172,9 @@ This idiom is preferred over `lexical-let'."
 			     ((equal severity 'warn)
 			      (ensime-make-overlay
 			       start stop msg 'ensime-warnline nil))
+
+			     (t (ensime-make-overlay
+				 start stop msg 'ensime-warnline nil))
 			     )))
 	      (push ov ensime-note-overlays)
 	      )))
@@ -1219,10 +1210,9 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-remove-old-overlays ()
   "Delete the existing note overlays."
+  ;; Guard against nil overlays here..
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
-
-
 
 ;; Test compile current file
 
@@ -1234,24 +1224,16 @@ This idiom is preferred over `lexical-let'."
 ;; Completion
 
 (defun ensime-scope-completion ()
-  (interactive)
   (ensime-eval-async `(swank:scope-completion ,buffer-file-name ,(point)) #'identity))
 
 (defun ensime-members-for-type-at-point (&optional prefix)
-  (interactive)
   (let ((result (ensime-eval 
 		 `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix "")))))
     (plist-get result :members)))
 
-(defun ensime-choose-member ()
-  "Display a list of all the members of the type under point."
-  (interactive)
-  (let ((members (ensime-members-for-type-at-point)))
-    (if (null members)
-	(progn (ensime-minibuffer-respecting-message
-		"Couldn't find any members")
-	       (ding))
-      (ensime-select-from-members members))))
+(defun ensime-inspect-type-at-point ()
+  (ensime-eval 
+   `(swank:inspect-type ,buffer-file-name ,(point))))
 
 
 (defun ensime-maybe-complete-as-filename ()
@@ -1264,21 +1246,25 @@ Return nil if point is not at filename."
     nil))
 
 
-
-;; Ensime completions UI
-
-(defun ensime-select-from-members (members)
-  "Offer all members as choices."
-  (let* ((buffer-name "*ensime-type-members*")
+(defun ensime-inspect-type ()
+  "Display a list of all the members of the type under point."
+  (interactive)
+  (let* ((info (ensime-inspect-type-at-point))
+	 (members (plist-get info :members))
+	 (type (plist-get info :type))
+	 (type-name (plist-get type :name))
+	 (buffer-name "*ensime-type-members*")
 	 (describe-func
 	  (lambda (m)
-	    (destructuring-bind (&key name type &allow-other-keys) m
-	      (insert (format "%s : %s" name type))
-	      (insert "\n")))))
+	    (insert (format "%s : %s" 
+			    (plist-get m :name) (plist-get m :type)))
+	    (insert "\n"))))
     (progn
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
       (switch-to-buffer-other-window buffer-name)
+      (insert (format "%s\n" type-name))
+      (insert "---------------------\n\n")
       (mapc describe-func members)
       (setq buffer-read-only t)
       (use-local-map (make-sparse-keymap))
