@@ -403,6 +403,33 @@ The default condition handler for timer functions (see
 ;;;
 ;;;;; Syntactic sugar
 
+
+(defcustom ensime-scaladoc-stdlib-url-base "http://www.scala-lang.org/docu/files/api/"
+  "url for constructing scaladoc links."
+  :type 'string
+  :group 'ensime)
+
+(defcustom ensime-javadoc-stdlib-url-base "http://java.sun.com/javase/6/docs/api/"
+  "url for constructing scaladoc links."
+  :type 'string
+  :group 'ensime)
+
+
+(defun ensime-make-scaladoc-url (ident)
+  "Given a qualified scala identifier, construct the
+   corresponding scaladoc url."
+  (concat ensime-scaladoc-stdlib-url-base
+	  (replace-regexp-in-string "\\." "/" ident)
+	  ".html"))
+
+(defun ensime-make-javadoc-url (ident)
+  "Given a qualified java identifier, construct the
+   corresponding javadoc url."
+  (concat ensime-javadoc-stdlib-url-base 
+	  (replace-regexp-in-string "\\." "/" ident)
+	  ".html"))
+
+
 (defun ensime-make-code-link (start end file-path offset)
   "Make an emacs button, from start to end in current buffer, linking to file-path and offset."
   (make-button start end
@@ -412,13 +439,23 @@ The default condition handler for timer functions (see
 			  (goto-char ,offset)
 			  )))
 
-(defun ensime-insert-link (text file-path offset)
+(defun ensime-make-code-hyperlink (start end http-path)
+  "Make an emacs button, from start to end in current buffer, hyperlinking to http-path."
+  (make-button start end
+	       'face font-lock-constant-face
+	       'action `(lambda (x)
+			  (browse-url ,http-path)
+			  )))
+
+(defun ensime-insert-link (text file-path &optional offset)
   "Insert text in current buffer and make it into an emacs 
    button, linking to file-path and offset."
   (let ((start (point)))
     (insert text)
-    (if (and file-path (> offset -1))
-	(ensime-make-code-link start (point) file-path offset))))
+    (if (and file-path (string-match "http://" file-path))
+	(ensime-make-code-hyperlink start (point) file-path)
+      (if (and file-path (> offset -1))
+	  (ensime-make-code-link start (point) file-path offset)))))
 
 (defmacro* when-let ((var value) &rest body)
   "Evaluate VALUE, if the result is non-nil bind it to VAR and eval BODY.
@@ -1268,6 +1305,9 @@ Return nil if point is not at filename."
   (let* ((info (ensime-inspect-type-at-point))
 	 (members (plist-get info :members))
 	 (type (plist-get info :type))
+	 (type-name (plist-get type :name))
+	 (is-scala-std-lib (not (null (string-match "^scala\\." type-name))))
+	 (is-java-std-lib (not (null (string-match "^java\\." type-name))))
 	 (buffer-name "*ensime-type-members*")
 	 (member-printer
 	  (lambda (m)
@@ -1278,9 +1318,12 @@ Return nil if point is not at filename."
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
       (switch-to-buffer-other-window buffer-name)
-      (ensime-insert-link (format "%s\n" (plist-get type :name))
-			  (plist-get type :file)
-			  (plist-get type :offset))
+      (let ((url (cond (is-scala-std-lib (ensime-make-scaladoc-url type-name))
+		       (is-java-std-lib (ensime-make-javadoc-url type-name))
+		       (t (plist-get type :file)))))
+	(ensime-insert-link (format "%s\n" type-name) url
+			    (plist-get type :offset)))
+
       (insert "---------------------\n\n")
       (mapc member-printer members)
       (setq buffer-read-only t)

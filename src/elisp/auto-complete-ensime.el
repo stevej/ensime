@@ -37,7 +37,7 @@
 
 (defun ac-ensime-enable ()
   (setq ac-sources '(ac-source-ensime))
-  (setq ac-quick-help-delay 0.5)
+  (setq ac-quick-help-delay 1.5)
   (auto-complete-mode 1)
   )
 
