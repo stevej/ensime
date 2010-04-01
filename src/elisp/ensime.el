@@ -1306,8 +1306,9 @@ Return nil if point is not at filename."
 	 (members (plist-get info :members))
 	 (type (plist-get info :type))
 	 (type-name (plist-get type :name))
-	 (is-scala-std-lib (not (null (string-match "^scala\\." type-name))))
-	 (is-java-std-lib (not (null (string-match "^java\\." type-name))))
+	 (gen-type-name (plist-get type :general-name))
+	 (is-scala-std-lib (not (null (string-match "^scala\\." gen-type-name))))
+	 (is-java-std-lib (not (null (string-match "^java\\." gen-type-name))))
 	 (buffer-name "*ensime-type-members*")
 	 (member-printer
 	  (lambda (m)
@@ -1318,19 +1319,18 @@ Return nil if point is not at filename."
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
       (switch-to-buffer-other-window buffer-name)
-      (let ((url (cond (is-scala-std-lib (ensime-make-scaladoc-url type-name))
-		       (is-java-std-lib (ensime-make-javadoc-url type-name))
+      (let ((url (cond (is-scala-std-lib (ensime-make-scaladoc-url gen-type-name))
+		       (is-java-std-lib (ensime-make-javadoc-url gen-type-name))
 		       (t (plist-get type :file)))))
 	(ensime-insert-link (format "%s\n" type-name) url
 			    (plist-get type :offset)))
-
+      (insert (format "(%s)\n" gen-type-name))
       (insert "---------------------\n\n")
       (mapc member-printer members)
       (setq buffer-read-only t)
       (use-local-map (make-sparse-keymap))
       (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
       (goto-char (point-min))
-      (forward-line 3)
       )))
 
 
