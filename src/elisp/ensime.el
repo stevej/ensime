@@ -403,6 +403,22 @@ The default condition handler for timer functions (see
 ;;;
 ;;;;; Syntactic sugar
 
+(defun ensime-make-code-link (start end file-path offset)
+  "Make an emacs button, from start to end in current buffer, linking to file-path and offset."
+  (make-button start end
+	       'face font-lock-constant-face
+	       'action `(lambda (x)
+			  (find-file-other-window ,file-path)
+			  (goto-char ,offset)
+			  )))
+
+(defun ensime-insert-link (text file-path offset)
+  "Insert text in current buffer and make it into an emacs 
+   button, linking to file-path and offset."
+  (let ((start (point)))
+    (insert text)
+    (if (and file-path (> offset -1))
+	(ensime-make-code-link start (point) file-path offset))))
 
 (defmacro* when-let ((var value) &rest body)
   "Evaluate VALUE, if the result is non-nil bind it to VAR and eval BODY.
@@ -1252,9 +1268,8 @@ Return nil if point is not at filename."
   (let* ((info (ensime-inspect-type-at-point))
 	 (members (plist-get info :members))
 	 (type (plist-get info :type))
-	 (type-name (plist-get type :name))
 	 (buffer-name "*ensime-type-members*")
-	 (describe-func
+	 (member-printer
 	  (lambda (m)
 	    (insert (format "%s : %s" 
 			    (plist-get m :name) (plist-get m :type)))
@@ -1263,9 +1278,11 @@ Return nil if point is not at filename."
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
       (switch-to-buffer-other-window buffer-name)
-      (insert (format "%s\n" type-name))
+      (ensime-insert-link (format "%s\n" (plist-get type :name))
+			  (plist-get type :file)
+			  (plist-get type :offset))
       (insert "---------------------\n\n")
-      (mapc describe-func members)
+      (mapc member-printer members)
       (setq buffer-read-only t)
       (use-local-map (make-sparse-keymap))
       (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
