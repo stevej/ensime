@@ -90,20 +90,26 @@
   (save-buffer)
   (add-hook 'after-save-hook 'ensime-after-save-hook nil t))
 
-(defvar ensime-mode-indirect-map (make-sparse-keymap)
-  "Empty keymap which has `ensime-mode-map' as it's parent.
-This is a hack so that we can reinitilize the real ensime-mode-map
-more easily. See `ensime-init-keymaps'.")
+
+(defvar ensime-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c t") 'ensime-inspect-type)
+    map)
+  "Keymap for `ensime-mode'.")
+
 
 (define-minor-mode ensime-mode
   "\\<ensime-mode-map>\
-ENSIME: The ENhanced Scala Interaction Mode for Emacs (minor-mode).
+  ENSIME: The ENhanced Scala Interaction Mode for Emacs (minor-mode).
 
-Full set of commands:
-\\{ensime-mode-map}"
+  Finding definitions:
+  \\[ensime-inspect-type]   - Show a summary of the type under point.
+ 
+  Full set of commands:
+  \\{ensime-mode-map}"
   nil
   nil
-  ensime-mode-indirect-map
+  ensime-mode-map
 
   (if ensime-mode
       (progn
@@ -114,35 +120,6 @@ Full set of commands:
       (remove-hook 'after-save-hook 'ensime-after-save-hook t))))
 
 
-(defvar ensime-mode-map nil
-  "Keymap for slime-mode.")
-
-(defvar ensime-keys
-  '(
-    ;;     ("\C-c\C-k"  ensime-complete-member)
-    ))
-
-(defun ensime-init-keymaps ()
-  "(Re)initialize the keymaps for `ensime-mode'."
-  (interactive)
-  (ensime-init-keymap 'ensime-mode-map nil nil ensime-keys))
-
-(defun ensime-init-keymap (keymap-name prefixp bothp bindings)
-  (set keymap-name (make-sparse-keymap))
-  (when prefixp (define-prefix-command keymap-name))
-  (ensime-bind-keys (eval keymap-name) bothp bindings))
-
-(defun ensime-bind-keys (keymap bothp bindings)
-  "Add BINDINGS to KEYMAP.
-If BOTHP is true also add bindings with control modifier."
-  (loop for (key command) in bindings do
-	(cond (bothp
-	       (define-key keymap `[,key] command)
-	       (unless (equal key ?h)     ; But don't bind C-h
-		 (define-key keymap `[(control ,key)] command)))
-	      (t (define-key keymap key command)))))
-
-(ensime-init-keymaps)
 
 ;;;;;; Modeline
 
@@ -404,7 +381,12 @@ The default condition handler for timer functions (see
 ;;;;; Syntactic sugar
 
 
-(defcustom ensime-scaladoc-stdlib-url-base "http://www.scala-lang.org/docu/files/api/"
+(defcustom ensime-scaladoc-stdlib-url-base "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/library/"
+  "url for constructing scaladoc links."
+  :type 'string
+  :group 'ensime)
+
+(defcustom ensime-scaladoc-compiler-url-base "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/compiler/"
   "url for constructing scaladoc links."
   :type 'string
   :group 'ensime)
@@ -418,7 +400,9 @@ The default condition handler for timer functions (see
 (defun ensime-make-scaladoc-url (ident)
   "Given a qualified scala identifier, construct the
    corresponding scaladoc url."
-  (concat ensime-scaladoc-stdlib-url-base
+  (concat (if (not (null (string-match "^scala\\.tools\\.nsc\\." ident)))
+	      ensime-scaladoc-compiler-url-base
+	    ensime-scaladoc-stdlib-url-base)
 	  (replace-regexp-in-string "\\." "/" ident)
 	  ".html"))
 
@@ -456,6 +440,12 @@ The default condition handler for timer functions (see
 	(ensime-make-code-hyperlink start (point) file-path)
       (if (and file-path (> offset -1))
 	  (ensime-make-code-link start (point) file-path offset)))))
+
+(defun ensime-insert-with-face (text face)
+  "Insert text in current buffer and color it with face"
+  (let ((start (point)))
+    (insert text)
+    (set-text-properties start (point) `(face ,face))))
 
 (defmacro* when-let ((var value) &rest body)
   "Evaluate VALUE, if the result is non-nil bind it to VAR and eval BODY.
@@ -1312,26 +1302,32 @@ Return nil if point is not at filename."
 	 (buffer-name "*ensime-type-members*")
 	 (member-printer
 	  (lambda (m)
-	    (insert (format "%s : %s" 
-			    (plist-get m :name) (plist-get m :type)))
+	    (insert (format "%s   " (plist-get m :name)))
+	    (ensime-insert-with-face (format "%s" (plist-get m :type))
+				     font-lock-comment-face)
 	    (insert "\n"))))
     (progn
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
       (switch-to-buffer-other-window buffer-name)
-      (let ((url (cond (is-scala-std-lib (ensime-make-scaladoc-url gen-type-name))
-		       (is-java-std-lib (ensime-make-javadoc-url gen-type-name))
+      (let ((url (cond (is-scala-std-lib 
+			(ensime-make-scaladoc-url gen-type-name))
+		       (is-java-std-lib 
+			(ensime-make-javadoc-url gen-type-name))
 		       (t (plist-get type :file)))))
-	(ensime-insert-link (format "%s\n" type-name) url
-			    (plist-get type :offset)))
-      (insert (format "(%s)\n" gen-type-name))
-      (insert "---------------------\n\n")
-      (mapc member-printer members)
-      (setq buffer-read-only t)
-      (use-local-map (make-sparse-keymap))
-      (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
-      (goto-char (point-min))
-      )))
+	(ensime-insert-link 
+	 (format "%s\n" type-name) url
+	 (plist-get type :offset))
+	(ensime-insert-with-face 
+	 (format "(%s)\n" gen-type-name) 
+	 font-lock-comment-face)
+	(insert "---------------------\n\n")
+	(mapc member-printer members)
+	(setq buffer-read-only t)
+	(use-local-map (make-sparse-keymap))
+	(define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
+	(goto-char (point-min))
+	))))
 
 
 (defun ensime-minibuffer-respecting-message (format &rest format-args)

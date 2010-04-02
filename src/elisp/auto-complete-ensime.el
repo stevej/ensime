@@ -18,7 +18,7 @@
       (mapcar (lambda (m)
 		(let ((name (plist-get m :name))
 		      (type (plist-get m :type)))
-		  ;; Use the type as a poor man's documentation
+		  ;; Save the type for later display
 		  (propertize name 'scala-type type))
 		) members))))
 
@@ -37,7 +37,9 @@
 
 (defun ac-ensime-enable ()
   (setq ac-sources '(ac-source-ensime))
-  (setq ac-quick-help-delay 1.5)
+  (setq ac-quick-help-delay 1.0)
+  (setq ac-auto-start nil)
+  (ac-set-trigger-key "TAB")
   (auto-complete-mode 1)
   )
 
