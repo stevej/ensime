@@ -1353,6 +1353,8 @@ Return nil if point is not at filename."
 	))))
 
 
+;; Interface
+
 (defun ensime-minibuffer-respecting-message (format &rest format-args)
   "Display TEXT as a message, without hiding any minibuffer contents."
   (let ((text (format " [%s]" (apply #'format format format-args))))
@@ -1361,6 +1363,36 @@ Return nil if point is not at filename."
 	    (temp-minibuffer-message text)
 	  (minibuffer-message text))
       (message "%s" text))))
+
+(defun ensime-message (format &rest args)
+  "Like `message' but with special support for multi-line messages.
+Single-line messages use the echo area."
+  (apply ensime-message-function format args))
+
+(defun ensime-display-warning (message &rest args)
+  (display-warning '(ensime warning) (apply #'format message args)))
+
+(defvar ensime-background-message-function 'ensime-display-oneliner)
+
+
+(defun ensime-background-message (format-string &rest format-args)
+  "Display a message in passing.
+This is like `ensime-message', but less distracting because it
+will never pop up a buffer or display multi-line messages.
+It should be used for \"background\" messages such as argument lists."
+  (apply ensime-background-message-function format-string format-args))
+
+(defun ensime-display-oneliner (format-string &rest format-args)
+  (let* ((msg (apply #'format format-string format-args)))
+    (unless (minibuffer-window-active-p (minibuffer-window))
+      (message  "%s" (ensime-oneliner msg)))))
+
+(defun ensime-oneliner (string)
+  "Return STRING truncated to fit in a single echo-area line."
+  (substring string 0 (min (length string)
+                           (or (position ?\n string) most-positive-fixnum)
+                           (1- (frame-width)))))
+
 
 
 ;; Portability
