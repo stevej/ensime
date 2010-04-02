@@ -94,6 +94,7 @@
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c t") 'ensime-inspect-type)
+    (define-key map (kbd "C-c c") 'ensime-compile-current-file)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -164,19 +165,8 @@
 	 (env (plist-get config :server-env))
 	 (dir (plist-get config :server-root))
 	 (buffer "*inferior-ensime-server*")
+	 (args (list (ensime-swank-port-file))))
 
-	 ;;Project-specific..
-	 (root-dir (plist-get config :root-dir))
-	 (src-dir (plist-get config :source-dir))
-	 (src-files (mapconcat
-		     'identity
-		     (plist-get config :source-files) ":"))
-	 (classpath (mapconcat
-		     'identity
-		     (plist-get config :classpath) ":"))
-
-	 (args (list (ensime-swank-port-file) root-dir src-dir src-files classpath)))
-    
     (ensime-delete-swank-port-file 'quiet)
     (let ((proc (ensime-maybe-start-server cmd args env dir buffer)))
       (ensime-inferior-connect config proc))))
@@ -323,8 +313,10 @@ See `ensime-start'.")
 	   (let ((port (ensime-read-swank-port))
 		 (args (ensime-inferior-server-args process)))
 	     (ensime-delete-swank-port-file 'message)
-	     (let ((c (ensime-connect host port)))
-	       (ensime-set-inferior-process c process))))
+	     (let ((c (ensime-connect config host port)))
+	       (ensime-set-config c config)
+	       (ensime-set-inferior-process c process)
+	       )))
 	  ((and retries (zerop retries))
 	   (ensime-cancel-connect-retry-timer)
 	   (message "Gave up connecting to Swank after %d attempts." attempt))
@@ -762,6 +754,9 @@ This is automatically synchronized from Lisp.")
 (ensime-def-connection-var ensime-inferior-process nil
   "The inferior process for the connection if any.")
 
+(ensime-def-connection-var ensime-config nil
+  "The project configuration corresponding to this connection.")
+
 (ensime-def-connection-var ensime-communication-style nil
   "The communication style.")
 
@@ -811,10 +806,30 @@ Return nil if there's no connection."
 	   (error "Connection closed."))
 	  (t conn))))
 
-(defun ensime-setup-connection (process)
+;; FIXME: should be called auto-start
+(defcustom ensime-auto-connect 'never
+  "Controls auto connection when information from lisp process is needed.
+This doesn't mean it will connect right after Ensime is loaded."
+  :group 'ensime-mode
+  :type '(choice (const never)
+                 (const always)
+                 (const ask)))
+
+(defun ensime-auto-connect ()
+  (cond ((or (eq ensime-auto-connect 'always)
+             (and (eq ensime-auto-connect 'ask)
+                  (y-or-n-p "No connection.  Start Ensime? ")))
+         (save-window-excursion
+           (ensime)
+           (while (not (ensime-current-connection))
+             (sleep-for 1))
+           (ensime-connection)))
+        (t nil)))
+
+(defun ensime-setup-connection (config process)
   "Make a connection out of PROCESS."
   (let ((ensime-dispatching-connection process))
-    (ensime-init-connection-state process)
+    (ensime-init-connection-state config process)
     (ensime-select-connection process)
     process))
 
@@ -832,7 +847,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 			   (error "No connection")))
      ,@body))
 
-(defun ensime-connect (host port)
+(defun ensime-connect (config host port)
   "Connect to a running Swank server. Return the connection."
   (interactive (list (read-from-minibuffer "Host: " ensime-server-host)
 		     (read-from-minibuffer "Port: " (format "%d" ensime-port)
@@ -845,10 +860,10 @@ If PROCESS is not specified, `ensime-connection' is used.
     (message "Connecting to Swank on port %S.." port)
     (let* ((process (ensime-net-connect host port))
 	   (ensime-dispatching-connection process))
-      (ensime-setup-connection process))))
+      (ensime-setup-connection config process))))
 
 
-(defun ensime-init-connection-state (proc)
+(defun ensime-init-connection-state (config proc)
   "Initialize connection state in the process-buffer of PROC."
   ;; To make life simpler for the user: if this is the only open
   ;; connection then reset the connection counter.
@@ -862,10 +877,10 @@ If PROCESS is not specified, `ensime-connection' is used.
   ;; from a timer then it mysteriously uses the wrong keymap for the
   ;; first command.
   (ensime-eval-async '(swank:connection-info)
-		     (ensime-curry #'ensime-set-connection-info proc)))
+		     (ensime-curry #'ensime-set-connection-info config proc)))
 
 
-(defun ensime-set-connection-info (connection info)
+(defun ensime-set-connection-info (config connection info)
   "Initialize CONNECTION with INFO received from Lisp."
   (let ((ensime-dispatching-connection connection))
     (destructuring-bind (&key pid style server-implementation machine
@@ -894,7 +909,11 @@ If PROCESS is not specified, `ensime-connection' is used.
       (run-hooks 'ensime-connected-hook)
       (when-let (fun (plist-get args ':init-function))
 	(funcall fun)))
-    (message "Connected. %s" (ensime-random-words-of-encouragement))))
+    (message "Connected. %s" (ensime-random-words-of-encouragement))
+
+    ;; Send the project initialization..
+    (ensime-eval-async `(swank:init-project ,config) #'identity)
+    ))
 
 
 (defun ensime-check-version (version conn)
@@ -1046,6 +1065,9 @@ Return nil if there's no process object for the connection."
 ;; Non-macro version to keep the file byte-compilable. 
 (defun ensime-set-inferior-process (connection process)
   (setf (ensime-inferior-process connection) process))
+
+(defun ensime-set-config (connection config)
+  (setf (ensime-config connection) config))
 
 
 ;; Commonly used functions
@@ -1261,6 +1283,7 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-compile-current-file ()
   (interactive)
+  (if (buffer-modified-p) (ensime-save-buffer-no-hook))
   (ensime-eval-async `(swank:compile-file ,buffer-file-name) #'identity))
 
 
