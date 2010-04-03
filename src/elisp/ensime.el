@@ -1314,11 +1314,52 @@ Return nil if point is not at filename."
     nil))
 
 
+
+(defun ensime-inspect-type-insert-linked-type (type)
+  "Helper utility to output a link to a type.
+   Should only be invoked by ensime-inspect-type"
+  (let* ((type-name (ensime-type-name type))
+	 (full-type-name (plist-get type :full-name))
+	 (is-scala-std-lib (not (null (string-match "^scala\\." full-type-name))))
+	 (is-java-std-lib (not (null (string-match "^java\\." full-type-name))))
+	 (pos (plist-get type :pos))
+	 (url (cond (is-scala-std-lib
+		     (ensime-make-scaladoc-url full-type-name))
+		    (is-java-std-lib 
+		     (ensime-make-javadoc-url full-type-name))
+		    (t (ensime-pos-file pos)))))
+    (ensime-insert-link 
+     (format "%s\n" type-name) url (ensime-pos-offset pos))
+    (ensime-insert-with-face 
+     (format "(%s)\n" full-type-name) 
+     font-lock-comment-face)))
+
+(defun ensime-inspect-type-insert-linked-member (owner-type m)
+  "Helper utility to output a link to a type member.
+   Should only be invoked by ensime-inspect-type"
+  (let* ((type (plist-get m :type))
+	 (pos (plist-get m :pos))
+	 (full-owner-type-name (plist-get owner-type :full-name))
+	 (is-scala-std-lib (not (null (string-match "^scala\\." full-owner-type-name))))
+	 (is-java-std-lib (not (null (string-match "^java\\." full-owner-type-name))))
+	 (member-name (plist-get m :name))
+	 (url (cond (is-scala-std-lib
+		     (ensime-make-scaladoc-url full-owner-type-name member-name))
+		    (is-java-std-lib 
+		     (ensime-make-javadoc-url full-owner-type-name member-name))
+		    (t (ensime-pos-file pos)))))
+    (ensime-insert-link 
+     (format " %s   " member-name) url (ensime-pos-offset pos))
+    (ensime-insert-with-face (format "%s" (ensime-type-name type))
+			     font-lock-comment-face)
+    (insert "\n")))
+
 (defun ensime-inspect-type ()
-  "Display a list of all the members of the type under point."
+  "Display a list of all the members of the type under point, sorted by
+   owner type."
   (interactive)
   (let* ((info (ensime-inspect-type-at-point))
-	 (members (plist-get info :members))
+	 (members-by-owner (plist-get info :members-by-owner))
 	 (buffer-name "*ensime-type-members*"))
     (progn
       (if (get-buffer buffer-name)
@@ -1327,38 +1368,20 @@ Return nil if point is not at filename."
 
       ;; Display main type
       (let* ((type (plist-get info :type))
-	     (type-name (ensime-type-name type))
-	     (gen-type-name (plist-get type :general-name))
-	     (is-scala-std-lib (not (null (string-match "^scala\\." gen-type-name))))
-	     (is-java-std-lib (not (null (string-match "^java\\." gen-type-name))))
-	     (pos (plist-get type :pos))
-	     (url (cond (is-scala-std-lib
-			 (ensime-make-scaladoc-url gen-type-name))
-			(is-java-std-lib 
-			 (ensime-make-javadoc-url gen-type-name))
-			(t (ensime-pos-file pos)))))
-	(ensime-insert-link 
-	 (format "%s\n" type-name) url (ensime-pos-offset pos))
-	(ensime-insert-with-face 
-	 (format "(%s)\n" gen-type-name) 
-	 font-lock-comment-face)
-	(insert "---------------------\n\n")
+	     (full-type-name (plist-get type :full-name)))
+	(ensime-inspect-type-insert-linked-type type)
+	(insert "---------------------\n")
 
-	;; Display each member of type
-	(dolist (m members)
-	  (let* ((type (plist-get m :type))
-		 (pos (plist-get m :pos))
-		 (member-name (plist-get m :name))
-		 (url (cond (is-scala-std-lib
-			     (ensime-make-scaladoc-url gen-type-name member-name))
-			    (is-java-std-lib 
-			     (ensime-make-javadoc-url gen-type-name member-name))
-			    (t (ensime-pos-file pos)))))
-	    (ensime-insert-link 
-	     (format "%s   " member-name) url (ensime-pos-offset pos))
-	    (ensime-insert-with-face (format "%s" (ensime-type-name type))
-				     font-lock-comment-face)
-	    (insert "\n")))
+	;; Display each member, arranged by owner type
+	(dolist (ms members-by-owner)
+	  (let* ((owner-type (car ms))
+		 (members (cadr ms)))
+	    (insert "\n\nProvided by: ")
+	    (ensime-inspect-type-insert-linked-type owner-type)
+	    (insert "---------------------\n")
+	    (dolist (m members)
+	      (ensime-inspect-type-insert-linked-member owner-type m))
+	    ))
 
 
 	;; Setup the buffer...
