@@ -39,7 +39,6 @@
   :type 'boolean
   :group 'ensime-ui)
 
-
 (defgroup ensime-server nil
   "Server configuration."
   :prefix "ensime-"
@@ -389,21 +388,24 @@ The default condition handler for timer functions (see
   :group 'ensime)
 
 
-(defun ensime-make-scaladoc-url (ident)
+(defun ensime-make-scaladoc-url (type-name &optional member-name)
   "Given a qualified scala identifier, construct the
    corresponding scaladoc url."
-  (concat (if (not (null (string-match "^scala\\.tools\\.nsc\\." ident)))
+  (concat (if (not (null (string-match "^scala\\.tools\\.nsc\\." type-name)))
 	      ensime-scaladoc-compiler-url-base
 	    ensime-scaladoc-stdlib-url-base)
-	  (replace-regexp-in-string "\\." "/" ident)
+	  (replace-regexp-in-string "\\." "/" type-name)
+	  (if member-name (concat "$" member-name "$") "")
 	  ".html"))
 
-(defun ensime-make-javadoc-url (ident)
+(defun ensime-make-javadoc-url (type-name &optional member-name)
   "Given a qualified java identifier, construct the
    corresponding javadoc url."
   (concat ensime-javadoc-stdlib-url-base 
-	  (replace-regexp-in-string "\\." "/" ident)
-	  ".html"))
+	  (replace-regexp-in-string "\\." "/" type-name)
+	  ".html"
+	  (if member-name (concat "#" member-name) "")
+	  ))
 
 
 (defun ensime-make-code-link (start end file-path offset)
@@ -1317,35 +1319,49 @@ Return nil if point is not at filename."
   (interactive)
   (let* ((info (ensime-inspect-type-at-point))
 	 (members (plist-get info :members))
-	 (type (plist-get info :type))
-	 (type-name (plist-get type :name))
-	 (gen-type-name (plist-get type :general-name))
-	 (is-scala-std-lib (not (null (string-match "^scala\\." gen-type-name))))
-	 (is-java-std-lib (not (null (string-match "^java\\." gen-type-name))))
-	 (buffer-name "*ensime-type-members*")
-	 (member-printer
-	  (lambda (m)
-	    (insert (format "%s   " (plist-get m :name)))
-	    (ensime-insert-with-face (format "%s" (plist-get m :type))
-				     font-lock-comment-face)
-	    (insert "\n"))))
+	 (buffer-name "*ensime-type-members*"))
     (progn
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
       (switch-to-buffer-other-window buffer-name)
-      (let ((url (cond (is-scala-std-lib 
-			(ensime-make-scaladoc-url gen-type-name))
-		       (is-java-std-lib 
-			(ensime-make-javadoc-url gen-type-name))
-		       (t (plist-get type :file)))))
+
+      ;; Display main type
+      (let* ((type (plist-get info :type))
+	     (type-name (ensime-type-name type))
+	     (gen-type-name (plist-get type :general-name))
+	     (is-scala-std-lib (not (null (string-match "^scala\\." gen-type-name))))
+	     (is-java-std-lib (not (null (string-match "^java\\." gen-type-name))))
+	     (pos (plist-get type :pos))
+	     (url (cond (is-scala-std-lib
+			 (ensime-make-scaladoc-url gen-type-name))
+			(is-java-std-lib 
+			 (ensime-make-javadoc-url gen-type-name))
+			(t (ensime-pos-file pos)))))
 	(ensime-insert-link 
-	 (format "%s\n" type-name) url
-	 (plist-get type :offset))
+	 (format "%s\n" type-name) url (ensime-pos-offset pos))
 	(ensime-insert-with-face 
 	 (format "(%s)\n" gen-type-name) 
 	 font-lock-comment-face)
 	(insert "---------------------\n\n")
-	(mapc member-printer members)
+
+	;; Display each member of type
+	(dolist (m members)
+	  (let* ((type (plist-get m :type))
+		 (pos (plist-get m :pos))
+		 (member-name (plist-get m :name))
+		 (url (cond (is-scala-std-lib
+			     (ensime-make-scaladoc-url gen-type-name member-name))
+			    (is-java-std-lib 
+			     (ensime-make-javadoc-url gen-type-name member-name))
+			    (t (ensime-pos-file pos)))))
+	    (ensime-insert-link 
+	     (format "%s   " member-name) url (ensime-pos-offset pos))
+	    (ensime-insert-with-face (format "%s" (ensime-type-name type))
+				     font-lock-comment-face)
+	    (insert "\n")))
+
+
+	;; Setup the buffer...
 	(setq buffer-read-only t)
 	(use-local-map (make-sparse-keymap))
 	(define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
@@ -1390,9 +1406,20 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-oneliner (string)
   "Return STRING truncated to fit in a single echo-area line."
   (substring string 0 (min (length string)
-                           (or (position ?\n string) most-positive-fixnum)
-                           (1- (frame-width)))))
+			   (or (position ?\n string) most-positive-fixnum)
+			   (1- (frame-width)))))
 
+
+;; Ensime datastructure accessors
+
+(defun ensime-type-name (type)
+  (plist-get type :name))
+
+(defun ensime-pos-file (pos)
+  (plist-get pos :file))
+
+(defun ensime-pos-offset (pos)
+  (or (plist-get pos :offset) -1))
 
 
 ;; Portability

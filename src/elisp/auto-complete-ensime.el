@@ -17,7 +17,7 @@
     (let ((members (ensime-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let ((name (plist-get m :name))
-		      (type (plist-get m :type)))
+		      (type (plist-get m :type-name)))
 		  ;; Save the type for later display
 		  (propertize name 'scala-type type))
 		) members))))
