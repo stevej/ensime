@@ -1349,7 +1349,7 @@ Return nil if point is not at filename."
 		     (ensime-make-javadoc-url full-owner-type-name member-name))
 		    (t (ensime-pos-file pos)))))
     (ensime-insert-link 
-     (format " %s   " member-name) url (ensime-pos-offset pos))
+     (format "%s   " member-name) url (ensime-pos-offset pos))
     (ensime-insert-with-face (format "%s" (ensime-type-name type))
 			     font-lock-comment-face)
     (insert "\n")))
