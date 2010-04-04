@@ -1,19 +1,17 @@
 (require 'auto-complete)
 
-(defun ac-ensime-move-point-back-to-call-target ()
+(defun ac-ensime-move-point-back-to-call-target (prefix)
   "Assuming the point is in a member prefix, move the point back so it's
    at the last char of the call target.
   "
-  ;; TODO Make this smarter!
-  (re-search-backward "\\." (point-at-bol) t)
-  ;;  (skip-syntax-backward "w_")
-  (goto-char (1- (point))))
+  (backward-char (length prefix))
+  (re-search-backward "[^\\. ]" (point-at-bol) t))
 
 (defun ac-ensime-candidates (prefix)
   "Return candidate list."
   (ensime-save-buffer-no-hook)
   (save-excursion
-    (ac-ensime-move-point-back-to-call-target)
+    (ac-ensime-move-point-back-to-call-target prefix)
     (let ((members (ensime-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let ((name (plist-get m :name))
@@ -26,10 +24,15 @@
   "Return doc for given item."
   (get-text-property 0 'scala-type item))
 
+(defun ac-ensime-member-prefix ()
+  "C-like languages dot(.) prefix."
+  (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" nil t)))
+    (if point (1+ point))))
+
 (ac-define-source ensime
   '((document . ac-ensime-get-member-doc)
     (candidates . (ac-ensime-candidates ac-prefix))
-    (prefix . c-dot)
+    (prefix . ac-ensime-member-prefix)
     (requires . 0)
     (symbol . "f")
     (cache . t)
