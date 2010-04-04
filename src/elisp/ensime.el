@@ -1327,10 +1327,8 @@ Return nil if point is not at filename."
 		     (ensime-make-javadoc-url full-type-name))
 		    (t (ensime-pos-file pos)))))
     (ensime-insert-link 
-     (format "%s\n" type-name) url (ensime-pos-offset pos))
-    (ensime-insert-with-face 
-     (format "(%s)\n" full-type-name) 
-     font-lock-comment-face)))
+     (format "%s\n" full-type-name) url (ensime-pos-offset pos))
+    font-lock-comment-face)))
 
 (defun ensime-inspect-type-insert-linked-member (owner-type m)
   "Helper utility to output a link to a type member.
@@ -1367,17 +1365,19 @@ Return nil if point is not at filename."
       ;; Display main type
       (let* ((type (plist-get info :type))
 	     (full-type-name (plist-get type :full-name)))
+	(insert (format "%s\n" 
+			(ensime-type-declared-as-str type)))
 	(ensime-inspect-type-insert-linked-type type)
-	(insert "---------------------\n")
+
 
 	;; Display each member, arranged by owner type
 	(dolist (ms members-by-owner)
 	  (let* ((owner-type (car ms))
 		 (members (cadr ms)))
-	    (insert (format "\n\nProvided by %s " 
+	    (insert (format "\n\n%s\n" 
 			    (ensime-type-declared-as-str owner-type)))
 	    (ensime-inspect-type-insert-linked-type owner-type)
-	    (insert "---------------------\n")
+	    (insert "---------------------------\n")
 	    (dolist (m members)
 	      (ensime-inspect-type-insert-linked-member owner-type m))
 	    ))
@@ -1388,6 +1388,7 @@ Return nil if point is not at filename."
 	(use-local-map (make-sparse-keymap))
 	(define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
 	(goto-char (point-min))
+	(forward-line)
 	))))
 
 
