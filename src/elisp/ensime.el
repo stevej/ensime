@@ -139,8 +139,6 @@
       (let ((local (eq conn ensime-buffer-connection)))
 	(concat " "
 		(if local "{" "[")
-		" "
-		;; ignore errors for closed connections
 		(ignore-errors (ensime-connection-name conn))
 		(ensime-modeline-state-string conn)
 		(if local "}" "]"))))))
@@ -1376,7 +1374,8 @@ Return nil if point is not at filename."
 	(dolist (ms members-by-owner)
 	  (let* ((owner-type (car ms))
 		 (members (cadr ms)))
-	    (insert "\n\nProvided by: ")
+	    (insert (format "\n\nProvided by %s " 
+			    (ensime-type-declared-as-str owner-type)))
 	    (ensime-inspect-type-insert-linked-type owner-type)
 	    (insert "---------------------\n")
 	    (dolist (m members)
@@ -1437,6 +1436,15 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-type-name (type)
   (plist-get type :name))
+
+(defun ensime-type-declared-as-str (type)
+  (case (plist-get type :declared-as)
+    (trait "trait")
+    (interface "interface")
+    (class "class")
+    (abstractclass "abstract class")
+    (otherwise "type")
+    ))
 
 (defun ensime-pos-file (pos)
   (plist-get pos :file))
