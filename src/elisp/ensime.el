@@ -240,12 +240,13 @@ See `ensime-start'.")
 (defun ensime-load-config ()
   "Load and parse the project config file."
   (let* ((default (ensime-find-config-file buffer-file-name))
-	 (file (read-file-name "ENSIME Project file: "
-			       (if default (file-name-directory default))
-			       default
-			       nil
-			       (if default (file-name-nondirectory default))
-			       ))
+	 (file (read-file-name 
+		"ENSIME Project file: "
+		(if default (file-name-directory default))
+		default
+		nil
+		(if default (file-name-nondirectory default))
+		))
 	 ;; Infer the project root from the project file..
 	 (dir (expand-file-name (file-name-directory file))))
 
@@ -370,17 +371,20 @@ The default condition handler for timer functions (see
 ;;;;; Syntactic sugar
 
 
-(defcustom ensime-scaladoc-stdlib-url-base "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/library/"
+(defcustom ensime-scaladoc-stdlib-url-base 
+  "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/library/"
   "url for constructing scaladoc links."
   :type 'string
   :group 'ensime)
 
-(defcustom ensime-scaladoc-compiler-url-base "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/compiler/"
+(defcustom ensime-scaladoc-compiler-url-base 
+  "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/compiler/"
   "url for constructing scaladoc links."
   :type 'string
   :group 'ensime)
 
-(defcustom ensime-javadoc-stdlib-url-base "http://java.sun.com/javase/6/docs/api/"
+(defcustom ensime-javadoc-stdlib-url-base 
+  "http://java.sun.com/javase/6/docs/api/"
   "url for constructing scaladoc links."
   :type 'string
   :group 'ensime)
@@ -1242,11 +1246,7 @@ This idiom is preferred over `lexical-let'."
 				 start stop msg 'ensime-warnline nil))
 			     )))
 	      (push ov ensime-note-overlays)
-	      )))
-	)
-      )
-    )
-  )
+	      )))))))
 
 (defface ensime-errline
   '((((class color) (background dark)) (:background "Firebrick4"))
