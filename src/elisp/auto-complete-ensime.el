@@ -15,24 +15,41 @@
     (let ((members (ensime-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let ((name (plist-get m :name))
-		      (type (plist-get m :type-name)))
+		      (type (plist-get m :type)))
 		  ;; Save the type for later display
 		  (propertize name 'scala-type type))
 		) members))))
 
 (defun ac-ensime-get-member-doc (item)
   "Return doc for given item."
-  (get-text-property 0 'scala-type item))
+  (ensime-type-name 
+   (get-text-property 0 'scala-type item)))
 
 (defun ac-ensime-member-prefix ()
   "C-like languages dot(.) prefix."
   (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" nil t)))
     (if point (1+ point))))
 
+(defun ac-ensime-member-complete-action ()
+  "C-like languages dot(.) prefix."
+  (let ((candidate (ac-selected-candidate))
+	(type (get-text-property 0 'scala-type candidate)))
+    (if (and (ensime-type-is-arrow type) (ensime-type-param-types type))
+	(let* ((arg-str (mapconcat 
+			 (lambda(p)(ensime-type-name p))
+			 (ensime-type-param-types type)
+			 ", "
+			 )))
+	  (save-excursion
+	    (insert (concat "(" arg-str ")" )))
+	  (forward-char)
+	  ))))
+
 (ac-define-source ensime
   '((document . ac-ensime-get-member-doc)
     (candidates . (ac-ensime-candidates ac-prefix))
     (prefix . ac-ensime-member-prefix)
+    (action . ac-ensime-member-complete-action)
     (requires . 0)
     (symbol . "f")
     (cache . t)

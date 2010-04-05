@@ -1328,7 +1328,7 @@ Return nil if point is not at filename."
 		    (t (ensime-pos-file pos)))))
     (ensime-insert-link 
      (format "%s\n" full-type-name) url (ensime-pos-offset pos))
-    font-lock-comment-face)))
+    font-lock-comment-face))
 
 (defun ensime-inspect-type-insert-linked-member (owner-type m)
   "Helper utility to output a link to a type member.
@@ -1446,6 +1446,12 @@ It should be used for \"background\" messages such as argument lists."
     (abstractclass "abstract class")
     (otherwise "type")
     ))
+
+(defun ensime-type-is-arrow (type)
+  (plist-get type :arrow-type))
+
+(defun ensime-type-param-types (type)
+  (plist-get type :arrow-type))
 
 (defun ensime-pos-file (pos)
   (plist-get pos :file))
