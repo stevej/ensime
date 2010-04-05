@@ -15,15 +15,15 @@
     (let ((members (ensime-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let ((name (plist-get m :name))
-		      (type (plist-get m :type)))
+		      (type-name (plist-get m :type-name))
+		      (type-id (plist-get m :type-id)))
 		  ;; Save the type for later display
-		  (propertize name 'scala-type type))
+		  (propertize name 'scala-type-name type-name 'scala-type-id type-id))
 		) members))))
 
 (defun ac-ensime-get-member-doc (item)
   "Return doc for given item."
-  (ensime-type-name 
-   (get-text-property 0 'scala-type item)))
+  (get-text-property 0 'scala-type-name item))
 
 (defun ac-ensime-member-prefix ()
   "C-like languages dot(.) prefix."
@@ -31,10 +31,13 @@
     (if point (1+ point))))
 
 (defun ac-ensime-member-complete-action ()
-  "C-like languages dot(.) prefix."
-  (let ((candidate (ac-selected-candidate))
-	(type (get-text-property 0 'scala-type candidate)))
-    (if (and (ensime-type-is-arrow type) (ensime-type-param-types type))
+  "Defines action to perform when user selects a completion candidate."
+  (let* ((candidate candidate) ;;Grab from dynamic environment..
+	 (type-id (get-text-property 0 'scala-type-id candidate))
+	 (type (ensime-get-type-by-id type-id)))
+    (if (and type
+	     (ensime-type-is-arrow type) 
+	     (ensime-type-param-types type))
 	(let* ((arg-str (mapconcat 
 			 (lambda(p)(ensime-type-name p))
 			 (ensime-type-param-types type)

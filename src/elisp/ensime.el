@@ -1297,6 +1297,11 @@ This idiom is preferred over `lexical-let'."
 		 `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix "")))))
     (plist-get result :members)))
 
+(defun ensime-get-type-by-id (id)
+  (if (integerp id)
+      (ensime-eval 
+       `(swank:type-by-id ,id))))
+
 (defun ensime-inspect-type-at-point ()
   (ensime-eval 
    `(swank:inspect-type ,buffer-file-name ,(point))))
@@ -1317,7 +1322,7 @@ Return nil if point is not at filename."
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (let* ((type-name (ensime-type-name type))
-	 (full-type-name (plist-get type :full-name))
+	 (full-type-name (ensime-type-full-name type))
 	 (is-scala-std-lib (not (null (string-match "^scala\\." full-type-name))))
 	 (is-java-std-lib (not (null (string-match "^java\\." full-type-name))))
 	 (pos (plist-get type :pos))
@@ -1335,7 +1340,7 @@ Return nil if point is not at filename."
    Should only be invoked by ensime-inspect-type"
   (let* ((type (plist-get m :type))
 	 (pos (plist-get m :pos))
-	 (full-owner-type-name (plist-get owner-type :full-name))
+	 (full-owner-type-name (ensime-type-full-name owner-type))
 	 (is-scala-std-lib (not (null (string-match "^scala\\." full-owner-type-name))))
 	 (is-java-std-lib (not (null (string-match "^java\\." full-owner-type-name))))
 	 (member-name (plist-get m :name))
@@ -1438,6 +1443,11 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-type-name (type)
   (plist-get type :name))
 
+(defun ensime-type-full-name (type)
+  (if (plist-get type :arrow-type)
+      (plist-get type :name)
+    (plist-get type :full-name)))
+
 (defun ensime-type-declared-as-str (type)
   (case (plist-get type :declared-as)
     (trait "trait")
@@ -1451,7 +1461,7 @@ It should be used for \"background\" messages such as argument lists."
   (plist-get type :arrow-type))
 
 (defun ensime-type-param-types (type)
-  (plist-get type :arrow-type))
+  (plist-get type :param-types))
 
 (defun ensime-pos-file (pos)
   (plist-get pos :file))
