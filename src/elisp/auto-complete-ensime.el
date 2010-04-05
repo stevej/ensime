@@ -38,8 +38,13 @@
     (if (and type
 	     (ensime-type-is-arrow type) 
 	     (ensime-type-param-types type))
-	(let* ((arg-str (mapconcat 
-			 (lambda(p)(ensime-type-name p))
+	(let* ((i -1)
+	       (arg-str (mapconcat 
+			 (lambda(p)(progn
+				     (incf i)
+				     (format 
+				      "arg%s:%s" 
+				      i (ensime-type-name p))))
 			 (ensime-type-param-types type)
 			 ", "
 			 )))

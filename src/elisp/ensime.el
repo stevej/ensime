@@ -437,6 +437,13 @@ The default condition handler for timer functions (see
       (if (and file-path (> offset -1))
 	  (ensime-make-code-link start (point) file-path offset)))))
 
+(defun ensime-insert-action-link (text action)
+  "Insert text in current buffer and make it into an emacs 
+   button, linking to file-path and offset."
+  (let ((start (point)))
+    (insert text)
+    (make-button start (point) 'face font-lock-constant-face 'action action)))
+
 (defun ensime-insert-with-face (text face)
   "Insert text in current buffer and color it with face"
   (let ((start (point)))
@@ -1306,6 +1313,10 @@ This idiom is preferred over `lexical-let'."
   (ensime-eval 
    `(swank:inspect-type ,buffer-file-name ,(point))))
 
+(defun ensime-inspect-type-by-id (id)
+  (ensime-eval 
+   `(swank:inspect-type-by-id ,id)))
+
 
 (defun ensime-maybe-complete-as-filename ()
   "If point is at a string starting with \", complete it as filename.
@@ -1321,19 +1332,41 @@ Return nil if point is not at filename."
 (defun ensime-inspect-type-insert-linked-type (type)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
-  (let* ((type-name (ensime-type-name type))
-	 (full-type-name (ensime-type-full-name type))
-	 (is-scala-std-lib (not (null (string-match "^scala\\." full-type-name))))
-	 (is-java-std-lib (not (null (string-match "^java\\." full-type-name))))
-	 (pos (plist-get type :pos))
-	 (url (cond (is-scala-std-lib
-		     (ensime-make-scaladoc-url full-type-name))
-		    (is-java-std-lib 
-		     (ensime-make-javadoc-url full-type-name))
-		    (t (ensime-pos-file pos)))))
-    (ensime-insert-link 
-     (format "%s\n" full-type-name) url (ensime-pos-offset pos))
-    font-lock-comment-face))
+  (if (ensime-type-is-arrow type) 
+      (ensime-inspect-type-insert-linked-arrow-type type)
+    (let* ((type-name (ensime-type-name type))
+	   (full-type-name (ensime-type-full-name type))
+	   (is-scala-std-lib (not (null (string-match "^scala\\." full-type-name))))
+	   (is-java-std-lib (not (null (string-match "^java\\." full-type-name))))
+	   (pos (plist-get type :pos))
+	   (url (cond (is-scala-std-lib
+		       (ensime-make-scaladoc-url full-type-name))
+		      (is-java-std-lib 
+		       (ensime-make-javadoc-url full-type-name))
+		      (t (ensime-pos-file pos)))))
+      (ensime-insert-action-link
+       (format "%s" type-name)
+       `(lambda (x)
+	  (ensime-type-inspector-show 
+	   (ensime-inspect-type-by-id ,(ensime-type-id type))
+	   t
+	   )))
+      )))
+
+(defun ensime-inspect-type-insert-linked-arrow-type (type)
+  "Helper utility to output a link to a type.
+   Should only be invoked by ensime-inspect-type"
+  (let*  ((param-types (ensime-type-param-types type))
+	  (last-param-type (car (last param-types)))
+	  (result-type (ensime-type-result-type type)))
+    (insert "(")
+    (dolist (tpe param-types)
+      (ensime-inspect-type-insert-linked-type tpe)
+      (if (not (eq tpe last-param-type))
+	  (insert ", ")))
+    (insert ") => ")
+    (ensime-inspect-type-insert-linked-type result-type)))
+
 
 (defun ensime-inspect-type-insert-linked-member (owner-type m)
   "Helper utility to output a link to a type member.
@@ -1349,23 +1382,33 @@ Return nil if point is not at filename."
 		    (is-java-std-lib 
 		     (ensime-make-javadoc-url full-owner-type-name member-name))
 		    (t (ensime-pos-file pos)))))
-    (ensime-insert-link 
-     (format "%s   " member-name) url (ensime-pos-offset pos))
-    (ensime-insert-with-face (format "%s" (ensime-type-name type))
-			     font-lock-comment-face)
-    (insert "\n")))
+    
+    (let ((tab-stop-list '(20)))
+      (ensime-insert-link 
+       (format "%s" member-name) url (ensime-pos-offset pos))
+      (tab-to-tab-stop))
+    (ensime-inspect-type-insert-linked-type type)
+    ))
 
 (defun ensime-inspect-type ()
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (interactive)
-  (let* ((info (ensime-inspect-type-at-point))
-	 (members-by-owner (plist-get info :members-by-owner))
+  (ensime-type-inspector-show (ensime-inspect-type-at-point)))
+
+(defun ensime-type-inspector-show (info &optional same-window)
+  "Display a list of all the members of the type under point, sorted by
+   owner type."
+  (let* ((members-by-owner (plist-get info :members-by-owner))
 	 (buffer-name "*ensime-type-members*"))
     (progn
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
-      (switch-to-buffer-other-window buffer-name)
+      (if same-window
+	  (switch-to-buffer buffer-name)
+	(switch-to-buffer-other-window buffer-name))
+      
+      (text-mode)
 
       ;; Display main type
       (let* ((type (plist-get info :type))
@@ -1373,6 +1416,7 @@ Return nil if point is not at filename."
 	(insert (format "%s\n" 
 			(ensime-type-declared-as-str type)))
 	(ensime-inspect-type-insert-linked-type type)
+	(insert "\n")
 
 
 	;; Display each member, arranged by owner type
@@ -1382,9 +1426,12 @@ Return nil if point is not at filename."
 	    (insert (format "\n\n%s\n" 
 			    (ensime-type-declared-as-str owner-type)))
 	    (ensime-inspect-type-insert-linked-type owner-type)
+	    (insert "\n")
 	    (insert "---------------------------\n")
 	    (dolist (m members)
-	      (ensime-inspect-type-insert-linked-member owner-type m))
+	      (ensime-inspect-type-insert-linked-member owner-type m)
+	      (insert "\n")
+	      )
 	    ))
 
 
@@ -1443,6 +1490,9 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-type-name (type)
   (plist-get type :name))
 
+(defun ensime-type-id (type)
+  (plist-get type :id))
+
 (defun ensime-type-full-name (type)
   (if (plist-get type :arrow-type)
       (plist-get type :name)
@@ -1462,6 +1512,9 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-type-param-types (type)
   (plist-get type :param-types))
+
+(defun ensime-type-result-type (type)
+  (plist-get type :result-type))
 
 (defun ensime-pos-file (pos)
   (plist-get pos :file))
