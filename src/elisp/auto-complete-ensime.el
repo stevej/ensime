@@ -31,7 +31,9 @@
     (if point (1+ point))))
 
 (defun ac-ensime-member-complete-action ()
-  "Defines action to perform when user selects a completion candidate."
+  "Defines action to perform when user selects a completion candidate.
+   In this case, if the candidate is a method name, fill in place-holder
+   arguments."
   (let* ((candidate candidate) ;;Grab from dynamic environment..
 	 (type-id (get-text-property 0 'scala-type-id candidate))
 	 (type (ensime-get-type-by-id type-id)))

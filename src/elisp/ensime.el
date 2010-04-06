@@ -7,18 +7,15 @@
 (require 'thingatpt)
 (require 'comint)
 (require 'timer)
+(require 'tooltip)
 (require 'pp)
 (require 'hideshow)
 (require 'font-lock)
-(require 'easymenu)
 (require 'auto-complete)
 (require 'auto-complete-ensime)
 (require 'ido)
 (eval-when (compile)
-  (require 'arc-mode)
   (require 'apropos)
-  (require 'outline)
-  (require 'etags)
   (require 'compile))
 
 (eval-and-compile 
@@ -36,6 +33,16 @@
 
 (defcustom ensime-kill-without-query-p nil
   "If non-nil, kill ENSIME processes without query when quitting Emacs."
+  :type 'boolean
+  :group 'ensime-ui)
+
+(defcustom ensime-tooltip-type-hints t
+  "If non-nil, mouse tooltips are activated."
+  :type 'boolean
+  :group 'ensime-ui)
+
+(defcustom ensime-graphical-tooltips nil
+  "If non-nil, show graphical bubbles for tooltips."
   :type 'boolean
   :group 'ensime-ui)
 
@@ -114,10 +121,55 @@
   (if ensime-mode
       (progn
 	(ac-ensime-enable)
-	(add-hook 'after-save-hook 'ensime-after-save-hook nil t))
+	(add-hook 'after-save-hook 'ensime-after-save-hook nil t)
+	(when ensime-tooltip-type-hints
+	  (add-hook 'tooltip-functions 'ensime-tooltip-handler)
+	  (make-local-variable 'track-mouse)
+	  (setq track-mouse t)
+	  (make-local-variable 'tooltip-delay)
+	  (setq tooltip-delay 1.0)
+	  (define-key global-map [mouse-movement] 'ensime-tooltip-mouse-motion)))
     (progn
       (ac-ensime-disable)
-      (remove-hook 'after-save-hook 'ensime-after-save-hook t))))
+      (remove-hook 'after-save-hook 'ensime-after-save-hook t)
+      (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
+      (make-local-variable 'track-mouse)
+      (setq track-mouse nil)
+      (define-key global-map [mouse-movement] 'ignore)
+      )))
+
+
+;;;;;; Tooltips
+
+
+(defun ensime-tooltip-mouse-motion (event)
+  "Command handler for mouse movement events in `global-map'."
+  (interactive "e")
+  (tooltip-hide)
+  (when (car (mouse-pixel-position))
+    (setq tooltip-last-mouse-motion-event (copy-sequence event))
+    (tooltip-start-delayed-tip)))
+
+
+(defun ensime-tooltip-handler (event)
+  "Hook function to display a help tooltip."
+  (when (and (eventp event)
+	     ensime-mode
+	     (ensime-current-connection)
+	     (posn-point (event-end event)))
+    (let* ((point (posn-point (event-end event)))
+	   (ident (tooltip-identifier-from-point point)))
+      (ensime-eval-async 
+       `(swank:type-at-point ,buffer-file-name ,point)
+       #'(lambda (type)
+	   (when type
+	     (let ((msg (format "%s" 
+				(ensime-type-full-name type))))
+	       (if ensime-graphical-tooltips
+		   (tooltip-show msg tooltip-use-echo-area)
+		 (message msg))
+	       ))))
+      t)))
 
 
 
@@ -1332,9 +1384,13 @@ This idiom is preferred over `lexical-let'."
       (ensime-eval 
        `(swank:type-by-id ,id))))
 
+(defun ensime-get-type-at-point ()
+  (ensime-eval 
+   `(swank:type-at-point ,buffer-file-name ,(point))))
+
 (defun ensime-inspect-type-at-point ()
   (ensime-eval 
-   `(swank:inspect-type ,buffer-file-name ,(point))))
+   `(swank:inspect-type-at-point ,buffer-file-name ,(point))))
 
 (defun ensime-inspect-type-by-id (id)
   (ensime-eval 
