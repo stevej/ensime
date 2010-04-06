@@ -128,27 +128,37 @@
 	  (setq track-mouse t)
 	  (make-local-variable 'tooltip-delay)
 	  (setq tooltip-delay 1.0)
-	  (define-key global-map [mouse-movement] 'ensime-tooltip-mouse-motion)))
+	  (define-key ensime-mode-map [mouse-movement] 'ensime-mouse-motion))
+	(define-key ensime-mode-map [double-mouse-1] 'ensime-mouse-1-double-click))
     (progn
       (ac-ensime-disable)
       (remove-hook 'after-save-hook 'ensime-after-save-hook t)
       (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
       (make-local-variable 'track-mouse)
       (setq track-mouse nil)
-      (define-key global-map [mouse-movement] 'ignore)
+      (define-key ensime-mode-map [mouse-movement] 'ignore)
+      (define-key ensime-mode-map [double-mouse-1] 'ignore)
       )))
 
+;;;;;; Mouse handlers
 
-;;;;;; Tooltips
+(defun ensime-mouse-1-double-click (event)
+  "Command handler for mouse clicks events in `ensime-mode-map'."
+  (interactive "e")
+  (ensime-inspect-type))
 
-
-(defun ensime-tooltip-mouse-motion (event)
-  "Command handler for mouse movement events in `global-map'."
+(defun ensime-mouse-motion (event)
+  "Command handler for mouse movement events in `ensime-mode-map'."
   (interactive "e")
   (tooltip-hide)
   (when (car (mouse-pixel-position))
     (setq tooltip-last-mouse-motion-event (copy-sequence event))
     (tooltip-start-delayed-tip)))
+
+
+;;;;;; Tooltips
+
+
 
 
 (defun ensime-tooltip-handler (event)
@@ -159,17 +169,18 @@
 	     (posn-point (event-end event)))
     (let* ((point (posn-point (event-end event)))
 	   (ident (tooltip-identifier-from-point point)))
-      (ensime-eval-async 
-       `(swank:type-at-point ,buffer-file-name ,point)
-       #'(lambda (type)
-	   (when type
-	     (let ((msg (format "%s" 
-				(ensime-type-full-name type))))
-	       (if ensime-graphical-tooltips
-		   (tooltip-show msg tooltip-use-echo-area)
-		 (message msg))
-	       ))))
-      t)))
+      (if ident
+	  (ensime-eval-async 
+	   `(swank:type-at-point ,buffer-file-name ,point)
+	   #'(lambda (type)
+	       (when type
+		 (let ((msg (format "%s" 
+				    (ensime-type-full-name type))))
+		   (if ensime-graphical-tooltips
+		       (tooltip-show msg tooltip-use-echo-area)
+		     (message msg))
+		   ))))
+	t))))
 
 
 
