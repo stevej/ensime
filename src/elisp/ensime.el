@@ -220,6 +220,8 @@
 (defun ensime ()
   "Start an inferior ENSIME server and connect to its Swank server."
   (interactive)
+  (when (not ensime-mode) 
+    (ensime-mode 1))
   (let* ((config (ensime-load-config))
 	 (cmd (plist-get config :server-cmd))
 	 (env (plist-get config :server-env))
@@ -473,6 +475,25 @@ The default condition handler for timer functions (see
 		      (concat "#" full-type-name "#" name))))
       )))
 
+(defvar ensime-javadoc-type-replacements 
+  '(("^scala.Int$" . "int")
+    ("^scala.Double$" . "double")
+    ("^scala.Short$" . "short")
+    ("^scala.Byte$" . "byte")
+    ("^scala.Long$" . "long")
+    ("^scala.Float$" . "float")
+    ("^scala.Boolean$" . "char")
+    ("^scala.Unit$" . "void"))
+  "When creating javadoc urls, 
+   use this mapping to replace scala types with java types.")
+
+(defun ensime-javadoc-replace-types (str)
+  "Replace scala primitive type names with jave names."
+  (dolist (rep ensime-javadoc-type-replacements)
+    (setq str (replace-regexp-in-string 
+	       (car rep) (cdr rep) str)))
+  str)
+
 (defun ensime-make-javadoc-url (type &optional member)
   "Given a qualified java identifier, construct the
    corresponding javadoc url."
@@ -482,7 +503,6 @@ The default condition handler for timer functions (see
 	(concat ensime-javadoc-stdlib-url-base 
 		(replace-regexp-in-string "\\." "/" full-type-name)
 		".html"
-		
 		(if member
 		    (let* ((name (ensime-member-name member))
 			   (type (ensime-member-type member))
@@ -490,7 +510,10 @@ The default condition handler for timer functions (see
 		      (concat
 		       "#" name
 		       "("  
-		       (mapconcat 'ensime-type-full-name param-types ", ")
+		       (mapconcat 
+			(lambda (tpe)
+			  (ensime-javadoc-replace-types 
+			   (ensime-type-full-name tpe))) param-types ", ")
 		       ")"))))
       )))
 
