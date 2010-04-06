@@ -1383,10 +1383,9 @@ Return nil if point is not at filename."
 		     (ensime-make-javadoc-url full-owner-type-name member-name))
 		    (t (ensime-pos-file pos)))))
     
-    (let ((tab-stop-list '(20)))
-      (ensime-insert-link 
-       (format "%s" member-name) url (ensime-pos-offset pos))
-      (tab-to-tab-stop))
+    (ensime-insert-link 
+     (format "%s" member-name) url (ensime-pos-offset pos))
+    (tab-to-tab-stop)
     (ensime-inspect-type-insert-linked-type type)
     ))
 
@@ -1407,41 +1406,46 @@ Return nil if point is not at filename."
       (if same-window
 	  (switch-to-buffer buffer-name)
 	(switch-to-buffer-other-window buffer-name))
-      
+
       (text-mode)
 
-      ;; Display main type
-      (let* ((type (plist-get info :type))
-	     (full-type-name (plist-get type :full-name)))
-	(insert (format "%s\n" 
-			(ensime-type-declared-as-str type)))
-	(ensime-inspect-type-insert-linked-type type)
-	(insert "\n")
+      ;; We want two main columns. 
+      (let ((tab-stop-list '(15)))
+	(setq wrap-prefix (make-string 16 ?\s))
+
+	;; Display main type
+	(let* ((type (plist-get info :type))
+	       (full-type-name (plist-get type :full-name)))
+	  (insert (format "%s\n" 
+			  (ensime-type-declared-as-str type)))
+	  (ensime-inspect-type-insert-linked-type type)
+	  (insert "\n")
 
 
-	;; Display each member, arranged by owner type
-	(dolist (ms members-by-owner)
-	  (let* ((owner-type (car ms))
-		 (members (cadr ms)))
-	    (insert (format "\n\n%s\n" 
-			    (ensime-type-declared-as-str owner-type)))
-	    (ensime-inspect-type-insert-linked-type owner-type)
-	    (insert "\n")
-	    (insert "---------------------------\n")
-	    (dolist (m members)
-	      (ensime-inspect-type-insert-linked-member owner-type m)
+	  ;; Display each member, arranged by owner type
+	  (dolist (ms members-by-owner)
+	    (let* ((owner-type (car ms))
+		   (members (cadr ms)))
+	      (insert (format "\n\n%s\n" 
+			      (ensime-type-declared-as-str owner-type)))
+	      (ensime-inspect-type-insert-linked-type owner-type)
 	      (insert "\n")
-	      )
-	    ))
+	      (insert "---------------------------\n")
+	      (dolist (m members)
+		(ensime-inspect-type-insert-linked-member owner-type m)
+		(insert "\n")
+		)
+	      ))
 
 
-	;; Setup the buffer...
-	(setq buffer-read-only t)
-	(use-local-map (make-sparse-keymap))
-	(define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
-	(goto-char (point-min))
-	(forward-line)
-	))))
+	  ;; Setup the buffer...
+	  (setq buffer-read-only t)
+	  (use-local-map (make-sparse-keymap))
+	  (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
+	  (goto-char (point-min))
+	  (forward-line)
+
+	  )))))
 
 
 ;; Interface
