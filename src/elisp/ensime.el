@@ -518,19 +518,19 @@ The default condition handler for timer functions (see
       )))
 
 
-(defun ensime-make-code-link (start end file-path offset)
+(defun ensime-make-code-link (start end file-path offset &optional face)
   "Make an emacs button, from start to end in current buffer, linking to file-path and offset."
   (make-button start end
-	       'face font-lock-constant-face
+	       'face (or face font-lock-keyword-face)
 	       'action `(lambda (x)
 			  (find-file-other-window ,file-path)
 			  (goto-char ,offset)
 			  )))
 
-(defun ensime-make-code-hyperlink (start end http-path)
+(defun ensime-make-code-hyperlink (start end http-path &optional face)
   "Make an emacs button, from start to end in current buffer, hyperlinking to http-path."
   (make-button start end
-	       'face font-lock-constant-face
+	       'face (or face font-lock-constant-face)
 	       'action `(lambda (x)
 			  (browse-url ,http-path)
 			  (message "Opening documentation in browser..")
@@ -546,12 +546,12 @@ The default condition handler for timer functions (see
       (if (and file-path (> offset -1))
 	  (ensime-make-code-link start (point) file-path offset)))))
 
-(defun ensime-insert-action-link (text action)
+(defun ensime-insert-action-link (text action &optional face)
   "Insert text in current buffer and make it into an emacs 
    button, linking to file-path and offset."
   (let ((start (point)))
     (insert text)
-    (make-button start (point) 'face font-lock-constant-face 'action action)))
+    (make-button start (point) 'face (or face font-lock-variable-name-face) 'action action)))
 
 (defun ensime-insert-with-face (text face)
   "Insert text in current buffer and color it with face"
@@ -1442,23 +1442,27 @@ Return nil if point is not at filename."
 
 
 
-(defun ensime-inspect-type-insert-linked-type (type)
+(defun ensime-inspect-type-insert-linked-type (type &optional with-doc-link)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (if (ensime-type-is-arrow type) 
       (ensime-inspect-type-insert-linked-arrow-type type)
-    (let* ((type-name (ensime-type-name type))
-	   (pos (plist-get type :pos))
-	   (url (or (ensime-make-scaladoc-url type)
-		    (ensime-make-javadoc-url type)
-		    (ensime-pos-file pos))))
+    (let* ((type-name (ensime-type-name type)))
       (ensime-insert-action-link
        (format "%s" type-name)
        `(lambda (x)
 	  (ensime-type-inspector-show 
 	   (ensime-inspect-type-by-id ,(ensime-type-id type))
 	   t
-	   )))
+	   )) font-lock-type-face)
+
+      (when with-doc-link
+	(let ((pos (plist-get type :pos))
+	      (url (or (ensime-make-scaladoc-url type)
+		       (ensime-make-javadoc-url type)
+		       (ensime-pos-file pos))))
+	  (ensime-insert-link " doc" url)))
+
       )))
 
 (defun ensime-inspect-type-insert-linked-arrow-type (type)
@@ -1518,9 +1522,10 @@ Return nil if point is not at filename."
 	;; Display main type
 	(let* ((type (plist-get info :type))
 	       (full-type-name (plist-get type :full-name)))
-	  (insert (format "%s\n" 
-			  (ensime-type-declared-as-str type)))
-	  (ensime-inspect-type-insert-linked-type type)
+	  (ensime-insert-with-face (format "%s\n" 
+					   (ensime-type-declared-as-str type))
+				   font-lock-comment-face)
+	  (ensime-inspect-type-insert-linked-type type t)
 	  (insert "\n")
 
 
@@ -1528,9 +1533,11 @@ Return nil if point is not at filename."
 	  (dolist (ms members-by-owner)
 	    (let* ((owner-type (car ms))
 		   (members (cadr ms)))
-	      (insert (format "\n\n%s\n" 
-			      (ensime-type-declared-as-str owner-type)))
-	      (ensime-inspect-type-insert-linked-type owner-type)
+
+	      (ensime-insert-with-face (format "\n\n%s\n" 
+					       (ensime-type-declared-as-str owner-type))
+				       font-lock-comment-face)
+	      (ensime-inspect-type-insert-linked-type owner-type t)
 	      (insert "\n")
 	      (insert "---------------------------\n")
 	      (dolist (m members)
