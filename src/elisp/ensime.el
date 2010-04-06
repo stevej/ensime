@@ -390,24 +390,46 @@ The default condition handler for timer functions (see
   :group 'ensime)
 
 
-(defun ensime-make-scaladoc-url (type-name &optional member-name)
+(defun ensime-make-scaladoc-url (type &optional member)
   "Given a qualified scala identifier, construct the
    corresponding scaladoc url."
-  (concat (if (not (null (string-match "^scala\\.tools\\.nsc\\." type-name)))
-	      ensime-scaladoc-compiler-url-base
-	    ensime-scaladoc-stdlib-url-base)
-	  (replace-regexp-in-string "\\." "/" type-name)
-	  (if member-name (concat "$" member-name "$") "")
-	  ".html"))
+  (let* ((full-type-name (ensime-type-full-name type))
+	 (is-std-lib (not (null (string-match "^scala\\." full-type-name))))
+	 (is-compiler-lib (not (null (string-match "^scala\\.tools\\.nsc\\." full-type-name))))
+	 (url-base (cond (is-compiler-lib ensime-scaladoc-compiler-url-base)
+			 (is-std-lib ensime-scaladoc-stdlib-url-base)
+			 (t nil))))
+    (if (or is-std-lib is-compiler-lib)
+	(concat url-base
+		(replace-regexp-in-string "\\." "/" full-type-name)
+		".html"
+		(if member
+		    (let* ((name (ensime-member-name member))
+			   (type (ensime-member-type member))
+			   (param-types (ensime-type-param-types type)))
+		      (concat "#" full-type-name "#" name))))
+      )))
 
-(defun ensime-make-javadoc-url (type-name &optional member-name)
+(defun ensime-make-javadoc-url (type &optional member)
   "Given a qualified java identifier, construct the
    corresponding javadoc url."
-  (concat ensime-javadoc-stdlib-url-base 
-	  (replace-regexp-in-string "\\." "/" type-name)
-	  ".html"
-	  (if member-name (concat "#" member-name) "")
-	  ))
+  (let* ((full-type-name (ensime-type-full-name type))
+	 (is-std-lib (not (null (string-match "^java\\." full-type-name)))))
+    (if is-std-lib
+	(concat ensime-javadoc-stdlib-url-base 
+		(replace-regexp-in-string "\\." "/" full-type-name)
+		".html"
+		
+		(if member
+		    (let* ((name (ensime-member-name member))
+			   (type (ensime-member-type member))
+			   (param-types (ensime-type-param-types type)))
+		      (concat
+		       "#" name
+		       "("  
+		       (mapconcat 'ensime-type-full-name param-types ", ")
+		       ")"))))
+      )))
 
 
 (defun ensime-make-code-link (start end file-path offset)
@@ -425,6 +447,7 @@ The default condition handler for timer functions (see
 	       'face font-lock-constant-face
 	       'action `(lambda (x)
 			  (browse-url ,http-path)
+			  (message "Opening documentation in browser..")
 			  )))
 
 (defun ensime-insert-link (text file-path &optional offset)
@@ -823,19 +846,19 @@ Return nil if there's no connection."
 This doesn't mean it will connect right after Ensime is loaded."
   :group 'ensime-mode
   :type '(choice (const never)
-                 (const always)
-                 (const ask)))
+		 (const always)
+		 (const ask)))
 
 (defun ensime-auto-connect ()
   (cond ((or (eq ensime-auto-connect 'always)
-             (and (eq ensime-auto-connect 'ask)
-                  (y-or-n-p "No connection.  Start Ensime? ")))
-         (save-window-excursion
-           (ensime)
-           (while (not (ensime-current-connection))
-             (sleep-for 1))
-           (ensime-connection)))
-        (t nil)))
+	     (and (eq ensime-auto-connect 'ask)
+		  (y-or-n-p "No connection.  Start Ensime? ")))
+	 (save-window-excursion
+	   (ensime)
+	   (while (not (ensime-current-connection))
+	     (sleep-for 1))
+	   (ensime-connection)))
+	(t nil)))
 
 (defun ensime-setup-connection (config process)
   "Make a connection out of PROCESS."
@@ -1335,15 +1358,10 @@ Return nil if point is not at filename."
   (if (ensime-type-is-arrow type) 
       (ensime-inspect-type-insert-linked-arrow-type type)
     (let* ((type-name (ensime-type-name type))
-	   (full-type-name (ensime-type-full-name type))
-	   (is-scala-std-lib (not (null (string-match "^scala\\." full-type-name))))
-	   (is-java-std-lib (not (null (string-match "^java\\." full-type-name))))
 	   (pos (plist-get type :pos))
-	   (url (cond (is-scala-std-lib
-		       (ensime-make-scaladoc-url full-type-name))
-		      (is-java-std-lib 
-		       (ensime-make-javadoc-url full-type-name))
-		      (t (ensime-pos-file pos)))))
+	   (url (or (ensime-make-scaladoc-url type)
+		    (ensime-make-javadoc-url type)
+		    (ensime-pos-file pos))))
       (ensime-insert-action-link
        (format "%s" type-name)
        `(lambda (x)
@@ -1371,18 +1389,12 @@ Return nil if point is not at filename."
 (defun ensime-inspect-type-insert-linked-member (owner-type m)
   "Helper utility to output a link to a type member.
    Should only be invoked by ensime-inspect-type"
-  (let* ((type (plist-get m :type))
-	 (pos (plist-get m :pos))
-	 (full-owner-type-name (ensime-type-full-name owner-type))
-	 (is-scala-std-lib (not (null (string-match "^scala\\." full-owner-type-name))))
-	 (is-java-std-lib (not (null (string-match "^java\\." full-owner-type-name))))
-	 (member-name (plist-get m :name))
-	 (url (cond (is-scala-std-lib
-		     (ensime-make-scaladoc-url full-owner-type-name member-name))
-		    (is-java-std-lib 
-		     (ensime-make-javadoc-url full-owner-type-name member-name))
-		    (t (ensime-pos-file pos)))))
-    
+  (let* ((type (ensime-member-type m))
+	 (pos (ensime-member-pos m))
+	 (member-name (ensime-member-name m))
+	 (url (or (ensime-make-scaladoc-url owner-type m)
+		  (ensime-make-javadoc-url owner-type m)
+		  (ensime-pos-file pos))))
     (ensime-insert-link 
      (format "%s" member-name) url (ensime-pos-offset pos))
     (tab-to-tab-stop)
@@ -1409,9 +1421,9 @@ Return nil if point is not at filename."
 
       (text-mode)
 
-      ;; We want two main columns. 
-      (let ((tab-stop-list '(15)))
-	(setq wrap-prefix (make-string 16 ?\s))
+      ;; We want two main columns. The first, 20 chars wide.
+      (let ((tab-stop-list '(20)))
+	(setq wrap-prefix (make-string 21 ?\s))
 
 	;; Display main type
 	(let* ((type (plist-get info :type))
@@ -1519,6 +1531,15 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-type-result-type (type)
   (plist-get type :result-type))
+
+(defun ensime-member-name (member)
+  (plist-get member :name))
+
+(defun ensime-member-type (member)
+  (plist-get member :type))
+
+(defun ensime-member-pos (member)
+  (plist-get member :pos))
 
 (defun ensime-pos-file (pos)
   (plist-get pos :file))
