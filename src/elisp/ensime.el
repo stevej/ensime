@@ -538,13 +538,20 @@ The default condition handler for timer functions (see
 
 (defun ensime-insert-link (text file-path &optional offset)
   "Insert text in current buffer and make it into an emacs 
-   button, linking to file-path and offset."
+   button, linking to file-path and offset. Intelligently decide
+   whether to make a source link or an http link based on the file-path."
   (let ((start (point)))
-    (insert text)
-    (if (and file-path (string-match "http://" file-path))
-	(ensime-make-code-hyperlink start (point) file-path)
-      (if (and file-path (> offset -1))
-	  (ensime-make-code-link start (point) file-path offset)))))
+    (cond
+     ((and file-path (string-match "http://" file-path))
+      (progn
+	(insert text)
+	(ensime-make-code-hyperlink start (point) file-path)))
+
+     ((and file-path (integerp offset))
+      (progn
+	(insert text)
+	(ensime-make-code-link start (point) file-path offset))))))
+
 
 (defun ensime-insert-action-link (text action &optional face)
   "Insert text in current buffer and make it into an emacs 
@@ -1457,10 +1464,10 @@ Return nil if point is not at filename."
 	   )) font-lock-type-face)
 
       (when with-doc-link
-	(let ((pos (plist-get type :pos))
-	      (url (or (ensime-make-scaladoc-url type)
-		       (ensime-make-javadoc-url type)
-		       (ensime-pos-file pos))))
+	(let* ((pos (plist-get type :pos))
+	       (url (or (ensime-make-scaladoc-url type)
+			(ensime-make-javadoc-url type)
+			(ensime-pos-file pos))))
 	  (ensime-insert-link " doc" url)))
 
       )))
@@ -1505,10 +1512,11 @@ Return nil if point is not at filename."
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (let* ((members-by-owner (plist-get info :members-by-owner))
-	 (buffer-name "*ensime-type-members*"))
+	 (buffer-name "*Type Inspector*"))
     (progn
       (if (get-buffer buffer-name)
 	  (kill-buffer buffer-name))
+
       (if same-window
 	  (switch-to-buffer buffer-name)
 	(switch-to-buffer-other-window buffer-name))
@@ -1550,6 +1558,7 @@ Return nil if point is not at filename."
 	  ;; Setup the buffer...
 	  (setq buffer-read-only t)
 	  (use-local-map (make-sparse-keymap))
+	  (define-key (current-local-map) [mouse-1] 'push-button)
 	  (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
 	  (goto-char (point-min))
 	  (forward-line)
