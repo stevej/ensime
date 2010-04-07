@@ -36,12 +36,17 @@
   :type 'boolean
   :group 'ensime-ui)
 
-(defcustom ensime-tooltip-type-hints t
+(defcustom ensime-tooltip-hints t
   "If non-nil, mouse tooltips are activated."
   :type 'boolean
   :group 'ensime-ui)
 
-(defcustom ensime-graphical-tooltips nil
+(defcustom ensime-tooltip-type-hints t
+  "If non-nil, type-inspecting tooltips are activated."
+  :type 'boolean
+  :group 'ensime-ui)
+
+(defcustom ensime-graphical-tooltips t
   "If non-nil, show graphical bubbles for tooltips."
   :type 'boolean
   :group 'ensime-ui)
@@ -122,7 +127,7 @@
       (progn
 	(ac-ensime-enable)
 	(add-hook 'after-save-hook 'ensime-after-save-hook nil t)
-	(when ensime-tooltip-type-hints
+	(when ensime-tooltip-hints
 	  (add-hook 'tooltip-functions 'ensime-tooltip-handler)
 	  (make-local-variable 'track-mouse)
 	  (setq track-mouse t)
@@ -159,6 +164,11 @@
 ;;;;;; Tooltips
 
 
+(defun ensime-tooltip-show-message (msg)
+  "Display tooltip, respecting ensime tooltip options."
+  (if ensime-graphical-tooltips
+      (tooltip-show msg tooltip-use-echo-area)
+    (message msg)))
 
 
 (defun ensime-tooltip-handler (event)
@@ -167,20 +177,34 @@
 	     ensime-mode
 	     (ensime-current-connection)
 	     (posn-point (event-end event)))
+
     (let* ((point (posn-point (event-end event)))
-	   (ident (tooltip-identifier-from-point point)))
-      (if ident
+	   (ident (tooltip-identifier-from-point point))
+	   (note-overlays (ensime-overlays-at point)))
+
+      (cond
+
+       ;; If error or warning overlays exist, 
+       ;; show that message..
+       (note-overlays (progn
+			(ensime-tooltip-show-message
+			 (overlay-get (car note-overlays) 'help-echo))
+			t))
+
+       ;; Otherwise show a type hint..
+       ((and ident ensime-tooltip-type-hints)
+	(progn 
 	  (ensime-eval-async 
 	   `(swank:type-at-point ,buffer-file-name ,point)
 	   #'(lambda (type)
 	       (when type
-		 (let ((msg (format "%s" 
-				    (ensime-type-full-name type))))
-		   (if ensime-graphical-tooltips
-		       (tooltip-show msg tooltip-use-echo-area)
-		     (message msg))
+		 (let ((msg (format "%s" (ensime-type-full-name type))))
+		   (ensime-tooltip-show-message msg)
 		   ))))
-	t))))
+	  t
+	  )))
+      )))
+
 
 
 
@@ -1395,6 +1419,14 @@ This idiom is preferred over `lexical-let'."
     (overlay-put ov 'priority 100)
     ov)
   )
+
+(defun ensime-overlays-at (point)
+  "Return list of overlays of type 'ensime-overlay at point."
+  (let ((ovs (overlays-at point)))
+    (remove-if-not 
+     (lambda (ov) (overlay-get ov 'ensime-overlay))
+     ovs)
+    ))
 
 (defun ensime-remove-old-overlays ()
   "Delete the existing note overlays."
