@@ -1,6 +1,5 @@
 ;;; ensime.el --- ENhanced Scala Interaction Mode for Emacs
 ;;
-
 (eval-and-compile
   (when (<= emacs-major-version 21)
     (error "Ensime requires an Emacs version of 21, or above")))
