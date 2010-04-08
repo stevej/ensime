@@ -12,7 +12,7 @@
   (ensime-save-buffer-no-hook)
   (save-excursion
     (ac-ensime-move-point-back-to-call-target prefix)
-    (let ((members (ensime-members-for-type-at-point prefix)))
+    (let ((members (ensime-rpc-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let ((name (plist-get m :name))
 		      (type-name (plist-get m :type-name))
@@ -36,7 +36,7 @@
    arguments."
   (let* ((candidate candidate) ;;Grab from dynamic environment..
 	 (type-id (get-text-property 0 'scala-type-id candidate))
-	 (type (ensime-get-type-by-id type-id)))
+	 (type (ensime-rpc-get-type-by-id type-id)))
     (if (and type
 	     (ensime-type-is-arrow type) 
 	     (ensime-type-param-types type))

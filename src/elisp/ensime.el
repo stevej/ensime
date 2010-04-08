@@ -1364,7 +1364,11 @@ This idiom is preferred over `lexical-let'."
 	     ensime-words-of-encouragement)))
 
 
-;; Compiler notes
+
+
+
+
+;; Compiler Notes (Error/Warning overlays)
 
 (defvar ensime-note-overlays '())
 
@@ -1433,6 +1437,9 @@ This idiom is preferred over `lexical-let'."
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
 
+
+
+
 ;; Test compile current file
 
 (defun ensime-compile-current-file ()
@@ -1441,43 +1448,38 @@ This idiom is preferred over `lexical-let'."
   (ensime-eval-async `(swank:compile-file ,buffer-file-name) #'identity))
 
 
-;; Completion
 
-(defun ensime-scope-completion ()
+
+;; Basic RPC calls
+
+(defun ensime-rpc-scope-completion ()
   (ensime-eval-async `(swank:scope-completion ,buffer-file-name ,(point)) #'identity))
 
-(defun ensime-members-for-type-at-point (&optional prefix)
+(defun ensime-rpc-members-for-type-at-point (&optional prefix)
   (ensime-eval 
    `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix ""))))
 
-(defun ensime-get-type-by-id (id)
+(defun ensime-rpc-get-type-by-id (id)
   (if (integerp id)
       (ensime-eval 
        `(swank:type-by-id ,id))))
 
-(defun ensime-get-type-at-point ()
+(defun ensime-rpc-get-type-at-point ()
   (ensime-eval 
    `(swank:type-at-point ,buffer-file-name ,(point))))
 
-(defun ensime-inspect-type-at-point ()
+(defun ensime-rpc-inspect-type-at-point ()
   (ensime-eval 
    `(swank:inspect-type-at-point ,buffer-file-name ,(point))))
 
-(defun ensime-inspect-type-by-id (id)
+(defun ensime-rpc-inspect-type-by-id (id)
   (ensime-eval 
    `(swank:inspect-type-by-id ,id)))
 
 
-(defun ensime-maybe-complete-as-filename ()
-  "If point is at a string starting with \", complete it as filename.
-Return nil if point is not at filename."
-  (if (save-excursion (re-search-backward "\"[^ \t\n]+\\=" nil t))
-      (let ((comint-completion-addsuffix '("/" . "\"")))
-	(comint-replace-by-expanded-filename)
-	t)
-    nil))
 
 
+;; Type Inspector UI
 
 (defun ensime-inspect-type-insert-linked-type (type &optional with-doc-link)
   "Helper utility to output a link to a type.
@@ -1489,7 +1491,7 @@ Return nil if point is not at filename."
        (format "%s" type-name)
        `(lambda (x)
 	  (ensime-type-inspector-show 
-	   (ensime-inspect-type-by-id ,(ensime-type-id type))
+	   (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
 	   t
 	   )) font-lock-type-face)
 
@@ -1536,13 +1538,13 @@ Return nil if point is not at filename."
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (interactive)
-  (ensime-type-inspector-show (ensime-inspect-type-at-point)))
+  (ensime-type-inspector-show (ensime-rpc-inspect-type-at-point)))
 
 (defun ensime-type-inspector-show (info &optional same-window)
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (let* ((supers (plist-get info :supers))
-	 (named-type (plist-get info :named-type))
+	 (type (plist-get info :named-type))
 	 (buffer-name "*Type Inspector*"))
     (progn
       (if (get-buffer buffer-name)
@@ -1559,8 +1561,7 @@ Return nil if point is not at filename."
 	(setq wrap-prefix (make-string 21 ?\s))
 
 	;; Display main type
-	(let* ((type (plist-get named-type :type))
-	       (full-type-name (plist-get type :name)))
+	(let* ((full-type-name (plist-get type :name)))
 	  (ensime-insert-with-face (format "%s\n" 
 					   (ensime-type-declared-as-str type))
 				   font-lock-comment-face)
@@ -1570,7 +1571,7 @@ Return nil if point is not at filename."
 
 	  ;; Display each member, arranged by owner type
 	  (dolist (super supers)
-	    (let* ((owner-type (plist-get super :type))
+	    (let* ((owner-type super)
 		   (members (plist-get super :members)))
 
 	      (ensime-insert-with-face 
@@ -1645,7 +1646,7 @@ It should be used for \"background\" messages such as argument lists."
   (plist-get type :name))
 
 (defun ensime-type-id (type)
-  (plist-get type :id))
+  (plist-get type :type-id))
 
 (defun ensime-type-full-name (type)
   (if (plist-get type :arrow-type)
