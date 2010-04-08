@@ -1447,9 +1447,8 @@ This idiom is preferred over `lexical-let'."
   (ensime-eval-async `(swank:scope-completion ,buffer-file-name ,(point)) #'identity))
 
 (defun ensime-members-for-type-at-point (&optional prefix)
-  (let ((result (ensime-eval 
-		 `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix "")))))
-    (plist-get result :members)))
+  (ensime-eval 
+   `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix ""))))
 
 (defun ensime-get-type-by-id (id)
   (if (integerp id)
@@ -1542,7 +1541,8 @@ Return nil if point is not at filename."
 (defun ensime-type-inspector-show (info &optional same-window)
   "Display a list of all the members of the type under point, sorted by
    owner type."
-  (let* ((members-by-owner (plist-get info :members-by-owner))
+  (let* ((supers (plist-get info :supers))
+	 (named-type (plist-get info :named-type))
 	 (buffer-name "*Type Inspector*"))
     (progn
       (if (get-buffer buffer-name)
@@ -1559,8 +1559,8 @@ Return nil if point is not at filename."
 	(setq wrap-prefix (make-string 21 ?\s))
 
 	;; Display main type
-	(let* ((type (plist-get info :type))
-	       (full-type-name (plist-get type :full-name)))
+	(let* ((type (plist-get named-type :type))
+	       (full-type-name (plist-get type :name)))
 	  (ensime-insert-with-face (format "%s\n" 
 					   (ensime-type-declared-as-str type))
 				   font-lock-comment-face)
@@ -1569,13 +1569,14 @@ Return nil if point is not at filename."
 
 
 	  ;; Display each member, arranged by owner type
-	  (dolist (ms members-by-owner)
-	    (let* ((owner-type (car ms))
-		   (members (cadr ms)))
+	  (dolist (super supers)
+	    (let* ((owner-type (plist-get super :type))
+		   (members (plist-get super :members)))
 
-	      (ensime-insert-with-face (format "\n\n%s\n" 
-					       (ensime-type-declared-as-str owner-type))
-				       font-lock-comment-face)
+	      (ensime-insert-with-face 
+	       (format "\n\n%s\n" 
+		       (ensime-type-declared-as-str owner-type))
+	       font-lock-comment-face)
 	      (ensime-inspect-type-insert-linked-type owner-type t)
 	      (insert "\n")
 	      (insert "---------------------------\n")
