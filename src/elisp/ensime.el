@@ -1476,6 +1476,9 @@ This idiom is preferred over `lexical-let'."
   (ensime-eval 
    `(swank:inspect-type-by-id ,id)))
 
+(defun ensime-rpc-inspect-package-by-path (path)
+  (ensime-eval 
+   `(swank:inspect-package-by-path ,path)))
 
 
 
@@ -1597,6 +1600,39 @@ This idiom is preferred over `lexical-let'."
 	  (forward-line)
 
 	  )))))
+
+
+
+;; Package Inspector
+
+(defun ensime-inspect-package-by-path (&optional path)
+  "Display a list of all the members of the package with user provided path."
+  (interactive)
+  (let ((p (or path (read-string "Package path: "))))
+    (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))))
+
+
+(defun ensime-package-inspector-show (info &optional same-window)
+  "Display a list of all the members of the provided package."
+  (let* ((buffer-name "*Package Inspector*"))
+    (progn
+      (if (get-buffer buffer-name)
+	  (kill-buffer buffer-name))
+      (if same-window
+	  (switch-to-buffer buffer-name)
+	(switch-to-buffer-other-window buffer-name))
+      (text-mode)
+
+      (insert "%s" info)
+
+      ;; Setup the buffer...
+      (setq buffer-read-only t)
+      (use-local-map (make-sparse-keymap))
+      (define-key (current-local-map) [mouse-1] 'push-button)
+      (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
+      (goto-char (point-min))
+      (forward-line)
+      )))
 
 
 ;; Interface
