@@ -1623,7 +1623,7 @@ This idiom is preferred over `lexical-let'."
 	(switch-to-buffer-other-window buffer-name))
       (text-mode)
 
-      (insert "%s" info)
+      (insert (format "%s" info))
 
       ;; Setup the buffer...
       (setq buffer-read-only t)
