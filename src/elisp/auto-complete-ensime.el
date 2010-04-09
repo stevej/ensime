@@ -16,9 +16,13 @@
       (mapcar (lambda (m)
 		(let* ((type-name (plist-get m :type-name))
 		      (type-id (plist-get m :type-id))
-		      (name (concat (plist-get m :name) type-name)))
+		      (name (plist-get m :name))
+		      (candidate (concat name ":" type-name)))
 		  ;; Save the type for later display
-		  (propertize name 'scala-type-name type-name 'scala-type-id type-id))
+		  (propertize candidate
+			      'member-name name
+			      'scala-type-name type-name 
+			      'scala-type-id type-id))
 		) members))))
 
 (defun ac-ensime-get-member-doc (item)
@@ -36,7 +40,10 @@
    arguments."
   (let* ((candidate candidate) ;;Grab from dynamic environment..
 	 (type-id (get-text-property 0 'scala-type-id candidate))
-	 (type (ensime-rpc-get-type-by-id type-id)))
+	 (type (ensime-rpc-get-type-by-id type-id))
+	 (member-name (get-text-property 0 'member-name candidate)))
+    (kill-backward-chars (length candidate))
+    (insert member-name)
     (if (and type
 	     (ensime-type-is-arrow type) 
 	     (ensime-type-param-types type))
