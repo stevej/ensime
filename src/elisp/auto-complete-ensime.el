@@ -14,9 +14,9 @@
     (ac-ensime-move-point-back-to-call-target prefix)
     (let ((members (ensime-rpc-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
-		(let ((name (plist-get m :name))
-		      (type-name (plist-get m :type-name))
-		      (type-id (plist-get m :type-id)))
+		(let* ((type-name (plist-get m :type-name))
+		      (type-id (plist-get m :type-id))
+		      (name (concat (plist-get m :name) type-name)))
 		  ;; Save the type for later display
 		  (propertize name 'scala-type-name type-name 'scala-type-id type-id))
 		) members))))
