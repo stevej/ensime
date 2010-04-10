@@ -1,4 +1,4 @@
-;;; ensime.el --- ENhanced Scala Interaction Mode for Emacs
+
 ;;
 (eval-and-compile
   (when (<= emacs-major-version 21)
@@ -29,6 +29,13 @@
   "Interaction with the ENhanced Scala Environment."
   :prefix "ensime-"
   :group 'ensime)
+
+(defcustom ensime-truncate-lines t
+  "Set `truncate-lines' in popup buffers.
+This applies to buffers that present lines as rows of data, such as
+debugger backtraces and apropos listings."
+  :type 'boolean
+  :group 'ensime-ui)
 
 (defcustom ensime-kill-without-query-p nil
   "If non-nil, kill ENSIME processes without query when quitting Emacs."
@@ -104,6 +111,7 @@
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c t") 'ensime-inspect-type)
+    (define-key map (kbd "C-c p") 'ensime-inspect-package)
     (define-key map (kbd "C-c c") 'ensime-compile-current-file)
     map)
   "Keymap for `ensime-mode'.")
@@ -115,6 +123,8 @@
 
   Finding definitions:
   \\[ensime-inspect-type]   - Show a summary of the type under point.
+
+  \\[ensime-inspect-package]   - Show a summary of the package containing point.
  
   Full set of commands:
   \\{ensime-mode-map}"
@@ -1322,9 +1332,9 @@ This idiom is preferred over `lexical-let'."
 	   (ensime-send `(:emacs-pong ,thread ,tag)))
 	  ((:reader-error packet condition)
 	   (ensime-with-popup-buffer ("*Ensime Error*")
-				     (princ (format "Invalid protocol message:\n%s\n\n%S"
-						    condition packet))
-				     (goto-char (point-min)))
+	     (princ (format "Invalid protocol message:\n%s\n\n%S"
+			    condition packet))
+	     (goto-char (point-min)))
 	   (error "Invalid protocol message"))
 	  ((:invalid-rpc id message)
 	   (setf (ensime-rex-continuations)
@@ -1460,7 +1470,7 @@ This idiom is preferred over `lexical-let'."
    `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix ""))))
 
 (defun ensime-rpc-get-type-by-id (id)
-  (if (integerp id)
+  (if (and (integerp id) (> id -1))
       (ensime-eval 
        `(swank:type-by-id ,id))))
 
@@ -1473,8 +1483,9 @@ This idiom is preferred over `lexical-let'."
    `(swank:inspect-type-at-point ,buffer-file-name ,(point))))
 
 (defun ensime-rpc-inspect-type-by-id (id)
-  (ensime-eval 
-   `(swank:inspect-type-by-id ,id)))
+  (if (and (integerp id) (> id -1))
+      (ensime-eval 
+       `(swank:inspect-type-by-id ,id))))
 
 (defun ensime-rpc-inspect-package-by-path (path)
   (ensime-eval 
@@ -1484,14 +1495,14 @@ This idiom is preferred over `lexical-let'."
 
 ;; Type Inspector UI
 
-(defun ensime-inspect-type-insert-linked-type (type &optional with-doc-link)
+(defun ensime-type-inspector-insert-linked-type (type &optional with-doc-link)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (if (ensime-type-is-arrow type) 
-      (ensime-inspect-type-insert-linked-arrow-type type)
+      (ensime-type-inspector-insert-linked-arrow-type type)
     (let* ((type-name (ensime-type-name type)))
       (ensime-insert-action-link
-       (format "%s" type-name)
+       (format "%s%s" (make-string indent-level ?\s) type-name)
        `(lambda (x)
 	  (ensime-type-inspector-show 
 	   (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
@@ -1507,7 +1518,7 @@ This idiom is preferred over `lexical-let'."
 
       )))
 
-(defun ensime-inspect-type-insert-linked-arrow-type (type)
+(defun ensime-type-inspector-insert-linked-arrow-type (type)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (let*  ((param-types (ensime-type-param-types type))
@@ -1515,14 +1526,14 @@ This idiom is preferred over `lexical-let'."
 	  (result-type (ensime-type-result-type type)))
     (insert "(")
     (dolist (tpe param-types)
-      (ensime-inspect-type-insert-linked-type tpe)
+      (ensime-type-inspector-insert-linked-type tpe)
       (if (not (eq tpe last-param-type))
 	  (insert ", ")))
     (insert ") => ")
-    (ensime-inspect-type-insert-linked-type result-type)))
+    (ensime-type-inspector-insert-linked-type result-type)))
 
 
-(defun ensime-inspect-type-insert-linked-member (owner-type m)
+(defun ensime-type-inspector-insert-linked-member (owner-type m)
   "Helper utility to output a link to a type member.
    Should only be invoked by ensime-inspect-type"
   (let* ((type (ensime-member-type m))
@@ -1534,7 +1545,7 @@ This idiom is preferred over `lexical-let'."
     (ensime-insert-link 
      (format "%s" member-name) url (ensime-pos-offset pos))
     (tab-to-tab-stop)
-    (ensime-inspect-type-insert-linked-type type)
+    (ensime-type-inspector-insert-linked-type type)
     ))
 
 (defun ensime-inspect-type ()
@@ -1548,16 +1559,11 @@ This idiom is preferred over `lexical-let'."
    owner type."
   (let* ((supers (plist-get info :supers))
 	 (type (plist-get info :named-type))
-	 (buffer-name "*Type Inspector*"))
-    (progn
-      (if (get-buffer buffer-name)
-	  (kill-buffer buffer-name))
-
-      (if same-window
-	  (switch-to-buffer buffer-name)
-	(switch-to-buffer-other-window buffer-name))
-
-      (text-mode)
+	 (buffer-name "*Type Inspector*")
+	 (indent-level 0))
+    (if (eq (get-buffer buffer-name) (current-buffer))
+	(kill-buffer-and-window))
+    (ensime-with-popup-buffer (buffer-name nil t)
 
       ;; We want two main columns. The first, 20 chars wide.
       (let ((tab-stop-list '(20)))
@@ -1568,7 +1574,7 @@ This idiom is preferred over `lexical-let'."
 	  (ensime-insert-with-face (format "%s\n" 
 					   (ensime-type-declared-as-str type))
 				   font-lock-comment-face)
-	  (ensime-inspect-type-insert-linked-type type t)
+	  (ensime-type-inspector-insert-linked-type type t)
 	  (insert "\n")
 
 
@@ -1581,25 +1587,18 @@ This idiom is preferred over `lexical-let'."
 	       (format "\n\n%s\n" 
 		       (ensime-type-declared-as-str owner-type))
 	       font-lock-comment-face)
-	      (ensime-inspect-type-insert-linked-type owner-type t)
+	      (ensime-type-inspector-insert-linked-type owner-type t)
 	      (insert "\n")
 	      (insert "---------------------------\n")
 	      (dolist (m members)
-		(ensime-inspect-type-insert-linked-member owner-type m)
+		(ensime-type-inspector-insert-linked-member owner-type m)
 		(insert "\n")
 		)
 	      ))
 
-
-	  ;; Setup the buffer...
-	  (setq buffer-read-only t)
-	  (use-local-map (make-sparse-keymap))
-	  (define-key (current-local-map) [mouse-1] 'push-button)
-	  (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
 	  (goto-char (point-min))
-	  (forward-line)
-
-	  )))))
+	  ))
+      )))
 
 
 
@@ -1612,28 +1611,50 @@ This idiom is preferred over `lexical-let'."
     (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))))
 
 
-(defun ensime-package-inspector-show (info &optional same-window)
-  "Display a list of all the members of the provided package."
-  (let* ((buffer-name "*Package Inspector*"))
-    (progn
-      (if (get-buffer buffer-name)
-	  (kill-buffer buffer-name))
-      (if same-window
-	  (switch-to-buffer buffer-name)
-	(switch-to-buffer-other-window buffer-name))
-      (text-mode)
+(defun ensime-inspect-package ()
+  "Inspect the package of the current source file."
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (if (search-forward-regexp 
+	 "package \\(\\(?:[A-z0-0]+\\.\\)*[A-z0-0]+\\)"
+	 (point-max) t)
+	(let ((path (match-string 1)))
+	  ;; Remove all properties..
+	  (set-text-properties 0 (length path) nil path)
+	  (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))
+      (message "No package declaration found."))))
 
-      (insert (format "%s" info))
 
-      ;; Setup the buffer...
-      (setq buffer-read-only t)
-      (use-local-map (make-sparse-keymap))
-      (define-key (current-local-map) [mouse-1] 'push-button)
-      (define-key (current-local-map) (kbd "q") 'kill-buffer-and-window)
-      (goto-char (point-min))
-      (forward-line)
+(defun ensime-package-inspector-insert-package (pack &optional absolute)
+  (let ((name (if absolute 
+		  (ensime-package-full-name pack)
+		(ensime-package-name pack)))
+	(members (ensime-package-members pack)))
+
+    (insert (format "%s%s\n" (make-string indent-level ?\s) name))
+    (let ((indent-level (+ indent-level 5)))
+      (dolist (ea members)
+	(when (not (ensime-package-p ea))
+	  (ensime-type-inspector-insert-linked-type ea)
+	  (insert "\n")))
+      (dolist (ea members)
+	(when (ensime-package-p ea)
+	  (ensime-package-inspector-insert-package ea t)
+	  (insert "\n")))
       )))
 
+
+(defun ensime-package-inspector-show (info &optional same-window)
+  "Display a list of all the members of the provided package."
+  (let* ((buffer-name "*Package Inspector*")
+	 (indent-level 0))
+    (if (eq (get-buffer buffer-name) (current-buffer))
+	(kill-buffer-and-window))
+    (ensime-with-popup-buffer (buffer-name nil t)
+      (ensime-package-inspector-insert-package info t)
+      (goto-char (point-min))
+      )))
 
 ;; Interface
 
@@ -1677,6 +1698,18 @@ It should be used for \"background\" messages such as argument lists."
 
 
 ;; Ensime datastructure accessors
+
+(defun ensime-package-name (info)
+  (plist-get info :name))
+
+(defun ensime-package-full-name (info)
+  (plist-get info :full-name))
+
+(defun ensime-package-members (info)
+  (plist-get info :members))
+
+(defun ensime-package-p (info)
+  (equal 'package (plist-get info :info-type)))
 
 (defun ensime-type-name (type)
   (plist-get type :name))
@@ -1737,5 +1770,288 @@ It should be used for \"background\" messages such as argument lists."
 				(if timeout (truncate timeout))
 				;; Emacs 21 uses microsecs; Emacs 22 millisecs
 				(if timeout (truncate (* timeout 1000000)))))))
+
+
+;; Popup Buffer
+
+;;;;; Temporary popup buffers
+
+(defvar ensime-popup-buffer-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "q") 'ensime-popup-buffer-quit-function)
+    (define-key map [mouse-1] 'push-button)
+    map)
+  "Keymap for `ensime-popup-buffer-mode'.")
+
+(define-minor-mode ensime-popup-buffer-mode 
+  "Mode for displaying read only stuff"
+  nil
+  nil
+  ensime-popup-buffer-mode-map)
+
+(add-to-list 'minor-mode-alist
+	     '(ensime-popup-buffer-mode (:eval (ensime-modeline-string))))
+
+(defvar ensime-popup-restore-data nil
+  "Data needed when closing popup windows.
+This is used as buffer local variable.
+The format is (POPUP-WINDOW SELECTED-WINDOW OLD-BUFFER).
+POPUP-WINDOW is the window used to display the temp buffer.
+That window may have been reused or freshly created.
+SELECTED-WINDOW is the window that was selected before displaying
+the popup buffer.
+OLD-BUFFER is the buffer that was previously displayed in POPUP-WINDOW.
+OLD-BUFFER is nil if POPUP-WINDOW was newly created.
+
+See `view-return-to-alist' for a similar idea.")
+
+;; keep compiler quiet
+(defvar ensime-buffer-package)
+(defvar ensime-buffer-connection)
+
+;; Interface
+(defmacro* ensime-with-popup-buffer ((name &optional connection select)
+				     &body body)
+  "Similar to `with-output-to-temp-buffer'.
+Bind standard-output and initialize some buffer-local variables.
+Restore window configuration when closed.
+
+NAME is the name of the buffer to be created.
+CONNECTION is the value for `ensime-buffer-connection'.
+If nil, no explicit connection is associated with
+the buffer.  If t, the current connection is taken.
+"
+  `(let* ((vars% (list ,(if (eq connection t) '(ensime-connection) connection)))
+          (standard-output (ensime-make-popup-buffer ,name vars%)))
+     (with-current-buffer standard-output
+       (prog1 (progn ,@body)
+         (assert (eq (current-buffer) standard-output))
+         (ensime-init-popup-buffer vars%)
+         (setq buffer-read-only t)
+         (set-window-point (ensime-display-popup-buffer ,(or select 'nil))
+                           (point))))))
+
+
+(defun ensime-make-popup-buffer (name buffer-vars)
+  "Return a temporary buffer called NAME.
+The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
+  (with-current-buffer (get-buffer-create name)
+    (kill-all-local-variables)
+    (setq buffer-read-only nil)
+    (erase-buffer)
+    (set-syntax-table lisp-mode-syntax-table)
+    (ensime-init-popup-buffer buffer-vars)
+    (current-buffer)))
+
+(defun ensime-init-popup-buffer (buffer-vars)
+  (ensime-popup-buffer-mode 1)
+  (multiple-value-setq (ensime-buffer-package ensime-buffer-connection)
+    buffer-vars))
+
+(defun ensime-display-popup-buffer (select)
+  "Display the current buffer.
+   Save the selected-window in a buffer-local variable, so that we
+   can restore it later."
+  (let ((selected-window (selected-window))
+        (old-windows))
+    (walk-windows (lambda (w) (push (cons w (window-buffer w)) old-windows))
+                  nil t)
+    (let ((new-window (display-buffer (current-buffer))))
+      (unless ensime-popup-restore-data
+        (set (make-local-variable 'ensime-popup-restore-data)
+             (list new-window
+                   selected-window
+                   (cdr (find new-window old-windows :key #'car)))))
+      (when select
+        (select-window new-window))
+      new-window)))
+
+(defun ensime-close-popup-window ()
+  (when ensime-popup-restore-data
+    (destructuring-bind (popup-window selected-window old-buffer)
+        ensime-popup-restore-data
+      (kill-local-variable 'ensime-popup-restore-data)
+      (bury-buffer)
+      (when (eq popup-window (selected-window))
+        (cond ((and (not old-buffer) (not (one-window-p)))
+               (delete-window popup-window))
+              ((and old-buffer (buffer-live-p old-buffer))
+	       (set-window-buffer popup-window old-buffer))
+	      ))
+      (when (window-live-p selected-window)
+        (select-window selected-window)))
+    ))
+
+
+(defmacro ensime-save-local-variables (vars &rest body)
+  (let ((vals (make-symbol "vals")))
+    `(let ((,vals (mapcar (lambda (var)
+			    (if (ensime-local-variable-p var)
+				(cons var (eval var))))
+			  ',vars)))
+       (prog1 (progn . ,body)
+	 (mapc (lambda (var+val)
+		 (when (consp var+val)
+		   (set (make-local-variable (car var+val)) (cdr var+val))))
+	       ,vals)))))
+
+
+(make-variable-buffer-local
+ (defvar ensime-popup-buffer-quit-function 'ensime-popup-buffer-quit
+   "The function that is used to quit a temporary popup buffer."))
+
+(defun ensime-popup-buffer-quit-function (&optional kill-buffer-p)
+  "Wrapper to invoke the value of `ensime-popup-buffer-quit-function'."
+  (interactive)
+  (funcall ensime-popup-buffer-quit-function kill-buffer-p))
+
+(defun ensime-popup-buffer-quit (&optional kill-buffer-p)
+  "Get rid of the current (temp) buffer without asking.
+  Restore the window configuration unless it was changed since we
+  last activated the buffer."
+  (interactive)
+  (let ((buffer (current-buffer)))
+    (ensime-close-popup-window)
+    (when kill-buffer-p
+      (kill-buffer buffer))))
+
+
+;;;;; Connection listing
+
+(define-derived-mode ensime-connection-list-mode fundamental-mode
+  "Ensime-Connections"
+  "ENSIME Connection List Mode.
+
+\\{ensime-connection-list-mode-map}
+\\{ensime-popup-buffer-mode-map}"
+  (when ensime-truncate-lines
+    (set (make-local-variable 'truncate-lines) t)))
+
+(ensime-define-keys ensime-connection-list-mode-map
+		    ("d"         'ensime-connection-list-make-default)
+		    ("g"         'ensime-update-connection-list)
+		    ((kbd "C-k") 'ensime-quit-connection-at-point)
+		    ("R"         'ensime-restart-connection-at-point))
+
+(defun ensime-connection-at-point ()
+  (or (get-text-property (point) 'ensime-connection)
+      (error "No connection at point")))
+
+(defun ensime-quit-connection-at-point (connection)
+  (interactive (list (ensime-connection-at-point)))
+  (let ((ensime-dispatching-connection connection)
+        (end (time-add (current-time) (seconds-to-time 3))))
+    (ensime-quit-lisp t)
+    (while (memq connection ensime-net-processes)
+      (when (time-less-p end (current-time))
+        (message "Quit timeout expired.  Disconnecting.")
+        (delete-process connection))
+      (sit-for 0 100)))
+  (ensime-update-connection-list))
+
+(defun ensime-restart-connection-at-point (connection)
+  (interactive (list (ensime-connection-at-point)))
+  (let ((ensime-dispatching-connection connection))
+    (ensime-restart-inferior-lisp)))
+
+(defun ensime-connection-list-make-default ()
+  "Make the connection at point the default connection."
+  (interactive)
+  (ensime-select-connection (ensime-connection-at-point))
+  (ensime-update-connection-list))
+
+(defvar ensime-connections-buffer-name "*ENSIME Connections*")
+
+(defun ensime-list-connections ()
+  "Display a list of all connections."
+  (interactive)
+  (ensime-with-popup-buffer (ensime-connections-buffer-name)
+    (ensime-connection-list-mode)
+    (ensime-draw-connection-list)))
+
+(defun ensime-update-connection-list ()
+  "Display a list of all connections."
+  (interactive)
+  (let ((pos (point))
+	(inhibit-read-only t))
+    (erase-buffer)
+    (ensime-draw-connection-list)
+    (goto-char pos)))
+
+(defun ensime-draw-connection-list ()
+  (let ((default-pos nil)
+        (default ensime-default-connection)
+        (fstring "%s%2s  %-10s  %-17s  %-7s %-s\n"))
+    (insert (format fstring " " "Nr" "Name" "Port" "Pid" "Type")
+            (format fstring " " "--" "----" "----" "---" "----"))
+    (dolist (p (reverse ensime-net-processes))
+      (when (eq default p) (setf default-pos (point)))
+      (ensime-insert-propertized 
+       (list 'ensime-connection p)
+       (format fstring
+               (if (eq default p) "*" " ")
+               (ensime-connection-number p)
+               (ensime-connection-name p)
+               (or (process-id p) (process-contact p))
+               (ensime-pid p)
+               (ensime-server-implementation-type p))))
+    (when default 
+      (goto-char default-pos))))
+
+
+
+
+;; Interface Helpers
+
+(defmacro ensime-propertize-region (props &rest body)
+  "Execute BODY and add PROPS to all the text it inserts.
+More precisely, PROPS are added to the region between the point's
+positions before and after executing BODY."
+  (let ((start (gensym)))
+    `(let ((,start (point)))
+       (prog1 (progn ,@body)
+	 (add-text-properties ,start (point) ,props)))))
+
+(defun ensime-add-face (face string)
+  (add-text-properties 0 (length string) (list 'face face) string)
+  string)
+
+(defsubst ensime-insert-propertized (props &rest args)
+  "Insert all ARGS and then add text-PROPS to the inserted text."
+  (ensime-propertize-region props (apply #'insert args)))
+
+(defmacro ensime-with-rigid-indentation (level &rest body)
+  "Execute BODY and then rigidly indent its text insertions.
+Assumes all insertions are made at point."
+  (let ((start (gensym)) (l (gensym)))
+    `(let ((,start (point)) (,l ,(or level '(current-column))))
+       (prog1 (progn ,@body)
+         (ensime-indent-rigidly ,start (point) ,l)))))
+
+(put 'ensime-with-rigid-indentation 'lisp-indent-function 1)
+
+(defun ensime-indent-rigidly (start end column)
+  ;; Similar to `indent-rigidly' but doesn't inherit text props.
+  (let ((indent (make-string column ?\ )))
+    (save-excursion
+      (goto-char end)
+      (beginning-of-line)
+      (while (and (<= start (point))
+                  (progn
+                    (insert-before-markers indent)
+                    (zerop (forward-line -1))))))))
+
+(defun ensime-insert-indented (&rest strings)
+  "Insert all arguments rigidly indented."
+  (ensime-with-rigid-indentation nil
+    (apply #'insert strings)))
+
+(defun ensime-property-bounds (prop)
+  "Return two the positions of the previous and next changes to PROP.
+PROP is the name of a text property."
+  (assert (get-text-property (point) prop))
+  (let ((end (next-single-char-property-change (point) prop)))
+    (list (previous-single-char-property-change end prop) end)))
+
 
 (provide 'ensime)
