@@ -112,6 +112,7 @@ debugger backtraces and apropos listings."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c t") 'ensime-inspect-type)
     (define-key map (kbd "C-c p") 'ensime-inspect-package)
+    (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
     (define-key map (kbd "C-c c") 'ensime-compile-current-file)
     map)
   "Keymap for `ensime-mode'.")
@@ -1559,7 +1560,7 @@ This idiom is preferred over `lexical-let'."
    owner type."
   (let* ((supers (plist-get info :supers))
 	 (type (plist-get info :named-type))
-	 (buffer-name "*Type Inspector*")
+	 (buffer-name "*Inspector*")
 	 (indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
@@ -1626,6 +1627,15 @@ This idiom is preferred over `lexical-let'."
       (message "No package declaration found."))))
 
 
+(defun ensime-inspect-project-package ()
+  "Inspect the package declared as the project package in the config file."
+  (interactive)
+  (let* ((config (ensime-config))
+	 (path (or (plist-get config :project-package)
+		   (read-string "Missing :project-package in config. Enter package path: "))))
+    (if (and path (> (length path) 0))
+	(ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))))
+
 (defun ensime-package-inspector-insert-package (pack &optional absolute)
   (let ((name (if absolute 
 		  (ensime-package-full-name pack)
@@ -1644,10 +1654,9 @@ This idiom is preferred over `lexical-let'."
 	  (insert "\n")))
       )))
 
-
 (defun ensime-package-inspector-show (info &optional same-window)
   "Display a list of all the members of the provided package."
-  (let* ((buffer-name "*Package Inspector*")
+  (let* ((buffer-name "*Inspector*")
 	 (indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
