@@ -600,17 +600,12 @@ The default condition handler for timer functions (see
     (insert text)
     (set-text-properties start (point) `(face ,face))))
 
-(defun ensime-with-path-and-name (type-name)
-  "Invoke body with symbols bound to the Insert text in current buffer and color it with face"
-  (let ((start (point)))
-    (insert text)
-    (set-text-properties start (point) `(face ,face))))
 
 (defmacro* ensime-with-path-and-name (type-name (path name) &rest body)
   "Evaluate BODY with path bound to the dot-separated path of this type-name, and
    name bound to the final type name."
   `(let ((result (not (null (string-match 
-			     "\\(\\(?:[A-z0-9]+\\.\\)*[A-z0-9]+\\)\\.\\([^\\.]+\\)$"
+			     "\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(.+\\)$"
 			     ,type-name)))))
      (let ((,path (if result (match-string 1 ,type-name) nil))
 	   (,name (if result (match-string 2 ,type-name) ,type-name)))
@@ -1697,7 +1692,7 @@ This idiom is preferred over `lexical-let'."
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-popup-buffer (buffer-name nil t)
-			      (ensime-package-inspector-insert-package info)
+			      (ensime-inspector-insert-package info)
 			      (goto-char (point-min))
 			      )))
 
