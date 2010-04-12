@@ -1333,9 +1333,9 @@ This idiom is preferred over `lexical-let'."
 	   (ensime-send `(:emacs-pong ,thread ,tag)))
 	  ((:reader-error packet condition)
 	   (ensime-with-popup-buffer ("*Ensime Error*")
-	     (princ (format "Invalid protocol message:\n%s\n\n%S"
-			    condition packet))
-	     (goto-char (point-min)))
+				     (princ (format "Invalid protocol message:\n%s\n\n%S"
+						    condition packet))
+				     (goto-char (point-min)))
 	   (error "Invalid protocol message"))
 	  ((:invalid-rpc id message)
 	   (setf (ensime-rex-continuations)
@@ -1566,40 +1566,40 @@ This idiom is preferred over `lexical-let'."
 	(kill-buffer-and-window))
     (ensime-with-popup-buffer (buffer-name nil t)
 
-      ;; We want two main columns. The first, 20 chars wide.
-      (let ((tab-stop-list '(20)))
-	(setq wrap-prefix (make-string 21 ?\s))
+			      ;; We want two main columns. The first, 20 chars wide.
+			      (let ((tab-stop-list '(20)))
+				(setq wrap-prefix (make-string 21 ?\s))
 
-	;; Display main type
-	(let* ((full-type-name (plist-get type :name)))
-	  (ensime-insert-with-face (format "%s\n" 
-					   (ensime-type-declared-as-str type))
-				   font-lock-comment-face)
-	  (ensime-type-inspector-insert-linked-type type t)
-	  (insert "\n")
+				;; Display main type
+				(let* ((full-type-name (plist-get type :name)))
+				  (ensime-insert-with-face (format "%s\n" 
+								   (ensime-type-declared-as-str type))
+							   font-lock-comment-face)
+				  (ensime-type-inspector-insert-linked-type type t)
+				  (insert "\n")
 
 
-	  ;; Display each member, arranged by owner type
-	  (dolist (super supers)
-	    (let* ((owner-type super)
-		   (members (plist-get super :members)))
+				  ;; Display each member, arranged by owner type
+				  (dolist (super supers)
+				    (let* ((owner-type super)
+					   (members (plist-get super :members)))
 
-	      (ensime-insert-with-face 
-	       (format "\n\n%s\n" 
-		       (ensime-type-declared-as-str owner-type))
-	       font-lock-comment-face)
-	      (ensime-type-inspector-insert-linked-type owner-type t)
-	      (insert "\n")
-	      (insert "---------------------------\n")
-	      (dolist (m members)
-		(ensime-type-inspector-insert-linked-member owner-type m)
-		(insert "\n")
-		)
-	      ))
+				      (ensime-insert-with-face 
+				       (format "\n\n%s\n" 
+					       (ensime-type-declared-as-str owner-type))
+				       font-lock-comment-face)
+				      (ensime-type-inspector-insert-linked-type owner-type t)
+				      (insert "\n")
+				      (insert "---------------------------\n")
+				      (dolist (m members)
+					(ensime-type-inspector-insert-linked-member owner-type m)
+					(insert "\n")
+					)
+				      ))
 
-	  (goto-char (point-min))
-	  ))
-      )))
+				  (goto-char (point-min))
+				  ))
+			      )))
 
 
 
@@ -1641,7 +1641,6 @@ This idiom is preferred over `lexical-let'."
 		  (ensime-package-full-name pack)
 		(ensime-package-name pack)))
 	(members (ensime-package-members pack)))
-
     (insert (format "%s%s\n" (make-string indent-level ?\s) name))
     (let ((indent-level (+ indent-level 5)))
       (dolist (ea members)
@@ -1651,7 +1650,7 @@ This idiom is preferred over `lexical-let'."
       (dolist (ea members)
 	(when (ensime-package-p ea)
 	  (ensime-package-inspector-insert-package ea t)
-	  (insert "\n")))
+	  ))
       )))
 
 (defun ensime-package-inspector-show (info &optional same-window)
@@ -1661,9 +1660,9 @@ This idiom is preferred over `lexical-let'."
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-popup-buffer (buffer-name nil t)
-      (ensime-package-inspector-insert-package info t)
-      (goto-char (point-min))
-      )))
+			      (ensime-package-inspector-insert-package info t)
+			      (goto-char (point-min))
+			      )))
 
 ;; Interface
 
@@ -1975,8 +1974,8 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
   "Display a list of all connections."
   (interactive)
   (ensime-with-popup-buffer (ensime-connections-buffer-name)
-    (ensime-connection-list-mode)
-    (ensime-draw-connection-list)))
+			    (ensime-connection-list-mode)
+			    (ensime-draw-connection-list)))
 
 (defun ensime-update-connection-list ()
   "Display a list of all connections."
