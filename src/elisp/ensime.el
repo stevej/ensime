@@ -600,6 +600,23 @@ The default condition handler for timer functions (see
     (insert text)
     (set-text-properties start (point) `(face ,face))))
 
+(defun ensime-with-path-and-name (type-name)
+  "Invoke body with symbols bound to the Insert text in current buffer and color it with face"
+  (let ((start (point)))
+    (insert text)
+    (set-text-properties start (point) `(face ,face))))
+
+(defmacro* ensime-with-path-and-name (type-name (path name) &rest body)
+  "Evaluate BODY with path bound to the dot-separated path of this type-name, and
+   name bound to the final type name."
+  `(let ((result (not (null (string-match 
+			     "\\(\\(?:[A-z0-9]+\\.\\)*[A-z0-9]+\\)\\.\\([^\\.]+\\)$"
+			     ,type-name)))))
+     (let ((,path (if result (match-string 1 ,type-name) nil))
+	   (,name (if result (match-string 2 ,type-name) ,type-name)))
+       ,@body)))
+
+
 (defmacro* when-let ((var value) &rest body)
   "Evaluate VALUE, if the result is non-nil bind it to VAR and eval BODY.
 
@@ -1496,19 +1513,39 @@ This idiom is preferred over `lexical-let'."
 
 ;; Type Inspector UI
 
-(defun ensime-type-inspector-insert-linked-type (type &optional with-doc-link)
+(defun ensime-inspector-insert-linked-package-path (path &optional face)
+  "For each component of the package path, insert a link to inspect
+   that package."
+  (let ((pieces (split-string path "\\."))
+	(accum ""))
+    (dolist (piece pieces)
+      (setq accum (concat accum piece))
+      (ensime-insert-action-link
+       piece 
+       `(lambda (x)
+	  (ensime-inspect-package-by-path ,accum))
+       (or face font-lock-type-face))
+      (insert ".")
+      (setq accum (concat accum "."))
+      )))
+
+(defun ensime-inspector-insert-linked-type (type &optional with-doc-link)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (if (ensime-type-is-arrow type) 
-      (ensime-type-inspector-insert-linked-arrow-type type)
+      (ensime-inspector-insert-linked-arrow-type type)
     (let* ((type-name (ensime-type-name type)))
-      (ensime-insert-action-link
-       (format "%s%s" (make-string indent-level ?\s) type-name)
-       `(lambda (x)
-	  (ensime-type-inspector-show 
-	   (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
-	   t
-	   )) font-lock-type-face)
+      (ensime-with-path-and-name 
+       type-name (path name)
+       (when path
+	 (ensime-inspector-insert-linked-package-path path))
+       (ensime-insert-action-link
+	(format "%s%s" (make-string indent-level ?\s) name)
+	`(lambda (x)
+	   (ensime-type-inspector-show 
+	    (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
+	    t
+	    )) font-lock-type-face))
 
       (when with-doc-link
 	(let* ((pos (plist-get type :pos))
@@ -1519,7 +1556,7 @@ This idiom is preferred over `lexical-let'."
 
       )))
 
-(defun ensime-type-inspector-insert-linked-arrow-type (type)
+(defun ensime-inspector-insert-linked-arrow-type (type)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (let*  ((param-types (ensime-type-param-types type))
@@ -1527,14 +1564,14 @@ This idiom is preferred over `lexical-let'."
 	  (result-type (ensime-type-result-type type)))
     (insert "(")
     (dolist (tpe param-types)
-      (ensime-type-inspector-insert-linked-type tpe)
+      (ensime-inspector-insert-linked-type tpe)
       (if (not (eq tpe last-param-type))
 	  (insert ", ")))
     (insert ") => ")
-    (ensime-type-inspector-insert-linked-type result-type)))
+    (ensime-inspector-insert-linked-type result-type)))
 
 
-(defun ensime-type-inspector-insert-linked-member (owner-type m)
+(defun ensime-inspector-insert-linked-member (owner-type m)
   "Helper utility to output a link to a type member.
    Should only be invoked by ensime-inspect-type"
   (let* ((type (ensime-member-type m))
@@ -1546,7 +1583,7 @@ This idiom is preferred over `lexical-let'."
     (ensime-insert-link 
      (format "%s" member-name) url (ensime-pos-offset pos))
     (tab-to-tab-stop)
-    (ensime-type-inspector-insert-linked-type type)
+    (ensime-inspector-insert-linked-type type)
     ))
 
 (defun ensime-inspect-type ()
@@ -1575,7 +1612,7 @@ This idiom is preferred over `lexical-let'."
 				  (ensime-insert-with-face (format "%s\n" 
 								   (ensime-type-declared-as-str type))
 							   font-lock-comment-face)
-				  (ensime-type-inspector-insert-linked-type type t)
+				  (ensime-inspector-insert-linked-type type t)
 				  (insert "\n")
 
 
@@ -1588,11 +1625,11 @@ This idiom is preferred over `lexical-let'."
 				       (format "\n\n%s\n" 
 					       (ensime-type-declared-as-str owner-type))
 				       font-lock-comment-face)
-				      (ensime-type-inspector-insert-linked-type owner-type t)
+				      (ensime-inspector-insert-linked-type owner-type t)
 				      (insert "\n")
 				      (insert "---------------------------\n")
 				      (dolist (m members)
-					(ensime-type-inspector-insert-linked-member owner-type m)
+					(ensime-inspector-insert-linked-member owner-type m)
 					(insert "\n")
 					)
 				      ))
@@ -1636,20 +1673,20 @@ This idiom is preferred over `lexical-let'."
     (if (and path (> (length path) 0))
 	(ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))))
 
-(defun ensime-package-inspector-insert-package (pack &optional absolute)
-  (let ((name (if absolute 
-		  (ensime-package-full-name pack)
-		(ensime-package-name pack)))
+(defun ensime-inspector-insert-package (pack)
+  (let ((name (ensime-package-full-name pack))
 	(members (ensime-package-members pack)))
-    (insert (format "%s%s\n" (make-string indent-level ?\s) name))
+    (insert (make-string indent-level ?\s))
+    (ensime-inspector-insert-linked-package-path name font-lock-variable-name-face)
+    (insert "\n")
     (let ((indent-level (+ indent-level 5)))
       (dolist (ea members)
 	(when (not (ensime-package-p ea))
-	  (ensime-type-inspector-insert-linked-type ea)
+	  (ensime-inspector-insert-linked-type ea)
 	  (insert "\n")))
       (dolist (ea members)
 	(when (ensime-package-p ea)
-	  (ensime-package-inspector-insert-package ea t)
+	  (ensime-inspector-insert-package ea)
 	  ))
       )))
 
@@ -1660,7 +1697,7 @@ This idiom is preferred over `lexical-let'."
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-popup-buffer (buffer-name nil t)
-			      (ensime-package-inspector-insert-package info t)
+			      (ensime-package-inspector-insert-package info)
 			      (goto-char (point-min))
 			      )))
 
