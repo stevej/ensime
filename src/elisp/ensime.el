@@ -600,12 +600,14 @@ The default condition handler for timer functions (see
     (insert text)
     (set-text-properties start (point) `(face ,face))))
 
+(defvar ensime-qualified-type-regexp 
+  "^\\(?:object \\)?\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(.+\\)$")
 
 (defmacro* ensime-with-path-and-name (type-name (path name) &rest body)
   "Evaluate BODY with path bound to the dot-separated path of this type-name, and
    name bound to the final type name."
   `(let ((result (not (null (string-match 
-			     "\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(.+\\)$"
+			     ensime-qualified-type-regexp 
 			     ,type-name)))))
      (let ((,path (if result (match-string 1 ,type-name) nil))
 	   (,name (if result (match-string 2 ,type-name) ,type-name)))
@@ -1591,7 +1593,7 @@ This idiom is preferred over `lexical-let'."
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (let* ((supers (plist-get info :supers))
-	 (type (plist-get info :named-type))
+	 (type (plist-get info :type))
 	 (buffer-name "*Inspector*")
 	 (indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
