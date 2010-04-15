@@ -1,5 +1,3 @@
-
-;;
 (eval-and-compile
   (when (<= emacs-major-version 21)
     (error "Ensime requires an Emacs version of 21, or above")))
@@ -158,9 +156,15 @@ debugger backtraces and apropos listings."
 ;;;;;; Mouse handlers
 
 (defun ensime-mouse-1-double-click (event)
-  "Command handler for mouse clicks events in `ensime-mode-map'."
+  "Command handler for double clicks of mouse button 1.
+   If the user clicks on a package declaration or import, 
+   inspect that package. Otherwise, try to inspect the type
+   of the thing at point."
   (interactive "e")
-  (ensime-inspect-type))
+  (let ((pack-path (ensime-import-or-package-path-at-point)))
+    (if pack-path
+	(ensime-inspect-package-by-path pack-path)
+      (ensime-inspect-type))))
 
 (defun ensime-mouse-motion (event)
   "Command handler for mouse movement events in `ensime-mode-map'."
@@ -612,6 +616,33 @@ The default condition handler for timer functions (see
      (let ((,path (if result (match-string 1 ,type-name) nil))
 	   (,name (if result (match-string 2 ,type-name) ,type-name)))
        ,@body)))
+
+
+(defun ensime-re-search-containing-point (regex limit-start limit-end &optional group-number pos)
+  "A helper for finding regex matches for which the current point is contained in a specified group."
+  (let ((group-number (or group-number 0))
+	(pos (or pos (point))))
+    (save-excursion
+      (goto-char limit-end)
+      (catch 'return-now
+	(while (> (point) limit-start)
+	  (let* ((search-result (re-search-backward regex limit-start 1))
+		 (contains-result (and search-result
+				       (<= (match-beginning group-number) pos)
+				       (> (match-end group-number) pos))))
+
+	    (cond ((and search-result (not contains-result))
+		   (goto-char (- (match-end 0) 1)))
+
+		  ((and search-result contains-result)
+		   (throw 'return-now t)))
+	    ))))))
+
+
+(defun ensime-kill-txt-props (str)
+  "Remove all text-properties from str and return str."
+  (set-text-properties 0 (length str) nil str)
+  str)
 
 
 (defmacro* when-let ((var value) &rest body)
@@ -1546,9 +1577,10 @@ This idiom is preferred over `lexical-let'."
 
       (when with-doc-link
 	(let* ((pos (plist-get type :pos))
-	       (url (or (ensime-make-scaladoc-url type)
+	       (url (or (ensime-pos-file pos)
+			(ensime-make-scaladoc-url type)
 			(ensime-make-javadoc-url type)
-			(ensime-pos-file pos))))
+			)))
 	  (ensime-insert-link " doc" url)))
 
       )))
@@ -1574,9 +1606,10 @@ This idiom is preferred over `lexical-let'."
   (let* ((type (ensime-member-type m))
 	 (pos (ensime-member-pos m))
 	 (member-name (ensime-member-name m))
-	 (url (or (ensime-make-scaladoc-url owner-type m)
+	 (url (or (ensime-pos-file pos)
+		  (ensime-make-scaladoc-url owner-type m)
 		  (ensime-make-javadoc-url owner-type m)
-		  (ensime-pos-file pos))))
+		  )))
     (ensime-insert-link 
      (format "%s" member-name) url (ensime-pos-offset pos))
     (tab-to-tab-stop)
@@ -1645,6 +1678,14 @@ This idiom is preferred over `lexical-let'."
   (let ((p (or path (read-string "Package path: "))))
     (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))))
 
+(defun ensime-import-or-package-path-at-point ()
+  "Return the path of the package that is declared or imported at point."
+  (let* ((case-fold-search nil)
+	 (re "\\(?:package\\|import\\)\\s-+\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)"))
+    (save-excursion
+      (goto-char (point-at-bol))
+      (if (search-forward-regexp re (point-at-eol) t)
+	  (ensime-kill-txt-props (match-string 1))))))
 
 (defun ensime-inspect-package ()
   "Inspect the package of the current source file."
@@ -1652,11 +1693,10 @@ This idiom is preferred over `lexical-let'."
   (save-excursion
     (goto-char (point-min))
     (if (search-forward-regexp 
-	 "package \\(\\(?:[A-z0-0]+\\.\\)*[A-z0-0]+\\)"
+	 "package \\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)"
 	 (point-max) t)
 	(let ((path (match-string 1)))
-	  ;; Remove all properties..
-	  (set-text-properties 0 (length path) nil path)
+	  (ensime-kill-txt-props path)
 	  (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))
       (message "No package declaration found."))))
 
@@ -1864,14 +1904,14 @@ If nil, no explicit connection is associated with
 the buffer.  If t, the current connection is taken.
 "
   `(let* ((vars% (list ,(if (eq connection t) '(ensime-connection) connection)))
-          (standard-output (ensime-make-popup-buffer ,name vars%)))
+	  (standard-output (ensime-make-popup-buffer ,name vars%)))
      (with-current-buffer standard-output
        (prog1 (progn ,@body)
-         (assert (eq (current-buffer) standard-output))
-         (ensime-init-popup-buffer vars%)
-         (setq buffer-read-only t)
-         (set-window-point (ensime-display-popup-buffer ,(or select 'nil))
-                           (point))))))
+	 (assert (eq (current-buffer) standard-output))
+	 (ensime-init-popup-buffer vars%)
+	 (setq buffer-read-only t)
+	 (set-window-point (ensime-display-popup-buffer ,(or select 'nil))
+			   (point))))))
 
 
 (defun ensime-make-popup-buffer (name buffer-vars)
@@ -1895,33 +1935,33 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
    Save the selected-window in a buffer-local variable, so that we
    can restore it later."
   (let ((selected-window (selected-window))
-        (old-windows))
+	(old-windows))
     (walk-windows (lambda (w) (push (cons w (window-buffer w)) old-windows))
-                  nil t)
+		  nil t)
     (let ((new-window (display-buffer (current-buffer))))
       (unless ensime-popup-restore-data
-        (set (make-local-variable 'ensime-popup-restore-data)
-             (list new-window
-                   selected-window
-                   (cdr (find new-window old-windows :key #'car)))))
+	(set (make-local-variable 'ensime-popup-restore-data)
+	     (list new-window
+		   selected-window
+		   (cdr (find new-window old-windows :key #'car)))))
       (when select
-        (select-window new-window))
+	(select-window new-window))
       new-window)))
 
 (defun ensime-close-popup-window ()
   (when ensime-popup-restore-data
     (destructuring-bind (popup-window selected-window old-buffer)
-        ensime-popup-restore-data
+	ensime-popup-restore-data
       (kill-local-variable 'ensime-popup-restore-data)
       (bury-buffer)
       (when (eq popup-window (selected-window))
-        (cond ((and (not old-buffer) (not (one-window-p)))
-               (delete-window popup-window))
-              ((and old-buffer (buffer-live-p old-buffer))
+	(cond ((and (not old-buffer) (not (one-window-p)))
+	       (delete-window popup-window))
+	      ((and old-buffer (buffer-live-p old-buffer))
 	       (set-window-buffer popup-window old-buffer))
 	      ))
       (when (window-live-p selected-window)
-        (select-window selected-window)))
+	(select-window selected-window)))
     ))
 
 
@@ -1982,12 +2022,12 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
 (defun ensime-quit-connection-at-point (connection)
   (interactive (list (ensime-connection-at-point)))
   (let ((ensime-dispatching-connection connection)
-        (end (time-add (current-time) (seconds-to-time 3))))
+	(end (time-add (current-time) (seconds-to-time 3))))
     (ensime-quit-lisp t)
     (while (memq connection ensime-net-processes)
       (when (time-less-p end (current-time))
-        (message "Quit timeout expired.  Disconnecting.")
-        (delete-process connection))
+	(message "Quit timeout expired.  Disconnecting.")
+	(delete-process connection))
       (sit-for 0 100)))
   (ensime-update-connection-list))
 
@@ -2022,21 +2062,21 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
 
 (defun ensime-draw-connection-list ()
   (let ((default-pos nil)
-        (default ensime-default-connection)
-        (fstring "%s%2s  %-10s  %-17s  %-7s %-s\n"))
+	(default ensime-default-connection)
+	(fstring "%s%2s  %-10s  %-17s  %-7s %-s\n"))
     (insert (format fstring " " "Nr" "Name" "Port" "Pid" "Type")
-            (format fstring " " "--" "----" "----" "---" "----"))
+	    (format fstring " " "--" "----" "----" "---" "----"))
     (dolist (p (reverse ensime-net-processes))
       (when (eq default p) (setf default-pos (point)))
       (ensime-insert-propertized 
        (list 'ensime-connection p)
        (format fstring
-               (if (eq default p) "*" " ")
-               (ensime-connection-number p)
-               (ensime-connection-name p)
-               (or (process-id p) (process-contact p))
-               (ensime-pid p)
-               (ensime-server-implementation-type p))))
+	       (if (eq default p) "*" " ")
+	       (ensime-connection-number p)
+	       (ensime-connection-name p)
+	       (or (process-id p) (process-contact p))
+	       (ensime-pid p)
+	       (ensime-server-implementation-type p))))
     (when default 
       (goto-char default-pos))))
 
@@ -2068,7 +2108,7 @@ Assumes all insertions are made at point."
   (let ((start (gensym)) (l (gensym)))
     `(let ((,start (point)) (,l ,(or level '(current-column))))
        (prog1 (progn ,@body)
-         (ensime-indent-rigidly ,start (point) ,l)))))
+	 (ensime-indent-rigidly ,start (point) ,l)))))
 
 (put 'ensime-with-rigid-indentation 'lisp-indent-function 1)
 
@@ -2079,9 +2119,9 @@ Assumes all insertions are made at point."
       (goto-char end)
       (beginning-of-line)
       (while (and (<= start (point))
-                  (progn
-                    (insert-before-markers indent)
-                    (zerop (forward-line -1))))))))
+		  (progn
+		    (insert-before-markers indent)
+		    (zerop (forward-line -1))))))))
 
 (defun ensime-insert-indented (&rest strings)
   "Insert all arguments rigidly indented."
