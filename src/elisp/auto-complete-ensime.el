@@ -41,6 +41,7 @@
 			    'scala-type-id type-id))
 	      ) names)))
 
+
 (defun ac-ensime-get-doc (item)
   "Return doc for given item."
   (get-text-property 0 'scala-type-name item))
@@ -121,16 +122,23 @@
     ))
 
 (defun ac-ensime-enable ()
-  ;; TODO Make these variables local to ensime somehow..
-  (setq ac-sources '(ac-source-ensime-members ac-source-ensime-scope-names))
+  (make-local-variable 'ac-sources)
+  (setq ac-sources '(ac-source-ensime-members 
+		     ac-source-ensime-scope-names))
+
+  (make-local-variable 'ac-quick-help-delay)
   (setq ac-quick-help-delay 1.0)
+
+  (make-local-variable 'ac-auto-start)
   (setq ac-auto-start nil)
+
+  (make-local-variable 'ac-trigger-key)
   (ac-set-trigger-key "TAB")
+
   (auto-complete-mode 1)
   )
 
 (defun ac-ensime-disable ()
-  (setq ac-quick-help-delay 1.5)
   (auto-complete-mode 0)
   )
 
