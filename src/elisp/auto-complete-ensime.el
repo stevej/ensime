@@ -7,7 +7,7 @@
   (backward-char (length prefix))
   (re-search-backward "[^\\. ]" (point-at-bol) t))
 
-(defun ac-ensime-candidates (prefix)
+(defun ac-ensime-member-candidates (prefix)
   "Return candidate list."
   (ensime-save-buffer-no-hook)
   (save-excursion
@@ -15,9 +15,9 @@
     (let ((members (ensime-rpc-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let* ((type-name (plist-get m :type-name))
-		      (type-id (plist-get m :type-id))
-		      (name (plist-get m :name))
-		      (candidate (concat name ":" type-name)))
+		       (type-id (plist-get m :type-id))
+		       (name (plist-get m :name))
+		       (candidate (concat name ":" type-name)))
 		  ;; Save the type for later display
 		  (propertize candidate
 			      'member-name name
@@ -25,14 +25,42 @@
 			      'scala-type-id type-id))
 		) members))))
 
-(defun ac-ensime-get-member-doc (item)
+(defun ac-ensime-name-candidates (prefix)
+  "Return candidate list."
+  (ensime-save-buffer-no-hook)
+  (let ((names (ensime-rpc-name-completions-at-point prefix)))
+    (mapcar (lambda (m)
+	      (let* ((type-name (plist-get m :type-name))
+		     (type-id (plist-get m :type-id))
+		     (name (plist-get m :name))
+		     (candidate (concat name ":" type-name)))
+		;; Save the type for later display
+		(propertize candidate
+			    'symbol-name name
+			    'scala-type-name type-name 
+			    'scala-type-id type-id))
+	      ) names)))
+
+(defun ac-ensime-get-doc (item)
   "Return doc for given item."
   (get-text-property 0 'scala-type-name item))
 
 (defun ac-ensime-member-prefix ()
-  "C-like languages dot(.) prefix."
-  (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" nil t)))
+  "Starting at current point. Find the point of completion for a member access. 
+   Return nil if we are not currently looking at a member access."
+  (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" (point-at-bol) t)))
     (if point (1+ point))))
+
+(defun ac-ensime-name-prefix ()
+  "Starting at current point. Find the point of completion for a symbol.
+   Return nil if we are not currently looking at a symbol."
+  (let ((pt-at-end-of-prev-line
+	 (save-excursion (forward-line -1)(point-at-eol))))
+    (if (looking-back "[(\\[\\,\\;\\}\\{\n]\\s-*\\(\\w+\\)" pt-at-end-of-prev-line)
+	(let ((point (- (point) (length (match-string 1)))))
+	  (goto-char point)
+	  point
+	  ))))
 
 (defun ac-ensime-member-complete-action ()
   "Defines action to perform when user selects a completion candidate.
@@ -62,9 +90,19 @@
 	  (forward-char)
 	  ))))
 
-(ac-define-source ensime
-  '((document . ac-ensime-get-member-doc)
-    (candidates . (ac-ensime-candidates ac-prefix))
+
+(defun ac-ensime-name-complete-action ()
+  "Defines action to perform when user selects a completion candidate.
+   Candidates are suffixed with the scala type of the symbol. We kill those
+   characters and replace with just the name of the symbol."
+  (let* ((candidate candidate) ;;Grab from dynamic environment..
+	 (symbol-name (get-text-property 0 'symbol-name candidate)))
+    (kill-backward-chars (length candidate))
+    (insert symbol-name)))
+
+(ac-define-source ensime-members
+  '((document . ac-ensime-get-doc)
+    (candidates . (ac-ensime-member-candidates ac-prefix))
     (prefix . ac-ensime-member-prefix)
     (action . ac-ensime-member-complete-action)
     (requires . 0)
@@ -72,8 +110,19 @@
     (cache . t)
     ))
 
+(ac-define-source ensime-scope-names
+  '((document . ac-ensime-get-doc)
+    (candidates . (ac-ensime-name-candidates ac-prefix))
+    (prefix . ac-ensime-name-prefix)
+    (action . ac-ensime-name-complete-action)
+    (requires . 0)
+    (symbol . "s")
+    (cache . t)
+    ))
+
 (defun ac-ensime-enable ()
-  (setq ac-sources '(ac-source-ensime))
+  ;; TODO Make these variables local to ensime somehow..
+  (setq ac-sources '(ac-source-ensime-members ac-source-ensime-scope-names))
   (setq ac-quick-help-delay 1.0)
   (setq ac-auto-start nil)
   (ac-set-trigger-key "TAB")

@@ -1508,8 +1508,9 @@ This idiom is preferred over `lexical-let'."
 
 ;; Basic RPC calls
 
-(defun ensime-rpc-scope-completion ()
-  (ensime-eval-async `(swank:scope-completion ,buffer-file-name ,(point)) #'identity))
+(defun ensime-rpc-name-completions-at-point (&optional prefix)
+  (ensime-eval 
+   `(swank:scope-completion ,buffer-file-name ,(point) ,(or prefix ""))))
 
 (defun ensime-rpc-members-for-type-at-point (&optional prefix)
   (ensime-eval 
