@@ -20,7 +20,7 @@
 		       (candidate (concat name ":" type-name)))
 		  ;; Save the type for later display
 		  (propertize candidate
-			      'member-name name
+			      'symbol-name name
 			      'scala-type-name type-name 
 			      'scala-type-id type-id))
 		) members))))
@@ -63,16 +63,16 @@
 	  point
 	  ))))
 
-(defun ac-ensime-member-complete-action ()
+(defun ac-ensime-complete-action ()
   "Defines action to perform when user selects a completion candidate.
    In this case, if the candidate is a method name, fill in place-holder
    arguments."
   (let* ((candidate candidate) ;;Grab from dynamic environment..
 	 (type-id (get-text-property 0 'scala-type-id candidate))
 	 (type (ensime-rpc-get-type-by-id type-id))
-	 (member-name (get-text-property 0 'member-name candidate)))
+	 (name (get-text-property 0 'symbol-name candidate)))
     (kill-backward-chars (length candidate))
-    (insert member-name)
+    (insert name)
     (if (and type
 	     (ensime-type-is-arrow type) 
 	     (ensime-type-param-types type))
@@ -92,20 +92,12 @@
 	  ))))
 
 
-(defun ac-ensime-name-complete-action ()
-  "Defines action to perform when user selects a completion candidate.
-   Candidates are suffixed with the scala type of the symbol. We kill those
-   characters and replace with just the name of the symbol."
-  (let* ((candidate candidate) ;;Grab from dynamic environment..
-	 (symbol-name (get-text-property 0 'symbol-name candidate)))
-    (kill-backward-chars (length candidate))
-    (insert symbol-name)))
 
 (ac-define-source ensime-members
   '((document . ac-ensime-get-doc)
     (candidates . (ac-ensime-member-candidates ac-prefix))
     (prefix . ac-ensime-member-prefix)
-    (action . ac-ensime-member-complete-action)
+    (action . ac-ensime-complete-action)
     (requires . 0)
     (symbol . "f")
     (cache . t)
@@ -115,7 +107,7 @@
   '((document . ac-ensime-get-doc)
     (candidates . (ac-ensime-name-candidates ac-prefix))
     (prefix . ac-ensime-name-prefix)
-    (action . ac-ensime-name-complete-action)
+    (action . ac-ensime-complete-action)
     (requires . 0)
     (symbol . "s")
     (cache . t)
@@ -123,8 +115,8 @@
 
 (defun ac-ensime-enable ()
   (make-local-variable 'ac-sources)
-  (setq ac-sources '(ac-source-ensime-members 
-		     ac-source-ensime-scope-names))
+  (setq ac-sources '(ac-source-ensime-scope-names
+		     ac-source-ensime-members ))
 
   (make-local-variable 'ac-quick-help-delay)
   (setq ac-quick-help-delay 1.0)
