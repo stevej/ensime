@@ -70,12 +70,13 @@
   (let* ((candidate candidate) ;;Grab from dynamic environment..
 	 (type-id (get-text-property 0 'scala-type-id candidate))
 	 (type (ensime-rpc-get-type-by-id type-id))
-	 (name (get-text-property 0 'symbol-name candidate)))
+	 (name (get-text-property 0 'symbol-name candidate))
+	 (param-types (ensime-type-param-types type)))
     (kill-backward-chars (length candidate))
     (insert name)
     (if (and type
 	     (ensime-type-is-arrow type) 
-	     (ensime-type-param-types type))
+	     param-types)
 	(let* ((i -1)
 	       (arg-str (mapconcat 
 			 (lambda(p)(progn
@@ -83,11 +84,16 @@
 				     (format 
 				      "arg%s:%s" 
 				      i (ensime-type-name p))))
-			 (ensime-type-param-types type)
+			 param-types
 			 ", "
 			 )))
 	  (save-excursion
-	    (insert (concat "(" arg-str ")" )))
+	    (if (and (= 1 (length param-types)) 
+		     (null (string-match "[A-z]" name)))
+		;; Probably an operator..
+		(insert (concat " " arg-str))
+	      ;; Probably a normal method call
+	      (insert (concat "(" arg-str ")" ))))
 	  (forward-char)
 	  ))))
 
