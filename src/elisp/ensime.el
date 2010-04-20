@@ -1635,7 +1635,7 @@ This idiom is preferred over `lexical-let'."
 			(ensime-make-scaladoc-url type)
 			(ensime-make-javadoc-url type)
 			)))
-	  (ensime-insert-link " doc" url)))
+	  (ensime-insert-link " doc" url (ensime-pos-offset pos))))
 
       )))
 
@@ -1685,42 +1685,43 @@ This idiom is preferred over `lexical-let'."
 	 (indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
-    (ensime-with-popup-buffer (buffer-name nil t)
+    (ensime-with-popup-buffer 
+     (buffer-name nil t)
 
-			      ;; We want two main columns. The first, 20 chars wide.
-			      (let ((tab-stop-list '(20)))
-				(setq wrap-prefix (make-string 21 ?\s))
+     ;; We want two main columns. The first, 20 chars wide.
+     (let ((tab-stop-list '(20)))
+       (setq wrap-prefix (make-string 21 ?\s))
 
-				;; Display main type
-				(let* ((full-type-name (plist-get type :name)))
-				  (ensime-insert-with-face (format "%s\n" 
-								   (ensime-type-declared-as-str type))
-							   font-lock-comment-face)
-				  (ensime-inspector-insert-linked-type type t)
-				  (insert "\n")
+       ;; Display main type
+       (let* ((full-type-name (plist-get type :name)))
+	 (ensime-insert-with-face (format "%s\n" 
+					  (ensime-type-declared-as-str type))
+				  font-lock-comment-face)
+	 (ensime-inspector-insert-linked-type type t)
+	 (insert "\n")
 
 
-				  ;; Display each member, arranged by owner type
-				  (dolist (super supers)
-				    (let* ((owner-type super)
-					   (members (plist-get super :members)))
+	 ;; Display each member, arranged by owner type
+	 (dolist (super supers)
+	   (let* ((owner-type super)
+		  (members (plist-get super :members)))
 
-				      (ensime-insert-with-face 
-				       (format "\n\n%s\n" 
-					       (ensime-type-declared-as-str owner-type))
-				       font-lock-comment-face)
-				      (ensime-inspector-insert-linked-type owner-type t)
-				      (insert "\n")
-				      (insert "---------------------------\n")
-				      (dolist (m members)
-					(ensime-inspector-insert-linked-member owner-type m)
-					(insert "\n")
-					)
-				      ))
+	     (ensime-insert-with-face 
+	      (format "\n\n%s\n" 
+		      (ensime-type-declared-as-str owner-type))
+	      font-lock-comment-face)
+	     (ensime-inspector-insert-linked-type owner-type t)
+	     (insert "\n")
+	     (insert "---------------------------\n")
+	     (dolist (m members)
+	       (ensime-inspector-insert-linked-member owner-type m)
+	       (insert "\n")
+	       )
+	     ))
 
-				  (goto-char (point-min))
-				  ))
-			      )))
+	 (goto-char (point-min))
+	 ))
+     )))
 
 
 
@@ -2192,7 +2193,6 @@ PROP is the name of a text property."
     (list (previous-single-char-property-change end prop) end)))
 
 
-
 ;; Regression Tests
 
 (defun ensime-create-file (file contents)
@@ -2217,9 +2217,9 @@ PROP is the name of a text property."
 	  (src-dir (concat root-dir "src")))
      (mkdir src-dir)
      (dolist (f ,src-files)
-       (ensime-create-file (concat src-dir
-				   (plist-get f :name))
-			   (plist-get f :contents)))
+       (ensime-create-file 
+	(concat src-dir (plist-get f :name))
+	(plist-get f :contents)))
      ,@body
      ))
 
