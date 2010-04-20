@@ -341,7 +341,14 @@ See `ensime-start'.")
 	      (ensime-find-config-file (directory-file-name dir)))))))
 
 (defun ensime-load-config (&optional file-name)
-  "Load and parse the project config file. Return the resulting plist."
+  "Load and parse the project config file. Return the resulting plist.
+
+   The :root-dir setting will be deduced from the location of the project file.
+
+   The :classpath setting may be specified as a list of file-names or
+   the name of a function which will be called at load time. The configuration
+   plist will be passed to this function as it's only argument.
+  "
   (let* ((default (or file-name (ensime-find-config-file buffer-file-name)))
 	 (file (or file-name (read-file-name 
 			      "ENSIME Project file: "
