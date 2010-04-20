@@ -1,3 +1,34 @@
+;;; ensime.el --- ENhanced Scala Interaction Mode for Emacs
+;;
+;;;; License
+;;
+;;     Copyright (C) 2010 Aemon Cannon
+;;
+;;     This file includes code from slime.el of the SLIME project
+;;     (also licensend under the GNU General Public License.) The
+;;     following copyrights therefore apply:
+;;     
+;;     Copyright (C) 2003  Eric Marsden, Luke Gorrie, Helmut Eller
+;;     Copyright (C) 2004,2005,2006  Luke Gorrie, Helmut Eller
+;;     Copyright (C) 2007,2008,2009  Helmut Eller, Tobias C. Rittweiler
+;;
+;;
+;;     This program is free software; you can redistribute it and/or
+;;     modify it under the terms of the GNU General Public License as
+;;     published by the Free Software Foundation; either version 2 of
+;;     the License, or (at your option) any later version.
+;;
+;;     This program is distributed in the hope that it will be useful,
+;;     but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;;     GNU General Public License for more details.
+;;
+;;     You should have received a copy of the GNU General Public
+;;     License along with this program; if not, write to the Free
+;;     Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+;;     MA 02111-1307, USA.
+
+
 (eval-and-compile
   (when (<= emacs-major-version 21)
     (error "Ensime requires an Emacs version of 21, or above")))
@@ -15,13 +46,6 @@
   (require 'apropos)
   (require 'compile))
 
-(eval-and-compile 
-  (defvar ensime-path
-    (let ((path (or (locate-library "ensime") load-file-name)))
-      (and path (file-name-directory path)))
-    "Directory containing the Ensime package.
-     This is used to load the supporting Scala server."))
-
 
 (defgroup ensime-ui nil
   "Interaction with the ENhanced Scala Environment."
@@ -30,8 +54,8 @@
 
 (defcustom ensime-truncate-lines t
   "Set `truncate-lines' in popup buffers.
-This applies to buffers that present lines as rows of data, such as
-debugger backtraces and apropos listings."
+  This applies to buffers that present lines as rows of data, such as
+  debugger backtraces and apropos listings."
   :type 'boolean
   :group 'ensime-ui)
 
@@ -65,29 +89,30 @@ debugger backtraces and apropos listings."
   :type 'hook
   :group 'ensime-server)
 
-(defcustom ensime-server-host "127.0.0.1"
+(defcustom ensime-default-server-host "127.0.0.1"
   "The default hostname (or IP address) to connect to."
   :type 'string
   :group 'ensime-server)
 
-(defcustom ensime-port 9999
+(defcustom ensime-default-port 9999
   "Port to use as the default for `ensime-connect'."
   :type 'integer
   :group 'ensime-server)
 
+(defcustom ensime-default-server-cmd "bin/server.sh"
+  "Command to launch server process."
+  :type 'string
+  :group 'ensime-server)
+
+(defcustom ensime-default-server-root "/home/aemon/src/misc/ensime/"
+  "Location of ENSIME server library."
+  :type 'string
+  :group 'ensime-server)
 
 (defvar ensime-protocol-version "0.0.1")
 
 
 ;;;;; ensime-mode
-
-(defvar slime-lisp-modes '(scala-mode))
-
-(defun ensime-setup (&optional contribs)
-  "Setup Emacs so that scala-mode buffers always use ENSIME."
-  (when (member 'scala-mode ensime-scala-modes)
-    (add-hook 'scala-mode-hook 'ensime-scala-mode-hook)
-    ))
 
 (defgroup ensime-mode nil
   "Settings for ensime-mode scala source buffers."
@@ -95,16 +120,18 @@ debugger backtraces and apropos listings."
   :group 'ensime)
 
 (defun ensime-scala-mode-hook ()
+  "Conveniance hook function that just starts ensime-mode."
   (ensime-mode 1))
 
 (defun ensime-after-save-hook ()
+  "When a buffer is saved, ask the ENSIME server for a type-check."
   (ensime-compile-current-file))
 
 (defun ensime-save-buffer-no-hook ()
+  "Just save the buffer per usual, don't type-check!"
   (remove-hook 'after-save-hook 'ensime-after-save-hook t)
   (save-buffer)
   (add-hook 'after-save-hook 'ensime-after-save-hook nil t))
-
 
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
@@ -117,16 +144,7 @@ debugger backtraces and apropos listings."
 
 
 (define-minor-mode ensime-mode
-  "\\<ensime-mode-map>\
-  ENSIME: The ENhanced Scala Interaction Mode for Emacs (minor-mode).
-
-  Finding definitions:
-  \\[ensime-inspect-type]   - Show a summary of the type under point.
-
-  \\[ensime-inspect-package]   - Show a summary of the package containing point.
- 
-  Full set of commands:
-  \\{ensime-mode-map}"
+  "ENSIME: The ENhanced Scala Interaction Mode for Emacs (minor-mode)."
   nil
   nil
   ensime-mode-map
@@ -186,7 +204,10 @@ debugger backtraces and apropos listings."
 
 
 (defun ensime-tooltip-handler (event)
-  "Hook function to display a help tooltip."
+  "Hook function to display a help tooltip. If an error 
+   or warning overlay exists at point, show the description 
+   of that error or warning. Otherwise try to inspect the
+   type of the expression under the cursor."
   (when (and (eventp event)
 	     ensime-mode
 	     (ensime-current-connection)
@@ -224,19 +245,20 @@ debugger backtraces and apropos listings."
 
 ;;;;;; Modeline
 
+;; Setup the custom ensime modeline handler
 (add-to-list 'minor-mode-alist
 	     '(ensime-mode (:eval (ensime-modeline-string))))
 
 (defun ensime-modeline-string ()
   "Return the string to display in the modeline.
-  \"Ensime\" only appears if we aren't connected.  If connected, include 
+  \"ENSIME\" only appears if we aren't connected.  If connected, include 
   connection-name, and possibly some state
   information."
   (let ((conn (ensime-current-connection)))
     ;; Bail out early in case there's no connection, so we won't
     ;; implicitly invoke `ensime-connection' which may query the user.
     (if (not conn)
-	(and ensime-mode " Ensime")
+	(and ensime-mode " ENSIME")
       (let ((local (eq conn ensime-buffer-connection)))
 	(concat " "
 		(if local "{" "[")
@@ -256,14 +278,17 @@ debugger backtraces and apropos listings."
 ;; Startup
 
 (defun ensime ()
-  "Start an inferior ENSIME server and connect to its Swank server."
+  "Read config file for settings. Then start an inferior 
+   ENSIME server and connect to its Swank server."
   (interactive)
   (when (not ensime-mode) 
     (ensime-mode 1))
-  (let* ((config (ensime-load-config))
-	 (cmd (plist-get config :server-cmd))
+  (let* ((config (ensime-find-and-load-config))
+	 (cmd (or (plist-get config :server-cmd) 
+		  ensime-default-server-cmd))
 	 (env (plist-get config :server-env))
-	 (dir (plist-get config :server-root))
+	 (dir (or (plist-get config :server-root)
+		  ensime-default-server-root))
 	 (buffer "*inferior-ensime-server*")
 	 (args (list (ensime-swank-port-file))))
 
@@ -340,30 +365,33 @@ See `ensime-start'.")
 	  (if (not (equal dir (directory-file-name dir)))
 	      (ensime-find-config-file (directory-file-name dir)))))))
 
-(defun ensime-load-config (&optional file-name)
-  "Load and parse the project config file. Return the resulting plist.
+(defun ensime-find-and-load-config ()
+  "Query the user for the path to a config file, then load it."
+  (let* ((default (ensime-find-config-file buffer-file-name))
+	 (file (read-file-name 
+		"ENSIME Project file: "
+		(if default (file-name-directory default))
+		default
+		nil
+		(if default (file-name-nondirectory default))
+		)))
+    (ensime-load-config file)))
+
+
+(defun ensime-load-config (file-name)
+  "Load and parse a project config file. Return the resulting plist.
 
    The :root-dir setting will be deduced from the location of the project file.
 
    The :classpath setting may be specified as a list of file-names or
    the name of a function which will be called at load time. The configuration
-   plist will be passed to this function as it's only argument.
-  "
-  (let* ((default (or file-name (ensime-find-config-file buffer-file-name)))
-	 (file (or file-name (read-file-name 
-			      "ENSIME Project file: "
-			      (if default (file-name-directory default))
-			      default
-			      nil
-			      (if default (file-name-nondirectory default))
-			      )))
-	 (dir (expand-file-name (file-name-directory file))))
-
+   plist will be passed to this function as it's only argument."
+  (let ((dir (expand-file-name (file-name-directory file-name))))
     (save-excursion
       (condition-case error
 	  (let ((config
-		 (let ((buf (find-file-read-only file ensime-config-file-name))
-		       (src (buffer-substring-no-properties 
+		 (let ((buf (find-file-read-only file-name ensime-config-file-name))
+		       (src (buffer-substring-no-properties
 			     (point-min) (point-max))))
 		   (kill-buffer buf)
 		   (read src))))
@@ -427,7 +455,7 @@ See `ensime-start'.")
 (defun ensime-attempt-connection (config process retries attempt)
   ;; A small one-state machine to attempt a connection with
   ;; timer-based retries.
-  (let ((host (or (plist-get config :server-host) ensime-server-host))
+  (let ((host (or (plist-get config :server-host) ensime-default-server-host))
 	(port-file (ensime-swank-port-file)))
     (unless (active-minibuffer-window)
       (message "Polling %S.. (Abort with `M-x ensime-abort-connection'.)" port-file))
@@ -517,7 +545,7 @@ The default condition handler for timer functions (see
 
 
 (defun ensime-make-scaladoc-url (type &optional member)
-  "Given a qualified scala identifier, construct the
+  "Given a scala type, and optionally a type member, construct the 
    corresponding scaladoc url."
   (let* ((full-type-name (ensime-type-full-name type))
 	 (is-std-lib (not (null (string-match "^scala\\." full-type-name))))
@@ -556,7 +584,7 @@ The default condition handler for timer functions (see
   str)
 
 (defun ensime-make-javadoc-url (type &optional member)
-  "Given a qualified java identifier, construct the
+  "Given a java type, and optionally a java type member, construct the
    corresponding javadoc url."
   (let* ((full-type-name (ensime-type-full-name type))
 	 (is-std-lib (not (null (string-match "^java\\." full-type-name)))))
@@ -1078,8 +1106,8 @@ If PROCESS is not specified, `ensime-connection' is used.
 
 (defun ensime-connect (config host port)
   "Connect to a running Swank server. Return the connection."
-  (interactive (list (read-from-minibuffer "Host: " ensime-server-host)
-		     (read-from-minibuffer "Port: " (format "%d" ensime-port)
+  (interactive (list (read-from-minibuffer "Host: " ensime-default-server-host)
+		     (read-from-minibuffer "Port: " (format "%d" ensime-default-port)
 					   nil t)))
   (when (and (interactive-p) ensime-net-processes
 	     (y-or-n-p "Close old connections first? "))
@@ -1522,6 +1550,8 @@ This idiom is preferred over `lexical-let'."
 ;; Test compile current file
 
 (defun ensime-compile-current-file ()
+  "Send a request for re-typecheck to the ENSIME server.
+   Current file is saved if it has unwritten modifications."
   (interactive)
   (if (buffer-modified-p) (ensime-save-buffer-no-hook))
   (ensime-eval-async `(swank:compile-file ,buffer-file-name) #'identity))
@@ -1735,6 +1765,7 @@ This idiom is preferred over `lexical-let'."
 	(ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))))
 
 (defun ensime-inspector-insert-package (pack)
+  "Helper to insert a hyper-linked package name."
   (let ((name (ensime-package-full-name pack))
 	(members (ensime-package-members pack)))
     (insert (make-string indent-level ?\s))
@@ -1803,7 +1834,8 @@ It should be used for \"background\" messages such as argument lists."
 			   (1- (frame-width)))))
 
 
-;; Ensime datastructure accessors
+
+;; Data-structure accessors
 
 (defun ensime-package-name (info)
   (plist-get info :name))
@@ -2163,6 +2195,34 @@ PROP is the name of a text property."
 
 ;; Regression Tests
 
+(defun ensime-create-file (file contents)
+  "Create file named 'file', with contents 'contents'. Return file's name."
+  (with-temp-file file
+    (insert contents))
+  file)
+
+(defvar ensime-test-env-classpath '("/home/aemon/lib/scala/lib/scala-library.jar"))
+
+(defmacro* ensime-with-tmp-project ((src-files) &rest body)
+  "Evaluate BODY with path bound to the dot-separated path of this type-name, and
+   name bound to the final type name."
+  `(let* ((root-dir (file-name-as-directory (make-temp-file "ensime_test_proj_" t)))
+	  (conf-file (ensime-create-file 
+		      (concat root-dir ".ensime")
+		      (format "%S" (list :source '("src")
+					 :project-package "com.test"
+					 :classpath ensime-test-env-classpath
+					 :test-mode t
+					 ))))
+	  (src-dir (concat root-dir "src")))
+     (mkdir src-dir)
+     (dolist (f ,src-files)
+       (ensime-create-file (concat src-dir
+				   (plist-get f :name))
+			   (plist-get f :contents)))
+     ,@body
+     ))
+
 (defun ensime-run-tests ()
   "Run all regression tests for ensime-mode."
   (interactive)
@@ -2184,9 +2244,9 @@ PROP is the name of a text property."
   ;; Test loading an erroneous config file..
   (let ((file (make-temp-file "ensime_test_conf_")))
     (with-temp-file file
-      (insert "(lkjsdfkjskfjs")
-      (let ((conf (ensime-load-config file)))
-	(assert (null conf)))))
+      (insert "(lkjsdfkjskfjs"))
+    (let ((conf (ensime-load-config file)))
+      (assert (null conf))))
 
 
   ;; Test loading a config file with function symbol at :classpath
@@ -2198,6 +2258,10 @@ PROP is the name of a text property."
 			      :classpath gen-class-path))))
     (let ((conf (ensime-load-config file)))
       (assert (equal (plist-get conf :classpath) '("one" "two" "three")))))
+
+
+  (ensime-with-tmp-project ('())
+			   (assert (file-exists-p conf-file)))
 
 
   (message "All tests passed :)"))
