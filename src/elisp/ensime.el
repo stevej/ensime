@@ -340,17 +340,16 @@ See `ensime-start'.")
 	  (if (not (equal dir (directory-file-name dir)))
 	      (ensime-find-config-file (directory-file-name dir)))))))
 
-(defun ensime-load-config ()
-  "Load and parse the project config file."
-  (let* ((default (ensime-find-config-file buffer-file-name))
-	 (file (read-file-name 
-		"ENSIME Project file: "
-		(if default (file-name-directory default))
-		default
-		nil
-		(if default (file-name-nondirectory default))
-		))
-	 ;; Infer the project root from the project file..
+(defun ensime-load-config (&optional file-name)
+  "Load and parse the project config file. Return the resulting plist."
+  (let* ((default (or file-name (ensime-find-config-file buffer-file-name)))
+	 (file (or file-name (read-file-name 
+			      "ENSIME Project file: "
+			      (if default (file-name-directory default))
+			      default
+			      nil
+			      (if default (file-name-nondirectory default))
+			      )))
 	 (dir (expand-file-name (file-name-directory file))))
 
     (save-excursion
@@ -361,15 +360,26 @@ See `ensime-start'.")
 			     (point-min) (point-max))))
 		   (kill-buffer buf)
 		   (read src))))
-	    (plist-put config :root-dir dir))
+
+	    ;; We use the project file's location as th project root.
+	    (plist-put config :root-dir dir)
+
+	    ;; If 'classpath' is a symbol bound to a function, call it
+	    ;; to compute the classpath.
+	    (let ((cp (plist-get config :classpath)))
+	      (if (and cp (symbolp cp) (boundp cp))
+		  (let ((val (eval cp)))
+		    (if (functionp val)
+			(plist-put config :classpath (funcall val config))))))
+
+	    config)
 	(error
 	 '())))
     ))
 
 (defun ensime-swank-port-file ()
   "Filename where the SWANK server writes its TCP port number."
-  (concat (file-name-as-directory (ensime-temp-directory))
-	  (format "ensime_port.%S" (emacs-pid))))
+  (ensime-temp-file-name (format "ensime_port.%S" (emacs-pid))))
 
 (defun ensime-read-swank-port ()
   "Read the Swank server port number from the `ensime-swank-port-file'."
@@ -381,7 +391,13 @@ See `ensime-start'.")
 	(assert (integerp port))
 	port))))
 
+(defun ensime-temp-file-name (name)
+  "Return the path of a temp file with filename 'name'."
+  (concat (file-name-as-directory (ensime-temp-directory))
+	  name))
+
 (defun ensime-temp-directory ()
+  "Return the directory name of the system's temporary file dump."
   (cond ((fboundp 'temp-directory) (temp-directory))
 	((boundp 'temporary-file-directory) temporary-file-directory)
 	(t "/tmp/")))
@@ -2135,6 +2151,50 @@ PROP is the name of a text property."
   (assert (get-text-property (point) prop))
   (let ((end (next-single-char-property-change (point) prop)))
     (list (previous-single-char-property-change end prop) end)))
+
+
+
+;; Regression Tests
+
+(defun ensime-run-tests ()
+  "Run all regression tests for ensime-mode."
+  (interactive)
+  
+  ;; Test loading a config file..
+  (let ((file (make-temp-file "ensime_test_conf_")))
+    (with-temp-file file
+      (insert (format "%S"
+		      '( :server-cmd 
+			 "bin/server.sh"
+			 :classpath ("hello" "world")
+			 ))))
+    (let ((conf (ensime-load-config file)))
+      (assert (equal (plist-get conf :server-cmd) "bin/server.sh"))
+      (assert (equal (plist-get conf :classpath) '("hello" "world")))
+      (assert (equal (plist-get conf :root-dir) (expand-file-name (file-name-directory file))))))
+
+
+  ;; Test loading an erroneous config file..
+  (let ((file (make-temp-file "ensime_test_conf_")))
+    (with-temp-file file
+      (insert "(lkjsdfkjskfjs")
+      (let ((conf (ensime-load-config file)))
+	(assert (null conf)))))
+
+
+  ;; Test loading a config file with function symbol at :classpath
+  (let ((file (make-temp-file "ensime_test_conf_"))
+	(gen-class-path #'(lambda (conf) (list "one" "two" "three"))))
+    (with-temp-file file
+      (insert (format "%S" '( :server-cmd 
+			      "bin/server.sh"
+			      :classpath gen-class-path))))
+    (let ((conf (ensime-load-config file)))
+      (assert (equal (plist-get conf :classpath) '("one" "two" "three")))))
+
+
+  (message "All tests passed :)"))
+
 
 
 (provide 'ensime)
