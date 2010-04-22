@@ -112,7 +112,9 @@
     (dolist (f src-files)
       (find-file f)
       (kill-buffer nil))
+    ;; a bit of paranoia..
     (if (and root-dir (integerp (string-match "^/tmp/" root-dir)))
+	;; ..before we wipe away the project dir
 	(shell-command (format "rm -rf %S" root-dir)))))
 
 (defun ensime-kill-all-ensime-servers ()
@@ -193,27 +195,29 @@
 (defmacro* ensime-async-test (title trigger &rest handlers)
   "Define an asynchronous test."
   (let* ((last-handler (car (last handlers)))
-	 (handler-structs (mapcar
-			   (lambda (h)
-			     (let* ((head (car h))
-				    (evt (car head))
-				    (val-sym (cadr head))
-				    (func-body (cadr h))
-				    (func `(lambda (,val-sym)
-					     (ensime-test-run-with-handlers
-					      ,title
-					      ,func-body))))
-			       (list
-				:event evt
-				:val-sym val-sym
-				:func func
-				:is-last (equal h last-handler)
-				)))
-			   handlers))
-	 (trigger-func `(lambda ()
-			  (ensime-test-run-with-handlers
-			   ,title
-			   ,trigger))))
+	 (handler-structs 
+	  (mapcar
+	   (lambda (h)
+	     (let* ((head (car h))
+		    (evt (car head))
+		    (val-sym (cadr head))
+		    (func-body (cadr h))
+		    (func `(lambda (,val-sym)
+			     (ensime-test-run-with-handlers
+			      ,title
+			      ,func-body))))
+	       (list
+		:event evt
+		:val-sym val-sym
+		:func func
+		:is-last (equal h last-handler)
+		)))
+	   handlers))
+	 (trigger-func 
+	  `(lambda ()
+	     (ensime-test-run-with-handlers
+	      ,title
+	      ,trigger))))
     `(list :title ,title :async t 
 	   :trigger ,trigger-func
 	   :handlers ',handler-structs

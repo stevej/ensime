@@ -1685,7 +1685,7 @@ This idiom is preferred over `lexical-let'."
   (interactive)
   (ensime-type-inspector-show (ensime-rpc-inspect-type-at-point)))
 
-(defun ensime-type-inspector-show (info &optional same-window)
+(defun ensime-type-inspector-show (info)
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (let* ((supers (plist-get info :supers))
@@ -1694,8 +1694,8 @@ This idiom is preferred over `lexical-let'."
 	 (indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
-    (ensime-with-popup-buffer 
-     (buffer-name nil t)
+    (ensime-with-inspector-buffer 
+     (buffer-name nil t) info
 
      ;; We want two main columns. The first, 20 chars wide.
      (let ((tab-stop-list '(20)))
@@ -1792,16 +1792,51 @@ This idiom is preferred over `lexical-let'."
 	  ))
       )))
 
-(defun ensime-package-inspector-show (info &optional same-window)
+(defun ensime-package-inspector-show (info)
   "Display a list of all the members of the provided package."
   (let* ((buffer-name "*Inspector*")
 	 (indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
-    (ensime-with-popup-buffer (buffer-name nil t)
-			      (ensime-inspector-insert-package info)
-			      (goto-char (point-min))
-			      )))
+    (ensime-with-inspector-buffer
+     (buffer-name nil t) info
+     (ensime-inspector-insert-package info)
+     (goto-char (point-min))
+     )))
+
+(defvar ensime-inspector-history '()
+  "Maintain a history of the info objects viewed in the type inspector.")
+
+(defvar ensime-inspector-history-cursor 0
+  "Where are we in the history?")
+
+(defun ensime-inspector-forward-page ()
+  "Inspect the info object following current in history."
+  (interactive)
+  )
+
+(defun ensime-inspector-backward-page ()
+  "Inspect the info object following current in history."
+  (interactive)
+  )
+
+(defvar ensime-popup-inspector-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "M n") 'ensime-inpector-forward-page)
+    (define-key map (kbd "M p") 'ensime-inpector-backward-page)
+    map)
+  "Type and package inspector specific key bindings 
+   (in addition to those defined by popup-buffer-mode)")
+
+(defmacro* ensime-with-inspector-buffer ((name object &optional connection select)
+					 &body body)
+  "Extend the standard popup buffer with inspector-specific bindings."
+  `(ensime-with-popup-buffer
+    (,name ,connection ,select)
+    (use-local-map ensime-popup-inspector-map)
+    ,@body
+    ))
+
 
 ;; Interface
 
