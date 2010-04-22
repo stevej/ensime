@@ -111,6 +111,8 @@
 
 (defvar ensime-protocol-version "0.0.1")
 
+(defvar ensime-prefer-noninteractive nil 
+  "State variable used for regression testing.")
 
 ;;;;; ensime-mode
 
@@ -368,13 +370,14 @@ See `ensime-start'.")
 (defun ensime-find-and-load-config ()
   "Query the user for the path to a config file, then load it."
   (let* ((default (ensime-find-config-file buffer-file-name))
-	 (file (read-file-name 
-		"ENSIME Project file: "
-		(if default (file-name-directory default))
-		default
-		nil
-		(if default (file-name-nondirectory default))
-		)))
+	 (file (if ensime-prefer-noninteractive default
+		 (read-file-name 
+		  "ENSIME Project file: "
+		  (if default (file-name-directory default))
+		  default
+		  nil
+		  (if default (file-name-nondirectory default))
+		  ))))
     (ensime-load-config file)))
 
 
@@ -1139,6 +1142,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 
 (defun ensime-set-connection-info (config connection info)
   "Initialize CONNECTION with INFO received from Lisp."
+  (ensime-test-sig :connected info)
   (let ((ensime-dispatching-connection connection))
     (destructuring-bind (&key pid style server-implementation machine
 			      features package version modules
@@ -1503,7 +1507,8 @@ This idiom is preferred over `lexical-let'."
 				 start stop msg 'ensime-warnline nil))
 			     )))
 	      (push ov ensime-note-overlays)
-	      )))))))
+	      ))))))
+  (ensime-test-sig :compilation-finished result))
 
 (defface ensime-errline
   '((((class color) (background dark)) (:background "Firebrick4"))
@@ -2191,80 +2196,6 @@ PROP is the name of a text property."
   (assert (get-text-property (point) prop))
   (let ((end (next-single-char-property-change (point) prop)))
     (list (previous-single-char-property-change end prop) end)))
-
-
-;; Regression Tests
-
-(defun ensime-create-file (file contents)
-  "Create file named 'file', with contents 'contents'. Return file's name."
-  (with-temp-file file
-    (insert contents))
-  file)
-
-(defvar ensime-test-env-classpath '("/home/aemon/lib/scala/lib/scala-library.jar"))
-
-(defmacro* ensime-with-tmp-project ((src-files) &rest body)
-  "Evaluate BODY with path bound to the dot-separated path of this type-name, and
-   name bound to the final type name."
-  `(let* ((root-dir (file-name-as-directory (make-temp-file "ensime_test_proj_" t)))
-	  (conf-file (ensime-create-file 
-		      (concat root-dir ".ensime")
-		      (format "%S" (list :source '("src")
-					 :project-package "com.test"
-					 :classpath ensime-test-env-classpath
-					 :test-mode t
-					 ))))
-	  (src-dir (concat root-dir "src")))
-     (mkdir src-dir)
-     (dolist (f ,src-files)
-       (ensime-create-file 
-	(concat src-dir (plist-get f :name))
-	(plist-get f :contents)))
-     ,@body
-     ))
-
-(defun ensime-run-tests ()
-  "Run all regression tests for ensime-mode."
-  (interactive)
-  
-  ;; Test loading a config file..
-  (let ((file (make-temp-file "ensime_test_conf_")))
-    (with-temp-file file
-      (insert (format "%S"
-		      '( :server-cmd 
-			 "bin/server.sh"
-			 :classpath ("hello" "world")
-			 ))))
-    (let ((conf (ensime-load-config file)))
-      (assert (equal (plist-get conf :server-cmd) "bin/server.sh"))
-      (assert (equal (plist-get conf :classpath) '("hello" "world")))
-      (assert (equal (plist-get conf :root-dir) (expand-file-name (file-name-directory file))))))
-
-
-  ;; Test loading an erroneous config file..
-  (let ((file (make-temp-file "ensime_test_conf_")))
-    (with-temp-file file
-      (insert "(lkjsdfkjskfjs"))
-    (let ((conf (ensime-load-config file)))
-      (assert (null conf))))
-
-
-  ;; Test loading a config file with function symbol at :classpath
-  (let ((file (make-temp-file "ensime_test_conf_"))
-	(gen-class-path #'(lambda (conf) (list "one" "two" "three"))))
-    (with-temp-file file
-      (insert (format "%S" '( :server-cmd 
-			      "bin/server.sh"
-			      :classpath gen-class-path))))
-    (let ((conf (ensime-load-config file)))
-      (assert (equal (plist-get conf :classpath) '("one" "two" "three")))))
-
-
-  (ensime-with-tmp-project ('())
-			   (assert (file-exists-p conf-file)))
-
-
-  (message "All tests passed :)"))
 
 
 
