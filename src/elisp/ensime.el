@@ -127,7 +127,7 @@
 
 (defun ensime-after-save-hook ()
   "When a buffer is saved, ask the ENSIME server for a type-check."
-  (ensime-compile-current-file))
+  (ensime-typecheck-current-file))
 
 (defun ensime-save-buffer-no-hook ()
   "Just save the buffer per usual, don't type-check!"
@@ -140,7 +140,7 @@
     (define-key map (kbd "C-c t") 'ensime-inspect-type)
     (define-key map (kbd "C-c p") 'ensime-inspect-package)
     (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
-    (define-key map (kbd "C-c c") 'ensime-compile-current-file)
+    (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -1379,8 +1379,12 @@ This idiom is preferred over `lexical-let'."
 			(force-mode-line-update t))
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
-	  ((:compilation-result result)
-	   (ensime-compilation-finished result))
+	  ((:full-typecheck-result result)
+	   (ensime-typecheck-finished result)
+	   (ensime-test-sig :full-typecheck-finished result))
+	  ((:quick-typecheck-result result)
+	   (ensime-typecheck-finished result)
+	   (ensime-test-sig :quick-typecheck-finished result))
 	  ((:debug-activate thread level &optional select)
 	   (assert thread)
 	   (sldb-activate thread level select))
@@ -1483,7 +1487,7 @@ This idiom is preferred over `lexical-let'."
 
 (defvar ensime-note-overlays '())
 
-(defun ensime-compilation-finished (result)
+(defun ensime-typecheck-finished (result)
   (ensime-remove-old-overlays)
   (destructuring-bind (&key notes &allow-other-keys) result
     (dolist (note notes)
@@ -1507,8 +1511,7 @@ This idiom is preferred over `lexical-let'."
 				 start stop msg 'ensime-warnline nil))
 			     )))
 	      (push ov ensime-note-overlays)
-	      ))))))
-  (ensime-test-sig :compilation-finished result))
+	      )))))))
 
 (defface ensime-errline
   '((((class color) (background dark)) (:background "Firebrick4"))
@@ -1554,17 +1557,18 @@ This idiom is preferred over `lexical-let'."
 
 ;; Test compile current file
 
-(defun ensime-compile-current-file ()
+(defun ensime-typecheck-current-file ()
   "Send a request for re-typecheck to the ENSIME server.
    Current file is saved if it has unwritten modifications."
   (interactive)
   (if (buffer-modified-p) (ensime-save-buffer-no-hook))
-  (ensime-eval-async `(swank:compile-file ,buffer-file-name) #'identity))
-
-
+  (ensime-rpc-async-typecheck-file buffer-file-name))
 
 
 ;; Basic RPC calls
+
+(defun ensime-rpc-async-typecheck-file (file-name)
+  (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix)
   (ensime-eval 

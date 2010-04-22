@@ -224,25 +224,27 @@
 
 (defun ensime-run-next-test ()
   "Run the next test from the test queue."
-  (if ensime-test-queue
-      (let ((ensime-prefer-noninteractive t)
-	    (test (car ensime-test-queue)))
-	(setq ensime-shared-test-state '())
-	(if (plist-get test :async)
+  (with-current-buffer ensime-testing-buffer
+    (if ensime-test-queue
+	(let ((ensime-prefer-noninteractive t)
+	      (test (car ensime-test-queue)))
+	  (setq ensime-shared-test-state '())
+	  (setq ensime-async-handler-stack '())
+	  (if (plist-get test :async)
 
-	    ;; Asynchronous test
-	    (let ((handlers (reverse (plist-get test :handlers))))
-	      (dolist (h handlers)
-		(push h ensime-async-handler-stack))
-	      (funcall (plist-get test :trigger)))
+	      ;; Asynchronous test
+	      (let ((handlers (reverse (plist-get test :handlers))))
+		(dolist (h handlers)
+		  (push h ensime-async-handler-stack))
+		(funcall (plist-get test :trigger)))
 
-	  ;; Synchronous test
-	  (progn
-	    (pop ensime-test-queue)
-	    (funcall (plist-get test :func))
-	    (ensime-run-next-test))))
-    (switch-to-buffer ensime-testing-buffer)
-    (insert "\nFinished.")))
+	    ;; Synchronous test
+	    (progn
+	      (pop ensime-test-queue)
+	      (funcall (plist-get test :func))
+	      (ensime-run-next-test))))
+      (insert "\nFinished."))))
+
 
 (defmacro ensime-assert (pred)
   `(let ((val ,pred))
@@ -265,81 +267,132 @@
 
   (ensime-test-suite
 
-   (ensime-test "Test loading a simple config."
-		(ensime-with-tmp-file 
-		 (file "ensime_test_conf_" (format "%S"
-						   '( :server-cmd 
-						      "bin/server.sh"
-						      :classpath ("hello" "world")
-						      )))
-		 (let ((conf (ensime-load-config file)))
-		   (ensime-assert (equal (plist-get conf :server-cmd) "bin/server.sh"))
-		   (ensime-assert (equal (plist-get conf :classpath) '("hello" "world")))
-		   (ensime-assert (equal (plist-get conf :root-dir) (expand-file-name (file-name-directory file)))))))
 
 
-   (ensime-test "Test loading a broken(syntactically) config file."
-		(ensime-with-tmp-file 
-		 (file "ensime_test_conf_" "(lkjsdfkjskfjs")
-		 (let ((conf (ensime-load-config file)))
-		   (ensime-assert (null conf)))))
-
-
-   (ensime-test "Test specifiying classpath as function."
-		(ensime-with-tmp-file 
-		 (file "ensime_test_conf_"
-		       (format "%S" '( :server-cmd 
-				       "bin/server.sh"
-				       :classpath gen-class-path)))
-		 (let* ((gen-class-path #'(lambda (conf) (list "one" "two" "three")))
-			(conf (ensime-load-config file)))
-		   (ensime-assert (equal (plist-get conf :classpath) '("one" "two" "three"))))))
+   (ensime-test 
+    "Test loading a simple config."
+    (ensime-with-tmp-file 
+     (file "ensime_test_conf_" 
+	   (format "%S"
+		   '( :server-cmd 
+		      "bin/server.sh"
+		      :classpath ("hello" "world")
+		      )))
+     (let ((conf (ensime-load-config file)))
+       (ensime-assert (equal (plist-get conf :server-cmd) "bin/server.sh"))
+       (ensime-assert (equal (plist-get conf :classpath) '("hello" "world")))
+       (ensime-assert (equal (plist-get conf :root-dir) 
+			     (expand-file-name (file-name-directory file)))))))
 
 
 
-   (ensime-async-test "Load and compile 'hello world'."
-		      (let* ((proj (ensime-create-tmp-project
-				    ensime-tmp-project-hello-world))
-			     (src-files (plist-get proj :src-files)))
-			(ensime-test-var-put :proj proj)
-			(find-file (car src-files))
-			(ensime))
 
-		      ((:connected connection-info)
-		       (ensime-assert (stringp (plist-get connection-info :version))))
-
-		      ((:compilation-finished val)
-		       (let ((proj (ensime-test-var-get :proj)))
-			 (ensime-assert-equal val '(:notes ()))
-			 (ensime-cleanup-tmp-project proj)
-			 (ensime-kill-all-ensime-servers)
-			 ))
-		      )
+   (ensime-test 
+    "Test loading a broken(syntactically) config file."
+    (ensime-with-tmp-file 
+     (file "ensime_test_conf_" "(lkjsdfkjskfjs")
+     (let ((conf (ensime-load-config file)))
+       (ensime-assert (null conf)))))
 
 
-   (ensime-async-test "Get package info for com.helloworld."
-		      (let* ((proj (ensime-create-tmp-project
-				    ensime-tmp-project-hello-world))
-			     (src-files (plist-get proj :src-files)))
-			(ensime-test-var-put :proj proj)
-			(find-file (car src-files))
-			(ensime))
 
-		      ((:connected connection-info))
 
-		      ((:compilation-finished val)
-		       (let ((proj (ensime-test-var-get :proj)))
-			 (ensime-assert-equal val '(:notes ()))
-			 (let ((info (ensime-rpc-inspect-package-by-path
-				      "com.helloworld")))
-			   (ensime-assert (not (null info)))
-			   (ensime-assert-equal (ensime-package-full-name info) "com.helloworld")
-			   (ensime-assert-equal 1 (length (ensime-package-members info)))
-			   )
-			 (ensime-cleanup-tmp-project proj)
-			 (ensime-kill-all-ensime-servers)
-			 ))
-		      )
+   (ensime-test 
+    "Test specifying classpath as function."
+    (ensime-with-tmp-file 
+     (file "ensime_test_conf_"
+	   (format "%S" '( :server-cmd 
+			   "bin/server.sh"
+			   :classpath gen-class-path)))
+     (let* ((gen-class-path #'(lambda (conf) (list "one" "two" "three")))
+	    (conf (ensime-load-config file)))
+       (ensime-assert (equal (plist-get conf :classpath) '("one" "two" "three"))))))
+
+
+
+
+   (ensime-async-test 
+    "Load and compile 'hello world'."
+    (let* ((proj (ensime-create-tmp-project
+		  ensime-tmp-project-hello-world))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info)
+     (ensime-assert (stringp (plist-get connection-info :version))))
+
+    ((:full-typecheck-finished val)
+     (let ((proj (ensime-test-var-get :proj)))
+       (ensime-assert-equal val '(:notes ()))
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
+
+
+
+   (ensime-async-test 
+    "Get package info for com.helloworld."
+    (let* ((proj (ensime-create-tmp-project
+		  ensime-tmp-project-hello-world))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let ((proj (ensime-test-var-get :proj)))
+       (ensime-assert-equal val '(:notes ()))
+       (let ((info (ensime-rpc-inspect-package-by-path
+		    "com.helloworld")))
+	 (ensime-assert (not (null info)))
+	 (ensime-assert-equal (ensime-package-full-name info) "com.helloworld")
+	 (ensime-assert-equal 1 (length (ensime-package-members info)))
+	 )
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
+
+
+   (ensime-async-test 
+    "Verify re-typecheck on save-buffer."
+    (let* ((proj (ensime-create-tmp-project
+		  ensime-tmp-project-hello-world))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files))
+	    (notes (plist-get val :notes)))
+       (ensime-assert-equal (length notes) 0)
+       (find-file (car src-files))
+       (goto-char (point-min))
+       (insert "lksdjfldkjf ")
+
+       ;; save-buffer should trigger a recheck...
+       (save-buffer)
+       ))
+
+    ((:full-typecheck-finished val)
+     (let ((proj (ensime-test-var-get :proj))
+	   (notes (plist-get val :notes)))
+       (ensime-assert (> (length notes) 0))
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
 
 
 
