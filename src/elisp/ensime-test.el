@@ -89,6 +89,21 @@
       proj
       )))
 
+(defvar ensime-tmp-project-hello-world
+  `((:name 
+     "hello_world.scala"
+     :contents ,(concat 
+		 "package com.helloworld\n"
+		 "class HelloWorld{\n"
+		 "}\n"
+		 "object HelloWorld {\n"
+		 "def main(args: Array[String]) = {\n"
+		 "Console.println(\"Hello, world!\")\n"
+		 "}\n"
+		 "}\n"
+		 )
+     )))
+
 (defun ensime-cleanup-tmp-project (proj)
   "Destroy a temporary project directory, kill all buffers visiting
    source files in the project."
@@ -283,18 +298,8 @@
 
 
    (ensime-async-test "Load and compile 'hello world'."
-
-		      (let* ((proj (ensime-create-tmp-project 
-				    (list
-				     `(:name 
-				       "hello_world.scala"
-				       :contents ,(concat "object HelloWorld {\n"
-							  "def main(args: Array[String]) = {\n"
-							  "Console.println(\"Hello, world!\")\n"
-							  "}\n"
-							  "}\n"
-							  )
-				       ))))
+		      (let* ((proj (ensime-create-tmp-project
+				    ensime-tmp-project-hello-world))
 			     (src-files (plist-get proj :src-files)))
 			(ensime-test-var-put :proj proj)
 			(find-file (car src-files))
@@ -309,8 +314,34 @@
 			 (ensime-cleanup-tmp-project proj)
 			 (ensime-kill-all-ensime-servers)
 			 ))
-
 		      )
+
+
+   (ensime-async-test "Get package info for com.helloworld."
+		      (let* ((proj (ensime-create-tmp-project
+				    ensime-tmp-project-hello-world))
+			     (src-files (plist-get proj :src-files)))
+			(ensime-test-var-put :proj proj)
+			(find-file (car src-files))
+			(ensime))
+
+		      ((:connected connection-info))
+
+		      ((:compilation-finished val)
+		       (let ((proj (ensime-test-var-get :proj)))
+			 (ensime-assert-equal val '(:notes ()))
+			 (let ((info (ensime-rpc-inspect-package-by-path
+				      "com.helloworld")))
+			   (ensime-assert (not (null info)))
+			   (ensime-assert-equal (ensime-package-full-name info) "com.helloworld")
+			   (ensime-assert-equal 1 (length (ensime-package-members info)))
+			   )
+			 (ensime-cleanup-tmp-project proj)
+			 (ensime-kill-all-ensime-servers)
+			 ))
+		      )
+
+
 
 
 
