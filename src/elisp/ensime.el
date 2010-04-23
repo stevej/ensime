@@ -32,6 +32,10 @@
 (eval-and-compile
   (when (<= emacs-major-version 21)
     (error "Ensime requires an Emacs version of 21, or above")))
+
+(eval-and-compile
+  (require 'cl))
+
 (require 'thingatpt)
 (require 'comint)
 (require 'timer)
@@ -1257,8 +1261,8 @@ versions cannot deal with that."
 
 (defun ensime-eval (sexp)
   "Evaluate EXPR on the superior Lisp and return the result."
-  (let* ((tag (gensym (format "ensime-result-%d-" 
-			      (1+ (ensime-continuation-counter)))))
+  (let* ((tag (gensym (format "ensime-result-%d-sym" 
+				   (1+ (ensime-continuation-counter)))))
 	 (ensime-stack-eval-tags (cons tag ensime-stack-eval-tags)))
     (apply
      #'funcall 
@@ -1604,6 +1608,9 @@ This idiom is preferred over `lexical-let'."
 
 ;; Type Inspector UI
 
+(defvar ensime-indent-level 0
+  "In inspector UI, how much to indent.")
+
 (defun ensime-inspector-insert-linked-package-path (path &optional face)
   "For each component of the package path, insert a link to inspect
    that package."
@@ -1631,7 +1638,7 @@ This idiom is preferred over `lexical-let'."
        (when path
 	 (ensime-inspector-insert-linked-package-path path))
        (ensime-insert-action-link
-	(format "%s%s" (make-string indent-level ?\s) name)
+	(format "%s%s" (make-string ensime-indent-level ?\s) name)
 	`(lambda (x)
 	   (ensime-type-inspector-show 
 	    (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
@@ -1690,7 +1697,7 @@ This idiom is preferred over `lexical-let'."
   (let* ((supers (plist-get info :supers))
 	 (type (plist-get info :type))
 	 (buffer-name "*Inspector*")
-	 (indent-level 0))
+	 (ensime-indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-inspector-buffer 
@@ -1777,10 +1784,10 @@ This idiom is preferred over `lexical-let'."
   "Helper to insert a hyper-linked package name."
   (let ((name (ensime-package-full-name pack))
 	(members (ensime-package-members pack)))
-    (insert (make-string indent-level ?\s))
+    (insert (make-string ensime-indent-level ?\s))
     (ensime-inspector-insert-linked-package-path name font-lock-variable-name-face)
     (insert "\n")
-    (let ((indent-level (+ indent-level 5)))
+    (let ((ensime-indent-level (+ ensime-indent-level 5)))
       (dolist (ea members)
 	(when (not (ensime-package-p ea))
 	  (ensime-inspector-insert-linked-type ea)
@@ -1794,7 +1801,7 @@ This idiom is preferred over `lexical-let'."
 (defun ensime-package-inspector-show (info)
   "Display a list of all the members of the provided package."
   (let* ((buffer-name "*Inspector*")
-	 (indent-level 0))
+	 (ensime-indent-level 0))
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-inspector-buffer
@@ -1885,6 +1892,8 @@ This idiom is preferred over `lexical-let'."
 
 
 ;; Interface
+
+(defvar ensime-message-function 'message)
 
 (defun ensime-minibuffer-respecting-message (format &rest format-args)
   "Display TEXT as a message, without hiding any minibuffer contents."
