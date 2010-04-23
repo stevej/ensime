@@ -1635,7 +1635,6 @@ This idiom is preferred over `lexical-let'."
 	`(lambda (x)
 	   (ensime-type-inspector-show 
 	    (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
-	    t
 	    )) font-lock-type-face))
 
       (when with-doc-link
@@ -1695,7 +1694,7 @@ This idiom is preferred over `lexical-let'."
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-inspector-buffer 
-     (buffer-name nil t) info
+     (buffer-name info nil t)
 
      ;; We want two main columns. The first, 20 chars wide.
      (let ((tab-stop-list '(20)))
@@ -1799,7 +1798,7 @@ This idiom is preferred over `lexical-let'."
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-inspector-buffer
-     (buffer-name nil t) info
+     (buffer-name info nil t)
      (ensime-inspector-insert-package info)
      (goto-char (point-min))
      )))
@@ -1810,23 +1809,49 @@ This idiom is preferred over `lexical-let'."
 (defvar ensime-inspector-history-cursor 0
   "Where are we in the history?")
 
+(defvar ensime-inspector-paging-in-progress nil
+  "A dynamic variable to inform dynamic extant of user's intent.
+   Are we moving in history, or inspecting a new info?")
+
+(defun ensime-inspector-backward-page ()
+  "Inspect the info object preceding current in history."
+  (interactive)
+  (setq ensime-inspector-history-cursor 
+	(min (- (length ensime-inspector-history) 1)
+	     (+ ensime-inspector-history-cursor 1)))
+  (ensime-inspector-goto-cursor))
+
 (defun ensime-inspector-forward-page ()
   "Inspect the info object following current in history."
   (interactive)
-  )
+  (setq ensime-inspector-history-cursor 
+	(max 0 (- ensime-inspector-history-cursor 1)))
+  (ensime-inspector-goto-cursor))
 
-(defun ensime-inspector-backward-page ()
-  "Inspect the info object following current in history."
-  (interactive)
-  )
+
+(defun ensime-inspector-goto-cursor ()
+  "Helper to jump to a specific point in history."
+  (let ((info (nth ensime-inspector-history-cursor
+		   ensime-inspector-history))
+	(ensime-inspector-paging-in-progress t))
+
+    (cond ((ensime-package-p info)
+	   (ensime-package-inspector-show info))
+
+	  (t (ensime-type-inspector-show info)))
+    ))
+
 
 (defvar ensime-popup-inspector-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "M n") 'ensime-inpector-forward-page)
-    (define-key map (kbd "M p") 'ensime-inpector-backward-page)
+    (define-key map (kbd "M-n") 'ensime-inspector-forward-page)
+    (define-key map (kbd "M-p") 'ensime-inspector-backward-page)
+    (define-key map (kbd ".") 'ensime-inspector-forward-page)
+    (define-key map (kbd ",") 'ensime-inspector-backward-page)
     map)
   "Type and package inspector specific key bindings 
    (in addition to those defined by popup-buffer-mode)")
+
 
 (defmacro* ensime-with-inspector-buffer ((name object &optional connection select)
 					 &body body)
@@ -1834,6 +1859,27 @@ This idiom is preferred over `lexical-let'."
   `(ensime-with-popup-buffer
     (,name ,connection ,select)
     (use-local-map ensime-popup-inspector-map)
+    (when (not ensime-inspector-paging-in-progress)
+
+      ;; First clamp the cursor, for safety
+      (setq ensime-inspector-history-cursor
+	    (max 0 ensime-inspector-history-cursor))
+      (setq ensime-inspector-history-cursor
+	    (min (- (length ensime-inspector-history) 1) 
+		 ensime-inspector-history-cursor))
+
+      ;; Remove all elements preceding the cursor (the 'redo' history)
+      (setq ensime-inspector-history
+	    (subseq ensime-inspector-history
+		    ensime-inspector-history-cursor))
+
+      ;; Add the new history item
+      (push ,object ensime-inspector-history)
+
+      ;; Set cursor to point to the new item
+      (setq ensime-inspector-history-cursor 0)
+      
+      )
     ,@body
     ))
 
