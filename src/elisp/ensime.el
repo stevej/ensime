@@ -78,7 +78,7 @@
   :type 'boolean
   :group 'ensime-ui)
 
-(defcustom ensime-graphical-tooltips t
+(defcustom ensime-graphical-tooltips nil
   "If non-nil, show graphical bubbles for tooltips."
   :type 'boolean
   :group 'ensime-ui)
@@ -1855,8 +1855,6 @@ This idiom is preferred over `lexical-let'."
     (define-key map [?\t] 'forward-button)
     (define-key map (kbd "M-n") 'forward-button)
     (define-key map (kbd "M-p") 'backward-button)
-    (define-key map (kbd "M-f") 'ensime-inspector-forward-page)
-    (define-key map (kbd "M-b") 'ensime-inspector-backward-page)
     (define-key map (kbd ".") 'ensime-inspector-forward-page)
     (define-key map (kbd ",") 'ensime-inspector-backward-page)
     map)
