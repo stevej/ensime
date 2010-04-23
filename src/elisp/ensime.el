@@ -1851,8 +1851,11 @@ This idiom is preferred over `lexical-let'."
 
 (defvar ensime-popup-inspector-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "M-n") 'ensime-inspector-forward-page)
-    (define-key map (kbd "M-p") 'ensime-inspector-backward-page)
+    (define-key map [?\t] 'forward-button)
+    (define-key map (kbd "M-n") 'forward-button)
+    (define-key map (kbd "M-p") 'backward-button)
+    (define-key map (kbd "M-f") 'ensime-inspector-forward-page)
+    (define-key map (kbd "M-b") 'ensime-inspector-backward-page)
     (define-key map (kbd ".") 'ensime-inspector-forward-page)
     (define-key map (kbd ",") 'ensime-inspector-backward-page)
     map)
