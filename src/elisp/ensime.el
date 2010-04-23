@@ -1262,7 +1262,7 @@ versions cannot deal with that."
 (defun ensime-eval (sexp)
   "Evaluate EXPR on the superior Lisp and return the result."
   (let* ((tag (gensym (format "ensime-result-%d-sym" 
-				   (1+ (ensime-continuation-counter)))))
+			      (1+ (ensime-continuation-counter)))))
 	 (ensime-stack-eval-tags (cons tag ensime-stack-eval-tags)))
     (apply
      #'funcall 
@@ -1637,8 +1637,9 @@ This idiom is preferred over `lexical-let'."
        type-name (path name)
        (when path
 	 (ensime-inspector-insert-linked-package-path path))
+       (insert (make-string ensime-indent-level ?\s))
        (ensime-insert-action-link
-	(format "%s%s" (make-string ensime-indent-level ?\s) name)
+	name
 	`(lambda (x)
 	   (ensime-type-inspector-show 
 	    (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
