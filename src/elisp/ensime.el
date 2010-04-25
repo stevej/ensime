@@ -1146,7 +1146,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 
 (defun ensime-set-connection-info (config connection info)
   "Initialize CONNECTION with INFO received from Lisp."
-  (ensime-test-sig :connected info)
+  (ensime-event-sig :connected info)
   (let ((ensime-dispatching-connection connection))
     (destructuring-bind (&key pid style server-implementation machine
 			      features package version modules
@@ -1385,10 +1385,10 @@ This idiom is preferred over `lexical-let'."
 		    (error "Unexpected reply: %S %S" id value)))))
 	  ((:full-typecheck-result result)
 	   (ensime-typecheck-finished result)
-	   (ensime-test-sig :full-typecheck-finished result))
+	   (ensime-event-sig :full-typecheck-finished result))
 	  ((:quick-typecheck-result result)
 	   (ensime-typecheck-finished result)
-	   (ensime-test-sig :quick-typecheck-finished result))
+	   (ensime-event-sig :quick-typecheck-finished result))
 	  ((:debug-activate thread level &optional select)
 	   (assert thread)
 	   (sldb-activate thread level select))
@@ -2292,6 +2292,15 @@ PROP is the name of a text property."
   (assert (get-text-property (point) prop))
   (let ((end (next-single-char-property-change (point) prop)))
     (list (previous-single-char-property-change end prop) end)))
+
+
+;; Testing helpers
+
+(defun ensime-event-sig (event value)
+  "Signal an event. Send to testing harness if it exists.
+   Used to drive asynchronous regression tests."
+  (if (fboundp 'ensime-test-sig)
+      (ensime-test-sig event value)))
 
 
 
