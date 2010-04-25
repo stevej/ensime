@@ -57,7 +57,7 @@
    Return nil if we are not currently looking at a symbol."
   (let ((pt-at-end-of-prev-line
 	 (save-excursion (forward-line -1)(point-at-eol))))
-    (if (looking-back "[(\\[\\,\\;\\}\\{\n]\\s-*\\(\\w+\\)" pt-at-end-of-prev-line)
+    (if (looking-back "[(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" pt-at-end-of-prev-line)
 	(let ((point (- (point) (length (match-string 1)))))
 	  (goto-char point)
 	  point
