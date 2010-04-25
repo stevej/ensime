@@ -1501,35 +1501,61 @@ This idiom is preferred over `lexical-let'."
 	  (switch-to-buffer buf)
 	  (save-excursion
 	    (goto-line line)
-	    (let* ((start (point-at-bol))
-		   (stop (point-at-eol))
-		   (ov (cond ((equal severity 'error)
-			      (ensime-make-overlay
-			       start stop msg 'ensime-errline nil))
+	    (let* ((line-start (point-at-bol))
+		   (line-stop (point-at-eol)))
+	      (cond 
 
-			     ((equal severity 'warn)
-			      (ensime-make-overlay
-			       start stop msg 'ensime-warnline nil))
+	       ((equal severity 'error)
+		(progn 
+		  (push (ensime-make-overlay
+			 line-start line-stop msg 'ensime-errline nil)
+			ensime-note-overlays)
+		  (push (ensime-make-overlay
+			 (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
+			ensime-note-overlays)
+		  ))
 
-			     (t (ensime-make-overlay
-				 start stop msg 'ensime-warnline nil))
-			     )))
-	      (push ov ensime-note-overlays)
-	      )))))))
+	       (t (progn 
+		    (push (ensime-make-overlay
+			   line-start line-stop msg 'ensime-warnline nil)
+			  ensime-note-overlays)
+		    (push (ensime-make-overlay
+			   (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
+			  ensime-note-overlays)
+		    ))
+
+	       ))
+	    )))))))
 
 (defface ensime-errline
   '((((class color) (background dark)) (:background "Firebrick4"))
     (((class color) (background light)) (:background "LightPink"))
     (t (:bold t)))
-  "Face used for marking error lines."
+  "Face used for marking the line on which an error occurs."
+  :group 'ensime-ui)
+
+(defface ensime-errline-highlight
+  '((((class color) (background dark)) (:background "Firebrick3"))
+    (((class color) (background light)) (:background "HotPink"))
+    (t (:bold t)))
+  "Face used for marking the specific region of an error, if available."
   :group 'ensime-ui)
 
 (defface ensime-warnline
   '((((class color) (background dark)) (:background "DarkBlue"))
     (((class color) (background light)) (:background "LightBlue2"))
     (t (:bold t)))
-  "Face used for marking warning lines."
+  "Face used for marking the line on which an warning occurs."
   :group 'ensime-ui)
+
+(defface ensime-warnline-highlight
+  '((((class color) (background dark)) (:background "dark slate blue"))
+    (((class color) (background light)) (:background "DeepSkyBlue1"))
+    (t (:bold t)))
+  "Face used for marking the specific region of an warning, if available."
+  :group 'ensime-ui)
+
+
 
 (defun ensime-make-overlay (beg end tooltip-text face mouse-face)
   "Allocate a ensime overlay in range BEG and END."
