@@ -646,7 +646,12 @@ The default condition handler for timer functions (see
      ((and file-path (integerp offset))
       (progn
 	(insert text)
-	(ensime-make-code-link start (point) file-path offset))))))
+	(ensime-make-code-link start (point) file-path offset)))
+
+     (t 
+      (progn
+	(insert text))))
+    ))
 
 
 (defun ensime-insert-action-link (text action &optional face)
@@ -759,6 +764,20 @@ corresponding values in the CDR of VALUE."
 						 ,struct-var)))))
 		      slots)
 	   . ,body)))))
+
+(defun ensime-in-string-or-comment (pos)
+  "A helper to determine if the text at point is in a string
+   or comment, and therefore should not be considered as part
+   of a paren-balancing calculation.
+
+   TODO: Currently this relies on font-lock-mode. Could be 
+   better."
+  (let ((face (plist-get (text-properties-at pos) 'face)))
+    (and face
+	 (or
+	  (equal face 'font-lock-doc-face)
+	  (equal face 'font-lock-string-face)
+	  (equal face 'font-lock-comment-face)))))
 
 
 (defvar ensime-net-processes nil
@@ -1525,7 +1544,7 @@ This idiom is preferred over `lexical-let'."
 		    ))
 
 	       ))
-	    )))))))
+	    ))))))
 
 (defface ensime-errline
   '((((class color) (background dark)) (:background "Firebrick4"))

@@ -73,30 +73,70 @@
 	 (name (get-text-property 0 'symbol-name candidate))
 	 (param-types (ensime-type-param-types type)))
     (kill-backward-chars (length candidate))
-    (insert name)
-    (if (and type
-	     (ensime-type-is-arrow type) 
-	     param-types)
-	(let* ((i -1)
-	       (arg-str (mapconcat 
-			 (lambda(p)(progn
-				     (incf i)
-				     (format 
-				      "arg%s:%s" 
-				      i (ensime-type-name p))))
-			 param-types
-			 ", "
-			 )))
-	  (save-excursion
-	    (if (and (= 1 (length param-types)) 
-		     (null (string-match "[A-z]" name)))
-		;; Probably an operator..
-		(insert (concat " " arg-str))
-	      ;; Probably a normal method call
-	      (insert (concat "(" arg-str ")" ))))
-	  (forward-char)
-	  ))))
+    (let ((name-start-point (point)))
+      (insert name)
+      (if (and type (ensime-type-is-arrow type) param-types)
+	  (let* ((param-list 
+		  (mapcar 
+		   (lambda(pt)
+		     (list "arg" (ensime-type-name pt))) param-types)))
 
+	    ;; Save param list information as a text property..
+	    (add-text-properties name-start-point 
+				 (+ name-start-point (length name))
+				 (list 'param-list param-list))
+
+	    ;; Insert space or parens depending on the nature of the
+	    ;; call
+	    (save-excursion
+	      (if (and (= 1 (length param-types))
+		       (null (string-match "[A-z]" name)))
+		  ;; Probably an operator..
+		  (insert " ")
+		;; Probably a normal method call
+		(insert "()" )))
+
+	    ;; Setup hook function to show param help later..
+	    (add-hook 'post-command-hook 'ensime-ac-update-param-help nil t)
+
+	    ;; This command should trigger help hook..
+	    (forward-char)
+	    )))))
+
+
+(defun ensime-ac-get-active-param-list ()
+  "Search backward from point for the param list that 
+   we are currently completing."
+  (save-excursion
+    (catch 'return 
+      (let ((lbound (point-at-bol)) ;; TODO <-- what about multiline param lists
+	    (balance 0))
+	(backward-char 1)
+	(while (> (point) lbound)
+	  (cond
+	   ((ensime-in-string-or-comment (point)) nil)
+	   ((looking-at "\\s)") (decf balance))
+	   ((looking-at "\\s(") (incf balance))
+	   (t
+	    (let ((prop (get-text-property (point) 'param-list)))
+	      (if (and (or (= 1 balance)) prop)
+		  (throw 'return (list (point) prop))))))
+	  (backward-char 1))))))
+
+
+(defun ensime-ac-update-param-help ()
+  "When entering the arguments to a call, display a tooltip
+   with the param names and types of the call."
+  (let ((desc (ensime-ac-get-active-param-list)))
+    (if desc
+	(let* ((name-end (car desc))
+	       (param-list (cadr desc))
+	       (param-str (mapconcat
+			   (lambda (p)
+			     (format "%s:%s"(car p)(cadr p)))
+			   param-list ", ")))
+	  (message (concat "( " param-str " )")))
+      (remove-hook 'post-command-hook 'ensime-ac-update-param-help t))))
 
 
 (ac-define-source ensime-members
