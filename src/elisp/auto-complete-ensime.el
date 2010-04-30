@@ -154,8 +154,9 @@
 			     (incf i)
 			     (format 
 			      "%s:%s" 
-			      (nth i param-names) 
-			      (ensime-type-name pt)))
+			      (propertize (nth i param-names) 'face font-lock-variable-name-face)
+			      (propertize (ensime-type-name pt) 'face font-lock-type-face)
+			      ))
 			   param-types ", ")))
 	  (message (concat "( " param-str " )")))
       (remove-hook 'post-command-hook 'ensime-ac-update-param-help t))))
