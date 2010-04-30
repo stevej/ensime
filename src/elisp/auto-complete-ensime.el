@@ -130,7 +130,7 @@
 	   (t
 	    (let ((param-types (get-text-property (point) 'param-types))
 		  (param-names (get-text-property (point) 'param-names)))
-	      (if (and (or (= 1 balance)) param-types)
+	      (if (and (or (> balance 0)) param-types)
 		  (throw 'return (list 
 				  :name-end-point (point)
 				  :param-types param-types
