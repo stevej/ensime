@@ -16,13 +16,16 @@
       (mapcar (lambda (m)
 		(let* ((type-name (plist-get m :type-name))
 		       (type-id (plist-get m :type-id))
+		       (is-callable (plist-get m :is-callable))
 		       (name (plist-get m :name))
 		       (candidate (concat name ":" type-name)))
 		  ;; Save the type for later display
 		  (propertize candidate
 			      'symbol-name name
 			      'scala-type-name type-name 
-			      'scala-type-id type-id))
+			      'scala-type-id type-id
+			      'is-callable is-callable
+			      ))
 		) members))))
 
 (defun ac-ensime-name-candidates (prefix)
@@ -32,13 +35,16 @@
     (mapcar (lambda (m)
 	      (let* ((type-name (plist-get m :type-name))
 		     (type-id (plist-get m :type-id))
+		     (is-callable (plist-get m :is-callable))
 		     (name (plist-get m :name))
 		     (candidate (concat name ":" type-name)))
 		;; Save the type for later display
 		(propertize candidate
 			    'symbol-name name
 			    'scala-type-name type-name 
-			    'scala-type-id type-id))
+			    'scala-type-id type-id
+			    'is-callable is-callable
+			    ))
 	      ) names)))
 
 
@@ -68,23 +74,27 @@
    In this case, if the candidate is a method name, fill in place-holder
    arguments."
   (let* ((candidate candidate) ;;Grab from dynamic environment..
-	 (type-id (get-text-property 0 'scala-type-id candidate))
-	 (type (ensime-rpc-get-type-by-id type-id))
 	 (name (get-text-property 0 'symbol-name candidate))
-	 (param-types (ensime-type-param-types type)))
+	 (type-id (get-text-property 0 'scala-type-id candidate)))
     (kill-backward-chars (length candidate))
     (let ((name-start-point (point)))
       (insert name)
-      (if (and type (ensime-type-is-arrow type) param-types)
-	  (let* ((param-list 
-		  (mapcar 
-		   (lambda(pt)
-		     (list "arg" (ensime-type-name pt))) param-types)))
 
-	    ;; Save param list information as a text property..
+      ;; If this member is callable, use the type-id to lookup call completion 
+      ;; information to show parameter hints.
+      (when (get-text-property 0 'is-callable candidate)
+
+	(let* ((call-info (ensime-rpc-get-call-completion type-id))
+	       (param-types (ensime-type-param-types call-info))
+	       (param-names (ensime-type-param-names call-info)))
+	  (when (and call-info param-names param-types)
+
+	    ;; Save param info as a text properties of the member name..
 	    (add-text-properties name-start-point 
 				 (+ name-start-point (length name))
-				 (list 'param-list param-list))
+				 (list 'param-types param-types
+				       'param-names param-names
+				       ))
 
 	    ;; Insert space or parens depending on the nature of the
 	    ;; call
@@ -101,11 +111,11 @@
 
 	    ;; This command should trigger help hook..
 	    (forward-char)
-	    )))))
+	    ))))))
 
 
-(defun ensime-ac-get-active-param-list ()
-  "Search backward from point for the param list that 
+(defun ensime-ac-get-active-param-info ()
+  "Search backward from point for the param info of the call that 
    we are currently completing."
   (save-excursion
     (catch 'return 
@@ -118,23 +128,35 @@
 	   ((looking-at "\\s)") (decf balance))
 	   ((looking-at "\\s(") (incf balance))
 	   (t
-	    (let ((prop (get-text-property (point) 'param-list)))
-	      (if (and (or (= 1 balance)) prop)
-		  (throw 'return (list (point) prop))))))
+	    (let ((param-types (get-text-property (point) 'param-types))
+		  (param-names (get-text-property (point) 'param-names)))
+	      (if (and (or (= 1 balance)) param-types)
+		  (throw 'return (list 
+				  :name-end-point (point)
+				  :param-types param-types
+				  :param-names param-names))))))
 	  (backward-char 1))))))
 
 
 (defun ensime-ac-update-param-help ()
   "When entering the arguments to a call, display a tooltip
    with the param names and types of the call."
-  (let ((desc (ensime-ac-get-active-param-list)))
-    (if desc
-	(let* ((name-end (car desc))
-	       (param-list (cadr desc))
+  (let ((info (ensime-ac-get-active-param-info)))
+    (if info
+	(let* (;; To be used for tooltip positioning..
+	       (name-end (plist-get info :name-end-point))
+
+	       (param-types (plist-get info :param-types))
+	       (param-names (plist-get info :param-names))
+	       (i -1)
 	       (param-str (mapconcat
-			   (lambda (p)
-			     (format "%s:%s"(car p)(cadr p)))
-			   param-list ", ")))
+			   (lambda (pt)
+			     (incf i)
+			     (format 
+			      "%s:%s" 
+			      (nth i param-names) 
+			      (ensime-type-name pt)))
+			   param-types ", ")))
 	  (message (concat "( " param-str " )")))
       (remove-hook 'post-command-hook 'ensime-ac-update-param-help t))))
 

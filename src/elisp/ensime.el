@@ -1649,6 +1649,11 @@ This idiom is preferred over `lexical-let'."
   (ensime-eval 
    `(swank:inspect-package-by-path ,path)))
 
+(defun ensime-rpc-get-call-completion (id)
+  (if (and (integerp id) (> id -1))
+      (ensime-eval 
+       `(swank:call-completion ,id))))
+
 
 
 ;; Type Inspector UI
@@ -2021,6 +2026,9 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-type-param-types (type)
   (plist-get type :param-types))
+
+(defun ensime-type-param-names (type)
+  (plist-get type :param-names))
 
 (defun ensime-type-result-type (type)
   (plist-get type :result-type))
