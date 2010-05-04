@@ -2058,7 +2058,7 @@ It should be used for \"background\" messages such as argument lists."
    to a system that just counts chars."
   (+ (point) 
      (if (eq 1 (coding-system-eol-type buffer-file-coding-system)) 
-	 (line-number-at-pos) 
+	 (- (line-number-at-pos) 1)
        0)
      ))
 
