@@ -1621,11 +1621,11 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix)
   (ensime-eval 
-   `(swank:scope-completion ,buffer-file-name ,(point) ,(or prefix ""))))
+   `(swank:scope-completion ,buffer-file-name ,(ensime-computed-point) ,(or prefix ""))))
 
 (defun ensime-rpc-members-for-type-at-point (&optional prefix)
   (ensime-eval 
-   `(swank:type-completion ,buffer-file-name ,(point) ,(or prefix ""))))
+   `(swank:type-completion ,buffer-file-name ,(ensime-computed-point) ,(or prefix ""))))
 
 (defun ensime-rpc-get-type-by-id (id)
   (if (and (integerp id) (> id -1))
@@ -1634,11 +1634,11 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-rpc-get-type-at-point ()
   (ensime-eval 
-   `(swank:type-at-point ,buffer-file-name ,(point))))
+   `(swank:type-at-point ,buffer-file-name ,(ensime-computed-point))))
 
 (defun ensime-rpc-inspect-type-at-point ()
   (ensime-eval 
-   `(swank:inspect-type-at-point ,buffer-file-name ,(point))))
+   `(swank:inspect-type-at-point ,buffer-file-name ,(ensime-computed-point))))
 
 (defun ensime-rpc-inspect-type-by-id (id)
   (if (and (integerp id) (> id -1))
@@ -2050,6 +2050,18 @@ It should be used for \"background\" messages such as argument lists."
 
 
 ;; Portability
+
+(defun ensime-computed-point ()
+  "In buffers with windows-encoded line-endings, 
+   add with the appropriate number of CRs. This is
+   necessary whenever we export a position out of emacs,
+   to a system that just counts chars."
+  (+ (point) 
+     (if (eq 1 (coding-system-eol-type buffer-file-coding-system)) 
+	 (line-number-at-pos) 
+       0)
+     ))
+
 
 (defvar ensime-accept-process-output-supports-floats 
   (ignore-errors (accept-process-output nil 0.0) t))
