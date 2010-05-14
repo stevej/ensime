@@ -145,6 +145,7 @@
     (define-key map (kbd "C-c p") 'ensime-inspect-package)
     (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
     (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
+    (define-key map (kbd "C-c d") 'ensime-jump-to-def-for-sym-at-point)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -166,7 +167,8 @@
 	  (make-local-variable 'tooltip-delay)
 	  (setq tooltip-delay 1.0)
 	  (define-key ensime-mode-map [mouse-movement] 'ensime-mouse-motion))
-	(define-key ensime-mode-map [double-mouse-1] 'ensime-mouse-1-double-click))
+	(define-key ensime-mode-map [double-mouse-1] 'ensime-mouse-1-double-click)
+	(define-key ensime-mode-map [C-mouse-1] 'ensime-control-mouse-1-single-click))
     (progn
       (ac-ensime-disable)
       (remove-hook 'after-save-hook 'ensime-after-save-hook t)
@@ -175,9 +177,20 @@
       (setq track-mouse nil)
       (define-key ensime-mode-map [mouse-movement] 'ignore)
       (define-key ensime-mode-map [double-mouse-1] 'ignore)
+      (define-key ensime-mode-map [C-down-mouse-1] 'ignore)
+      (define-key ensime-mode-map [C-up-mouse-1] 'ignore)
+      (define-key ensime-mode-map [C-mouse-1] 'ignore)
       )))
 
 ;;;;;; Mouse handlers
+
+(defun ensime-control-mouse-1-single-click (event)
+  "Command handler for control+clicks of mouse button 1.
+   If control is held, jump to definition of symbol under 
+   point."
+  (interactive "e")
+  (mouse-set-point event)
+  (ensime-jump-to-def-for-sym-at-point))
 
 (defun ensime-mouse-1-double-click (event)
   "Command handler for double clicks of mouse button 1.
@@ -643,13 +656,16 @@ The default condition handler for timer functions (see
 			  (message "Opening documentation in browser..")
 			  )))
 
+(defun ensime-http-url-p (s)
+  (and (stringp s) (string-match "http://" s)))
+
 (defun ensime-insert-link (text file-path &optional offset)
   "Insert text in current buffer and make it into an emacs 
    button, linking to file-path and offset. Intelligently decide
    whether to make a source link or an http link based on the file-path."
   (let ((start (point)))
     (cond
-     ((and file-path (string-match "http://" file-path))
+     ((and file-path (ensime-http-url-p file-path))
       (progn
 	(insert text)
 	(ensime-make-code-hyperlink start (point) file-path)))
@@ -1612,7 +1628,34 @@ This idiom is preferred over `lexical-let'."
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
 
+;; Jump to definition
 
+(defun ensime-jump-to-def-for-sym-at-point ()
+  "Lookup the position of the defintion for the symbol at point.
+   Jump there."
+  (interactive)
+  (ensime-jump-to-pos
+   (ensime-rpc-symbol-def-pos-at-point)))
+
+(defun ensime-jump-to-pos (pos)
+  "If pos describes a local file-system location, switch to 
+   buffer visiting pos. Otherwise, if pos describes an http location, 
+   browse to that location."
+  (interactive)
+  (let ((file-name (ensime-pos-file pos))
+	(offset (ensime-pos-offset pos)))
+    (cond ((ensime-http-url-p file-name)
+	   (progn
+	     (browse-url file-name)
+	     (message "Opening documentation in browser..")))
+
+	  ((and file-name (integerp offset))
+	   (progn
+	     (find-file-other-window file-name)
+	     (goto-char offset)))
+
+	  (t
+	   (message "Couldn't find definition.")))))
 
 
 ;; Test compile current file
@@ -1626,6 +1669,10 @@ This idiom is preferred over `lexical-let'."
 
 
 ;; Basic RPC calls
+
+(defun ensime-rpc-symbol-def-pos-at-point ()
+  (ensime-eval 
+   `(swank:symbol-def-pos ,buffer-file-name ,(ensime-computed-point))))
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
