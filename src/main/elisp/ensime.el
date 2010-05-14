@@ -108,7 +108,7 @@
   :type 'string
   :group 'ensime-server)
 
-(defcustom ensime-default-server-root "/home/aemon/src/misc/ensime/"
+(defcustom ensime-default-server-root "/home/aemon/src/misc/ensime/dist"
   "Location of ENSIME server library."
   :type 'string
   :group 'ensime-server)
@@ -336,6 +336,8 @@
     (comint-mode)
     (let ((process-environment (append env process-environment))
 	  (process-connection-type nil))
+      (setq comint-process-echoes nil)
+      (setq comint-use-prompt-regexp nil)
       (comint-exec (current-buffer) "inferior-ensime-server" program nil program-args))
     (let ((proc (get-buffer-process (current-buffer))))
       (ensime-set-query-on-exit-flag proc)
