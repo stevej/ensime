@@ -177,8 +177,6 @@
       (setq track-mouse nil)
       (define-key ensime-mode-map [mouse-movement] 'ignore)
       (define-key ensime-mode-map [double-mouse-1] 'ignore)
-      (define-key ensime-mode-map [C-down-mouse-1] 'ignore)
-      (define-key ensime-mode-map [C-up-mouse-1] 'ignore)
       (define-key ensime-mode-map [C-mouse-1] 'ignore)
       )))
 
@@ -1634,15 +1632,16 @@ This idiom is preferred over `lexical-let'."
   "Lookup the position of the defintion for the symbol at point.
    Jump there."
   (interactive)
-  (let* ((info (ensime-rpc-symbol-info-at-point))
+  (let* ((info (ensime-rpc-symbol-at-point))
 	 (pos (ensime-symbol-decl-pos info))
-	 (offset (ensime-pos-offset info))
+	 (offset (ensime-pos-offset pos))
 	 (type (ensime-symbol-type info))
 	 (url (or (ensime-pos-file pos)
 		  (ensime-make-scaladoc-url type)
 		  (ensime-make-javadoc-url type))))
     
     (ensime-jump-to-pos url offset)))
+
 
 (defun ensime-jump-to-pos (file-name &optional offset)
   "If file-name describes a local file-system location, switch to 
@@ -1656,7 +1655,13 @@ This idiom is preferred over `lexical-let'."
 
 	((and file-name (integerp offset))
 	 (progn
-	   (find-file-other-window file-name)
+	   ;; Open a new window if pos is in another file, 
+	   ;; or beyond the visible bounds of the current window.
+	   (when (or (not (equal (expand-file-name file-name)
+				 (expand-file-name buffer-file-name)))
+		     (< offset (window-start))
+		     (> offset (window-end)))
+	     (find-file-other-window file-name))
 	   (goto-char offset)))
 
 	(t
@@ -1675,9 +1680,9 @@ This idiom is preferred over `lexical-let'."
 
 ;; Basic RPC calls
 
-(defun ensime-rpc-symbol-def-pos-at-point ()
+(defun ensime-rpc-symbol-at-point ()
   (ensime-eval 
-   `(swank:symbol-def-pos ,buffer-file-name ,(ensime-computed-point))))
+   `(swank:symbol-at-point ,buffer-file-name ,(ensime-computed-point))))
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
@@ -2051,6 +2056,12 @@ It should be used for \"background\" messages such as argument lists."
 
 
 ;; Data-structure accessors
+
+(defun ensime-symbol-decl-pos (sym)
+  (plist-get sym :decl-pos))
+
+(defun ensime-symbol-type (sym)
+  (plist-get sym :type))
 
 (defun ensime-package-name (info)
   (plist-get info :name))

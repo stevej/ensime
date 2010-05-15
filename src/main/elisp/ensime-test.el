@@ -100,6 +100,9 @@
 		 "def main(args: Array[String]) = {\n"
 		 "Console.println(\"Hello, world!\")\n"
 		 "}\n"
+		 "def foo(a:Int, b:Int):Int = {\n"
+		 "a + b"
+		 "}\n"
 		 "}\n"
 		 )
      )))
@@ -399,7 +402,33 @@
     )
 
 
+   (ensime-async-test 
+    "Test get symbol info at point."
+    (let* ((proj (ensime-create-tmp-project
+		  ensime-tmp-project-hello-world))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
 
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       (ensime-assert-equal val '(:notes ()))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+       (goto-char 163)
+       (let* ((info (ensime-rpc-symbol-at-point))
+	      (pos (ensime-symbol-decl-pos info)))
+	 ;; New position should be at formal parameter...
+	 (ensime-assert-equal (ensime-pos-offset pos) 140)
+	 )
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
 
 
    ))
