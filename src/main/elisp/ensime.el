@@ -1676,10 +1676,12 @@ This idiom is preferred over `lexical-let'."
 	(ensime-goto-source-location pos where)))
 
      (type
-      (progn
-	(ensime-push-definition-stack)
-	(ensime-type-inspector-show 
-	 (ensime-rpc-inspect-type-by-id (ensime-type-id type)))))
+      (let ((info (ensime-rpc-inspect-type-by-id (ensime-type-id type))))
+	(if info
+	    (progn
+	      (ensime-push-definition-stack)
+	      (ensime-type-inspector-show info))
+	  (message "Sorry, no definition found."))))
      
      (t 
       (message "Sorry, no definition found.")))))
