@@ -145,7 +145,10 @@
     (define-key map (kbd "C-c p") 'ensime-inspect-package)
     (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
     (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
-    (define-key map (kbd "C-c d") 'ensime-jump-to-decl-for-sym-at-point)
+    (define-key map (kbd "M-.") 'ensime-edit-definition)
+    (define-key map (kbd "M-,") 'ensime-pop-find-definition-stack)
+    (define-key map (kbd "C-x 4") 'ensime-edit-definition-other-window)
+    (define-key map (kbd "C-x 5") 'ensime-edit-definition-other-frame)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -167,7 +170,13 @@
 	  (make-local-variable 'tooltip-delay)
 	  (setq tooltip-delay 1.0)
 	  (define-key ensime-mode-map [mouse-movement] 'ensime-mouse-motion))
+
 	(define-key ensime-mode-map [double-mouse-1] 'ensime-mouse-1-double-click)
+	;; Clear these
+	(define-key ensime-mode-map [C-down-mouse-1] 'ignore)
+	(define-key ensime-mode-map [C-up-mouse-1] 'ignore)
+	(define-key ensime-mode-map [C-mouse-1] 'ignore)
+
 	(define-key ensime-mode-map [C-mouse-1] 'ensime-control-mouse-1-single-click))
     (progn
       (ac-ensime-disable)
@@ -188,7 +197,7 @@
    point."
   (interactive "e")
   (mouse-set-point event)
-  (ensime-jump-to-decl-for-sym-at-point))
+  (ensime-edit-definition))
 
 (defun ensime-mouse-1-double-click (event)
   "Command handler for double clicks of mouse button 1.
@@ -1626,46 +1635,63 @@ This idiom is preferred over `lexical-let'."
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
 
+
+
+
 ;; Jump to definition
 
-(defun ensime-jump-to-decl-for-sym-at-point ()
-  "Lookup the position of the defintion for the symbol at point.
-   Jump there."
+(defun ensime-push-definition-stack ()
+  "Add point to find-tag-marker-ring."
+  (require 'etags)
+  (ring-insert find-tag-marker-ring (point-marker)))
+
+(defun ensime-pop-find-definition-stack ()
+  "Pop the edit-definition stack and goto the location."
   (interactive)
+  (pop-tag-mark))
+
+(defun ensime-edit-definition-other-window ()
+  (interactive)
+  (ensime-edit-definition 'window))
+
+(defun ensime-edit-definition-other-frame ()
+  (interactive)
+  (ensime-edit-definition 'frame))
+
+(defun ensime-edit-definition (&optional where)
+  "Lookup the definition of the name at point."
+  (interactive)
+
   (let* ((info (ensime-rpc-symbol-at-point))
 	 (pos (ensime-symbol-decl-pos info))
 	 (offset (ensime-pos-offset pos))
 	 (type (ensime-symbol-type info))
-	 (url (or (ensime-pos-file pos)
-		  (ensime-make-scaladoc-url type)
-		  (ensime-make-javadoc-url type))))
-    
-    (ensime-jump-to-pos url offset)))
+	 (file-name (ensime-pos-file pos))
+	 (scaladoc (ensime-make-scaladoc-url type))
+	 (javadoc (ensime-make-javadoc-url type)))
+    (cond
+     ((ensime-pos-valid-local-p pos)
+      (progn
+	(ensime-push-definition-stack)
+	(ensime-goto-source-location pos where)))
+
+     (type
+      (progn
+	(ensime-push-definition-stack)
+	(ensime-type-inspector-show 
+	 (ensime-rpc-inspect-type-by-id (ensime-type-id type)))))
+     
+     (t 
+      (message "Sorry, no definition found.")))))
 
 
-(defun ensime-jump-to-pos (file-name &optional offset)
-  "If file-name describes a local file-system location, switch to 
-   buffer visiting file-name. Otherwise, if file-name describes an http location, 
-   browse to that location."
-  (interactive)
-  (cond ((ensime-http-url-p file-name)
-	 (progn
-	   (browse-url file-name)
-	   (message "Opening documentation in browser..")))
-
-	((and file-name (integerp offset))
-	 (progn
-	   ;; Open a new window if pos is in another file, 
-	   ;; or beyond the visible bounds of the current window.
-	   (when (or (not (equal (expand-file-name file-name)
-				 (expand-file-name buffer-file-name)))
-		     (< offset (window-start))
-		     (> offset (window-end)))
-	     (find-file-other-window file-name))
-	   (goto-char offset)))
-
-	(t
-	 (message "Couldn't find location."))))
+(defun ensime-goto-source-location (pos &optional where)
+  "Move to the source location POS."
+  (ecase where
+    ((nil)     (find-file (ensime-pos-file pos)))
+    (window    (find-file-other-window (ensime-pos-file pos)))
+    (frame     (find-file-other-frame (ensime-pos-file pos))))
+  (goto-char (ensime-pos-offset pos)))
 
 
 ;; Test compile current file
@@ -2122,6 +2148,11 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-pos-offset (pos)
   (or (plist-get pos :offset) -1))
 
+(defun ensime-pos-valid-local-p (pos)
+  (and (stringp (ensime-pos-file pos))
+       (file-exists-p (ensime-pos-file pos))
+       (integerp (ensime-pos-offset pos))
+       (> (ensime-pos-offset pos) 0)))
 
 ;; Portability
 
