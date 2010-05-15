@@ -145,7 +145,7 @@
     (define-key map (kbd "C-c p") 'ensime-inspect-package)
     (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
     (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
-    (define-key map (kbd "C-c d") 'ensime-jump-to-def-for-sym-at-point)
+    (define-key map (kbd "C-c d") 'ensime-jump-to-decl-for-sym-at-point)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -190,7 +190,7 @@
    point."
   (interactive "e")
   (mouse-set-point event)
-  (ensime-jump-to-def-for-sym-at-point))
+  (ensime-jump-to-decl-for-sym-at-point))
 
 (defun ensime-mouse-1-double-click (event)
   "Command handler for double clicks of mouse button 1.
@@ -1630,32 +1630,37 @@ This idiom is preferred over `lexical-let'."
 
 ;; Jump to definition
 
-(defun ensime-jump-to-def-for-sym-at-point ()
+(defun ensime-jump-to-decl-for-sym-at-point ()
   "Lookup the position of the defintion for the symbol at point.
    Jump there."
   (interactive)
-  (ensime-jump-to-pos
-   (ensime-rpc-symbol-def-pos-at-point)))
+  (let* ((info (ensime-rpc-symbol-info-at-point))
+	 (pos (ensime-symbol-decl-pos info))
+	 (offset (ensime-pos-offset info))
+	 (type (ensime-symbol-type info))
+	 (url (or (ensime-pos-file pos)
+		  (ensime-make-scaladoc-url type)
+		  (ensime-make-javadoc-url type))))
+    
+    (ensime-jump-to-pos url offset)))
 
-(defun ensime-jump-to-pos (pos)
-  "If pos describes a local file-system location, switch to 
-   buffer visiting pos. Otherwise, if pos describes an http location, 
+(defun ensime-jump-to-pos (file-name &optional offset)
+  "If file-name describes a local file-system location, switch to 
+   buffer visiting file-name. Otherwise, if file-name describes an http location, 
    browse to that location."
   (interactive)
-  (let ((file-name (ensime-pos-file pos))
-	(offset (ensime-pos-offset pos)))
-    (cond ((ensime-http-url-p file-name)
-	   (progn
-	     (browse-url file-name)
-	     (message "Opening documentation in browser..")))
+  (cond ((ensime-http-url-p file-name)
+	 (progn
+	   (browse-url file-name)
+	   (message "Opening documentation in browser..")))
 
-	  ((and file-name (integerp offset))
-	   (progn
-	     (find-file-other-window file-name)
-	     (goto-char offset)))
+	((and file-name (integerp offset))
+	 (progn
+	   (find-file-other-window file-name)
+	   (goto-char offset)))
 
-	  (t
-	   (message "Couldn't find definition.")))))
+	(t
+	 (message "Couldn't find location."))))
 
 
 ;; Test compile current file
