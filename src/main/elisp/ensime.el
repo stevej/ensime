@@ -390,6 +390,23 @@ See `ensime-start'.")
 (defvar ensime-config-file-name ".ensime"
   "The default file name for ensime project configurations.")
 
+(defun ensime-file-in-directory-p (file-name dir-name)
+  "Determine if file named by file-name is contained in the 
+   directory named by dir-name."
+  (let* ((dir (file-name-as-directory (expand-file-name dir-name)))
+	 (file (expand-file-name file-name))
+	 (d file))
+    (catch 'return
+      (while d
+	(let ((d-original d))
+	  (setq d (file-name-directory 
+		   (directory-file-name d)))
+	  (when (equal dir d) 
+	    (throw 'return t))
+	  (when (equal d d-original)
+	    (throw 'return nil))
+	  )))))
+
 (defun ensime-find-config-file (file-name)
   "Search up the directory tree starting at file-name 
    for a suitable config file to load, return it's path. Return nil if 
@@ -867,8 +884,6 @@ The functions are called with the process as their argument.")
 
 (defun ensime-net-close (process &optional debug)
   (setq ensime-net-processes (remove process ensime-net-processes))
-  (when (eq process ensime-default-connection)
-    (setq ensime-default-connection nil))
   (cond (debug         
 	 (set-process-sentinel process 'ignore)
 	 (set-process-filter process 'ignore)
@@ -1013,7 +1028,49 @@ This is more compatible with the CL reader."
 
 
 
-;;; Connection-local variables:
+;;;; Connections
+;;;
+;;; "Connections" are the high-level Emacs<->ENSIME-Server networking concept.
+;;;
+;;; Emacs has a connection to each ENSIME server process that it's interacting
+;;; with. Typically there would only be one, but a user can choose to
+;;; connect to many Servers simultaneously.
+;;;
+;;; A connection consists of a control socket and a
+;;; set of connection-local state variables.
+;;;
+;;; The state variables are stored as buffer-local variables in the
+;;; control socket's process-buffer and are used via accessor
+;;; functions. These variables include things like the *FEATURES* list
+;;; and Unix Pid of the Server process.
+;;;
+;;; One connection is "current" at any given time. This is:
+;;;   `ensime-dispatching-connection' if dynamically bound, or
+;;;   `ensime-buffer-connection' if this is set buffer-local, 
+;;;   or the value of `(ensime-connection-for-source-file buffer-file-name)' otherwise.
+;;;
+;;; When you're invoking commands in your source files you'll be using
+;;; `(ensime-connection-for-source-file buffer-file-name)'.
+;;;
+;;; When a command creates a new buffer it will set
+;;; `ensime-buffer-connection' so that commands in the new buffer will
+;;; use the connection that the buffer originated from. For example,
+;;; the apropos command creates the *Apropos* buffer and any command
+;;; in that buffer (e.g. `M-.') will go to the same Lisp that did the
+;;; apropos search. REPL buffers are similarly tied to their
+;;; respective connections.
+;;;
+;;; When Emacs is dispatching some network message that arrived from a
+;;; connection it will dynamically bind `ensime-dispatching-connection'
+;;; so that the event will be processed in the context of that
+;;; connection.
+;;;
+;;; This is mostly transparent. The user should be aware that he can
+;;; set the default connection to pick which Server handles commands in
+;;; ensime-mode source buffers, and ensime hackers should be aware that
+;;; they can tie a buffer to a specific connection. The rest takes
+;;; care of itself.
+
 
 (defmacro ensime-def-connection-var (varname &rest initial-value-and-doc)
   "Define a connection-local variable.
@@ -1081,22 +1138,14 @@ This is automatically synchronized from Lisp.")
   "The name of the (remote) machine running the Lisp process.")
 
 
-;;;;; Connection setup
-
 (defvar ensime-dispatching-connection nil
   "Network process currently executing.
 This is dynamically bound while handling messages from Lisp; it
-overrides `ensime-buffer-connection' and `ensime-default-connection'.")
+overrides `ensime-buffer-connection'.")
 
 (make-variable-buffer-local
  (defvar ensime-buffer-connection nil
-   "Network connection to use in the current buffer.
-This overrides `ensime-default-connection'."))
-
-(defvar ensime-default-connection nil
-  "Network connection to use by default.
-Used for all Lisp communication, except when overridden by
-`ensime-dispatching-connection' or `ensime-buffer-connection'.")
+   "Network connection to use in the current buffer."))
 
 
 (defvar ensime-connection-counter 0
@@ -1107,21 +1156,31 @@ Used for all Lisp communication, except when overridden by
 Return nil if there's no connection."
   (or ensime-dispatching-connection
       ensime-buffer-connection
-      ensime-default-connection))
+      (ensime-connection-for-source-file buffer-file-name)))
 
 (defun ensime-connection ()
   "Return the connection to use for Lisp interaction.
    Signal an error if there's no connection."
   (let ((conn (ensime-current-connection)))
-    (cond ((and (not conn) ensime-net-processes)
-	   (or (ensime-auto-select-connection)
-	       (error "No default connection selected.")))
-	  ((not conn)
+    (cond ((not conn)
 	   (or (ensime-auto-connect)
 	       (error "Not connected.")))
 	  ((not (eq (process-status conn) 'open))
 	   (error "Connection closed."))
 	  (t conn))))
+
+
+(defun ensime-connection-for-source-file (file)
+  "Return the connection to use for a given file name.
+   Find the first connection with a project root directory that contains 
+   file-name (directly or indirectly)."
+  (catch 'return
+    (dolist (p ensime-net-processes)
+      (let* ((config (ensime-config p))
+	     (root-dir-name (plist-get config :root-dir)))
+	(when (ensime-file-in-directory-p file root-dir-name)
+	  (throw 'return p))
+	))))
 
 ;; FIXME: should be called auto-start
 (defcustom ensime-auto-connect 'never
@@ -1149,10 +1208,6 @@ This doesn't mean it will connect right after Ensime is loaded."
     (ensime-init-connection-state config process)
     (ensime-select-connection process)
     process))
-
-(defun ensime-select-connection (process)
-  "Make PROCESS the default connection."
-  (setq ensime-default-connection process))
 
 (defmacro* ensime-with-connection-buffer ((&optional process) &rest body)
   "Execute BODY in the process-buffer of PROCESS.
@@ -1253,14 +1308,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 (defun ensime-connection-close-hook (process)
 
   ;; TODO should this be per-connection?
-  (ensime-remove-old-overlays)
-
-  (when (eq process ensime-default-connection)
-    (when ensime-net-processes
-      (ensime-select-connection (car ensime-net-processes))
-      (message "Default connection closed; switched to #%S (%S)"
-	       (ensime-connection-number)
-	       (ensime-connection-name)))))
+  (ensime-remove-old-overlays))
 
 (add-hook 'ensime-net-process-close-hooks 'ensime-connection-close-hook)
 
@@ -2392,23 +2440,20 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
 
 (defun ensime-draw-connection-list ()
   (let ((default-pos nil)
-	(default ensime-default-connection)
 	(fstring "%s%2s  %-10s  %-17s  %-7s %-s\n"))
     (insert (format fstring " " "Nr" "Name" "Port" "Pid" "Type")
 	    (format fstring " " "--" "----" "----" "---" "----"))
     (dolist (p (reverse ensime-net-processes))
-      (when (eq default p) (setf default-pos (point)))
       (ensime-insert-propertized 
        (list 'ensime-connection p)
        (format fstring
-	       (if (eq default p) "*" " ")
+	       " "
 	       (ensime-connection-number p)
 	       (ensime-connection-name p)
 	       (or (process-id p) (process-contact p))
 	       (ensime-pid p)
 	       (ensime-server-implementation-type p))))
-    (when default 
-      (goto-char default-pos))))
+    ))
 
 
 
