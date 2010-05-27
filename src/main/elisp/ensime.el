@@ -2166,6 +2166,7 @@ It should be used for \"background\" messages such as argument lists."
     (trait "trait")
     (interface "interface")
     (class "class")
+    (object "object")
     (abstractclass "abstract class")
     (otherwise "type")
     ))
