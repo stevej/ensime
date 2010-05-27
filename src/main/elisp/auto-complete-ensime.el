@@ -28,10 +28,20 @@
 			      ))
 		) members))))
 
+
+(defun ensime-ac-completing-constructor-p (prefix)
+  "Are we trying to complete a call of the form 'new [prefix]' ?"
+  (save-excursion
+    (goto-char (- (point) (length prefix) 1))
+    (looking-back "new\\s-+" (ensime-pt-at-end-of-prev-line))
+    ))
+
 (defun ensime-ac-name-candidates (prefix)
   "Return candidate list."
   (ensime-save-buffer-no-hook)
-  (let ((names (ensime-rpc-name-completions-at-point prefix)))
+  (let* ((is-constructor (ensime-ac-completing-constructor-p prefix))
+	 (names (ensime-rpc-name-completions-at-point 
+		 prefix is-constructor)))
     (mapcar (lambda (m)
 	      (let* ((type-name (plist-get m :type-name))
 		     (type-id (plist-get m :type-id))
@@ -58,21 +68,23 @@
   (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" (point-at-bol) t)))
     (if point (1+ point))))
 
+(defun ensime-pt-at-end-of-prev-line ()
+  (save-excursion (forward-line -1)(point-at-eol)))
+
 (defun ensime-ac-name-prefix ()
   "Starting at current point. Find the point of completion for a symbol.
    Return nil if we are not currently looking at a symbol."
-  (let ((pt-at-end-of-prev-line
-	 (save-excursion (forward-line -1)(point-at-eol))))
-    (if (looking-back "[(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" pt-at-end-of-prev-line)
-	(let ((point (- (point) (length (match-string 1)))))
-	  (goto-char point)
-	  point
-	  ))))
+  (if (looking-back "[(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
+      (let ((point (- (point) (length (match-string 1)))))
+	(goto-char point)
+	point
+	)))
 
 (defun ensime-ac-complete-action ()
   "Defines action to perform when user selects a completion candidate.
-   In this case, if the candidate is a method name, fill in place-holder
-   arguments."
+   In this case, if the candidate is a callable symbol, add the meta-info
+   about the params and param types as text-properties of the completed name."
+
   (let* ((candidate candidate) ;;Grab from dynamic environment..
 	 (name (get-text-property 0 'symbol-name candidate))
 	 (type-id (get-text-property 0 'scala-type-id candidate)))

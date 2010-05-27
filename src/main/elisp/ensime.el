@@ -1762,9 +1762,9 @@ This idiom is preferred over `lexical-let'."
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
 
-(defun ensime-rpc-name-completions-at-point (&optional prefix)
+(defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
   (ensime-eval 
-   `(swank:scope-completion ,buffer-file-name ,(ensime-computed-point) ,(or prefix ""))))
+   `(swank:scope-completion ,buffer-file-name ,(ensime-computed-point) ,(or prefix "") ,is-constructor)))
 
 (defun ensime-rpc-members-for-type-at-point (&optional prefix)
   (ensime-eval 
