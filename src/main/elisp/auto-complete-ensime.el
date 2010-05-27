@@ -1,17 +1,17 @@
 (require 'auto-complete)
 
-(defun ac-ensime-move-point-back-to-call-target (prefix)
+(defun ensime-ac-move-point-back-to-call-target (prefix)
   "Assuming the point is in a member prefix, move the point back so it's
    at the last char of the call target.
   "
   (backward-char (length prefix))
   (re-search-backward "[^\\. ]" (point-at-bol) t))
 
-(defun ac-ensime-member-candidates (prefix)
+(defun ensime-ac-member-candidates (prefix)
   "Return candidate list."
   (ensime-save-buffer-no-hook)
   (save-excursion
-    (ac-ensime-move-point-back-to-call-target prefix)
+    (ensime-ac-move-point-back-to-call-target prefix)
     (let ((members (ensime-rpc-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let* ((type-name (plist-get m :type-name))
@@ -28,7 +28,7 @@
 			      ))
 		) members))))
 
-(defun ac-ensime-name-candidates (prefix)
+(defun ensime-ac-name-candidates (prefix)
   "Return candidate list."
   (ensime-save-buffer-no-hook)
   (let ((names (ensime-rpc-name-completions-at-point prefix)))
@@ -48,17 +48,17 @@
 	      ) names)))
 
 
-(defun ac-ensime-get-doc (item)
+(defun ensime-ac-get-doc (item)
   "Return doc for given item."
   (get-text-property 0 'scala-type-name item))
 
-(defun ac-ensime-member-prefix ()
+(defun ensime-ac-member-prefix ()
   "Starting at current point. Find the point of completion for a member access. 
    Return nil if we are not currently looking at a member access."
   (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" (point-at-bol) t)))
     (if point (1+ point))))
 
-(defun ac-ensime-name-prefix ()
+(defun ensime-ac-name-prefix ()
   "Starting at current point. Find the point of completion for a symbol.
    Return nil if we are not currently looking at a symbol."
   (let ((pt-at-end-of-prev-line
@@ -69,7 +69,7 @@
 	  point
 	  ))))
 
-(defun ac-ensime-complete-action ()
+(defun ensime-ac-complete-action ()
   "Defines action to perform when user selects a completion candidate.
    In this case, if the candidate is a method name, fill in place-holder
    arguments."
@@ -163,26 +163,26 @@
 
 
 (ac-define-source ensime-members
-  '((document . ac-ensime-get-doc)
-    (candidates . (ac-ensime-member-candidates ac-prefix))
-    (prefix . ac-ensime-member-prefix)
-    (action . ac-ensime-complete-action)
+  '((document . ensime-ac-get-doc)
+    (candidates . (ensime-ac-member-candidates ac-prefix))
+    (prefix . ensime-ac-member-prefix)
+    (action . ensime-ac-complete-action)
     (requires . 0)
     (symbol . "f")
     (cache . t)
     ))
 
 (ac-define-source ensime-scope-names
-  '((document . ac-ensime-get-doc)
-    (candidates . (ac-ensime-name-candidates ac-prefix))
-    (prefix . ac-ensime-name-prefix)
-    (action . ac-ensime-complete-action)
+  '((document . ensime-ac-get-doc)
+    (candidates . (ensime-ac-name-candidates ac-prefix))
+    (prefix . ensime-ac-name-prefix)
+    (action . ensime-ac-complete-action)
     (requires . 0)
     (symbol . "s")
     (cache . t)
     ))
 
-(defun ac-ensime-enable ()
+(defun ensime-ac-enable ()
   (make-local-variable 'ac-sources)
   (setq ac-sources '(ac-source-ensime-scope-names
 		     ac-source-ensime-members ))
@@ -199,7 +199,7 @@
   (auto-complete-mode 1)
   )
 
-(defun ac-ensime-disable ()
+(defun ensime-ac-disable ()
   (auto-complete-mode 0)
   )
 

@@ -161,7 +161,7 @@
 
   (if ensime-mode
       (progn
-	(ac-ensime-enable)
+	(ensime-ac-enable)
 	(add-hook 'after-save-hook 'ensime-after-save-hook nil t)
 	(when ensime-tooltip-hints
 	  (add-hook 'tooltip-functions 'ensime-tooltip-handler)
@@ -179,7 +179,7 @@
 
 	(define-key ensime-mode-map [C-mouse-1] 'ensime-control-mouse-1-single-click))
     (progn
-      (ac-ensime-disable)
+      (ensime-ac-disable)
       (remove-hook 'after-save-hook 'ensime-after-save-hook t)
       (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
       (make-local-variable 'track-mouse)
@@ -1206,7 +1206,6 @@ This doesn't mean it will connect right after Ensime is loaded."
   "Make a connection out of PROCESS."
   (let ((ensime-dispatching-connection process))
     (ensime-init-connection-state config process)
-    (ensime-select-connection process)
     process))
 
 (defmacro* ensime-with-connection-buffer ((&optional process) &rest body)
@@ -2388,7 +2387,6 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
     (set (make-local-variable 'truncate-lines) t)))
 
 (ensime-define-keys ensime-connection-list-mode-map
-		    ("d"         'ensime-connection-list-make-default)
 		    ("g"         'ensime-update-connection-list)
 		    ((kbd "C-k") 'ensime-quit-connection-at-point)
 		    ("R"         'ensime-restart-connection-at-point))
@@ -2414,11 +2412,6 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
   (let ((ensime-dispatching-connection connection))
     (ensime-restart-inferior-lisp)))
 
-(defun ensime-connection-list-make-default ()
-  "Make the connection at point the default connection."
-  (interactive)
-  (ensime-select-connection (ensime-connection-at-point))
-  (ensime-update-connection-list))
 
 (defvar ensime-connections-buffer-name "*ENSIME Connections*")
 
