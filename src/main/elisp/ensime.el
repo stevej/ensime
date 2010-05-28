@@ -1895,7 +1895,7 @@ This idiom is preferred over `lexical-let'."
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-inspector-buffer 
-     (buffer-name info nil t)
+     (buffer-name info t)
 
      ;; We want two main columns. The first, 20 chars wide.
      (let ((tab-stop-list '(20)))
@@ -1999,7 +1999,7 @@ This idiom is preferred over `lexical-let'."
     (if (eq (get-buffer buffer-name) (current-buffer))
 	(kill-buffer-and-window))
     (ensime-with-inspector-buffer
-     (buffer-name info nil t)
+     (buffer-name info t)
      (ensime-inspector-insert-package info)
      (goto-char (point-min))
      )))
@@ -2055,11 +2055,11 @@ This idiom is preferred over `lexical-let'."
    (in addition to those defined by popup-buffer-mode)")
 
 
-(defmacro* ensime-with-inspector-buffer ((name object &optional connection select)
+(defmacro* ensime-with-inspector-buffer ((name object &optional select)
 					 &body body)
   "Extend the standard popup buffer with inspector-specific bindings."
   `(ensime-with-popup-buffer
-    (,name ,connection ,select)
+    (,name t ,select)
     (use-local-map ensime-popup-inspector-map)
     (when (not ensime-inspector-paging-in-progress)
 
@@ -2305,7 +2305,7 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
 
 (defun ensime-init-popup-buffer (buffer-vars)
   (ensime-popup-buffer-mode 1)
-  (multiple-value-setq (ensime-buffer-package ensime-buffer-connection)
+  (multiple-value-setq (ensime-buffer-connection)
     buffer-vars))
 
 (defun ensime-display-popup-buffer (select)
