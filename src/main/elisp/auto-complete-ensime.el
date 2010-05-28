@@ -32,7 +32,7 @@
 (defun ensime-ac-completing-constructor-p (prefix)
   "Are we trying to complete a call of the form 'new [prefix]' ?"
   (save-excursion
-    (goto-char (- (point) (length prefix) 1))
+    (goto-char (- (point) (length prefix)))
     (looking-back "new\\s-+" (ensime-pt-at-end-of-prev-line))
     ))
 
