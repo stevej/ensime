@@ -205,6 +205,9 @@
   (make-local-variable 'ac-auto-start)
   (setq ac-auto-start nil)
 
+  (make-local-variable 'ac-expand-on-auto-complete)
+  (setq ac-expand-on-auto-complete nil)
+
   (make-local-variable 'ac-trigger-key)
   (ac-set-trigger-key "TAB")
 
