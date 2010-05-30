@@ -44,7 +44,8 @@
 (require 'hideshow)
 (require 'font-lock)
 (require 'auto-complete)
-(require 'auto-complete-ensime)
+(require 'ensime-auto-complete)
+(require 'ensime-sbt)
 (require 'ido)
 (eval-when (compile)
   (require 'apropos)
@@ -63,7 +64,7 @@
   :type 'boolean
   :group 'ensime-ui)
 
-(defcustom ensime-kill-without-query-p nil
+(defcustom ensime-kill-without-query-p t
   "If non-nil, kill ENSIME processes without query when quitting Emacs."
   :type 'boolean
   :group 'ensime-ui)
@@ -129,15 +130,22 @@
   "Conveniance hook function that just starts ensime-mode."
   (ensime-mode 1))
 
-(defun ensime-after-save-hook ()
-  "When a buffer is saved, ask the ENSIME server for a type-check."
-  (ensime-typecheck-current-file))
+(defvar ensime-source-buffer-saved-hook nil
+  "Hook called whenever an ensime source buffer is saved.")
 
-(defun ensime-save-buffer-no-hook ()
+(defun ensime-run-after-save-hooks ()
+  "Things to run whenever a source buffer is saved."
+  (condition-case err-info
+      (run-hooks 'ensime-source-buffer-saved-hook)
+    (error 
+     (message 
+      "Error running ensime-source-buffer-saved-hook: %s" 
+      err-info))))
+
+(defun ensime-save-buffer-no-hooks ()
   "Just save the buffer per usual, don't type-check!"
-  (remove-hook 'after-save-hook 'ensime-after-save-hook t)
-  (save-buffer)
-  (add-hook 'after-save-hook 'ensime-after-save-hook nil t))
+  (let ((after-save-hook nil))
+    (save-buffer)))
 
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
@@ -149,6 +157,7 @@
     (define-key map (kbd "M-,") 'ensime-pop-find-definition-stack)
     (define-key map (kbd "C-x 4") 'ensime-edit-definition-other-window)
     (define-key map (kbd "C-x 5") 'ensime-edit-definition-other-frame)
+    (define-key map (kbd "C-c C-a") 'ensime-sbt-switch)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -162,7 +171,8 @@
   (if ensime-mode
       (progn
 	(ensime-ac-enable)
-	(add-hook 'after-save-hook 'ensime-after-save-hook nil t)
+	(add-hook 'after-save-hook 'ensime-run-after-save-hooks nil t)
+	(add-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
 	(when ensime-tooltip-hints
 	  (add-hook 'tooltip-functions 'ensime-tooltip-handler)
 	  (make-local-variable 'track-mouse)
@@ -180,7 +190,8 @@
 	(define-key ensime-mode-map [C-mouse-1] 'ensime-control-mouse-1-single-click))
     (progn
       (ensime-ac-disable)
-      (remove-hook 'after-save-hook 'ensime-after-save-hook t)
+      (remove-hook 'after-save-hook 'ensime-run-after-save-hooks t)
+      (remove-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
       (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
       (make-local-variable 'track-mouse)
       (setq track-mouse nil)
@@ -365,8 +376,8 @@
     (comint-mode)
     (let ((process-environment (append env process-environment))
 	  (process-connection-type nil))
-      (setq comint-process-echoes nil)
-      (setq comint-use-prompt-regexp nil)
+      (set (make-local-variable 'comint-process-echoes) nil)
+      (set (make-local-variable 'comint-use-prompt-regexp) nil)
       (comint-exec (current-buffer) "inferior-ensime-server" program nil program-args))
     (let ((proc (get-buffer-process (current-buffer))))
       (ensime-set-query-on-exit-flag proc)
@@ -1749,7 +1760,7 @@ This idiom is preferred over `lexical-let'."
   "Send a request for re-typecheck to the ENSIME server.
    Current file is saved if it has unwritten modifications."
   (interactive)
-  (if (buffer-modified-p) (ensime-save-buffer-no-hook))
+  (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
   (ensime-rpc-async-typecheck-file buffer-file-name))
 
 

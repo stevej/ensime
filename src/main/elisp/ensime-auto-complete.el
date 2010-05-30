@@ -9,7 +9,7 @@
 
 (defun ensime-ac-member-candidates (prefix)
   "Return candidate list."
-  (ensime-save-buffer-no-hook)
+  (ensime-save-buffer-no-hooks)
   (save-excursion
     (ensime-ac-move-point-back-to-call-target prefix)
     (let ((members (ensime-rpc-members-for-type-at-point prefix)))
@@ -38,7 +38,7 @@
 
 (defun ensime-ac-name-candidates (prefix)
   "Return candidate list."
-  (ensime-save-buffer-no-hook)
+  (ensime-save-buffer-no-hooks)
   (let* ((is-constructor (ensime-ac-completing-constructor-p prefix))
 	 (names (ensime-rpc-name-completions-at-point 
 		 prefix is-constructor)))
@@ -215,4 +215,4 @@
   (auto-complete-mode 0)
   )
 
-(provide 'auto-complete-ensime)
+(provide 'ensime-auto-complete)
