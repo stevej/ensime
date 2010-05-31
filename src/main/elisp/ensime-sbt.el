@@ -108,9 +108,12 @@
     (set (make-local-variable 'comint-scroll-to-bottom-on-output) t)
     (set (make-local-variable 'comint-prompt-read-only) t)
     (set (make-local-variable 'comint-output-filter-functions)
-	 (if ensime-sbt-comint-ansi-support
-	     '(ansi-color-process-output comint-postoutput-scroll-to-bottom)
-	   '(comint-postoutput-scroll-to-bottom)))
+	 '(ansi-color-process-output comint-postoutput-scroll-to-bottom))
+
+    (if ensime-sbt-comint-ansi-support
+	(set (make-local-variable 'ansi-color-for-comint-mode) t)
+      (set (make-local-variable 'ansi-color-for-comint-mode) 'filter))
+    
     (compilation-shell-minor-mode t)
     (cd root-path)
     (comint-exec (current-buffer) 
