@@ -208,6 +208,9 @@
   (make-local-variable 'ac-expand-on-auto-complete)
   (setq ac-expand-on-auto-complete nil)
 
+  (make-local-variable 'ac-use-fuzzy)
+  (setq ac-use-fuzzy nil)
+
   (make-local-variable 'ac-trigger-key)
   (ac-set-trigger-key "TAB")
 
