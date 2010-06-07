@@ -119,6 +119,7 @@
 (defvar ensime-prefer-noninteractive nil 
   "State variable used for regression testing.")
 
+
 ;;;;; ensime-mode
 
 (defgroup ensime-mode nil
@@ -400,6 +401,8 @@ See `ensime-start'.")
 
 (defvar ensime-config-file-name ".ensime"
   "The default file name for ensime project configurations.")
+
+(add-to-list 'auto-mode-alist '("\\.ensime$" . emacs-lisp-mode))
 
 (defun ensime-file-in-directory-p (file-name dir-name)
   "Determine if file named by file-name is contained in the 
@@ -1812,8 +1815,14 @@ This idiom is preferred over `lexical-let'."
 
 ;; Type Inspector UI
 
+(defvar ensime-inspector-buffer-name "*Inspector*")
+
 (defvar ensime-indent-level 0
   "In inspector UI, how much to indent.")
+
+(defun ensime-inspector-buffer-p (buffer)
+  "Is this an ensime inspector buffer?"
+  (eq (get-buffer ensime-inspector-buffer-name) buffer))
 
 (defun ensime-inspector-insert-linked-package-path (path &optional face)
   "For each component of the package path, insert a link to inspect
@@ -1901,10 +1910,8 @@ This idiom is preferred over `lexical-let'."
    owner type."
   (let* ((supers (plist-get info :supers))
 	 (type (plist-get info :type))
-	 (buffer-name "*Inspector*")
+	 (buffer-name ensime-inspector-buffer-name)
 	 (ensime-indent-level 0))
-    (if (eq (get-buffer buffer-name) (current-buffer))
-	(kill-buffer-and-window))
     (ensime-with-inspector-buffer 
      (buffer-name info t)
 
@@ -2005,10 +2012,8 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-package-inspector-show (info)
   "Display a list of all the members of the provided package."
-  (let* ((buffer-name "*Inspector*")
+  (let* ((buffer-name ensime-inspector-buffer-name)
 	 (ensime-indent-level 0))
-    (if (eq (get-buffer buffer-name) (current-buffer))
-	(kill-buffer-and-window))
     (ensime-with-inspector-buffer
      (buffer-name info t)
      (ensime-inspector-insert-package info)
@@ -2074,7 +2079,7 @@ This idiom is preferred over `lexical-let'."
     (use-local-map ensime-popup-inspector-map)
     (when (not ensime-inspector-paging-in-progress)
 
-      ;; First clamp the cursor, for safety
+      ;; Clamp the history cursor
       (setq ensime-inspector-history-cursor
 	    (max 0 ensime-inspector-history-cursor))
       (setq ensime-inspector-history-cursor
@@ -2325,7 +2330,9 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
    can restore it later."
   (let ((selected-window (selected-window))
 	(old-windows))
-    (walk-windows (lambda (w) (push (cons w (window-buffer w)) old-windows))
+    (walk-windows (lambda (w) 
+		    (if (not (ensime-inspector-buffer-p (window-buffer w)))
+			(push (cons w (window-buffer w)) old-windows)))
 		  nil t)
     (let ((new-window (display-buffer (current-buffer))))
       (unless ensime-popup-restore-data
