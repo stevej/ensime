@@ -1346,7 +1346,7 @@ SEXP is evaluated and the princed version is sent to Lisp.
 CLAUSES is a list of patterns with same syntax as
 `destructure-case'.  The result of the evaluation of SEXP is
 dispatched on CLAUSES.  The result is either a sexp of the
-form (:ok VALUE) or (:abort).  CLAUSES is executed
+form (:ok VALUE) or (:abort REASON).  CLAUSES is executed
 asynchronously.
 
 Note: don't use backquote syntax for SEXP, because various Emacs
@@ -1388,8 +1388,8 @@ versions cannot deal with that."
 	    (error "Reply to canceled synchronous eval request tag=%S sexp=%S"
 		   tag sexp))
 	  (throw tag (list #'identity value)))
-	 ((:abort)
-	  (throw tag (list #'error "Synchronous Lisp Evaluation aborted"))))
+	 ((:abort reason)
+	  (throw tag (list #'error (format "Synchronous Lisp Evaluation aborted: %s" reason)))))
        (let ((debug-on-quit t)
 	     (inhibit-quit nil)
 	     (conn (ensime-connection)))
@@ -1407,8 +1407,8 @@ versions cannot deal with that."
      (when cont
        (set-buffer buffer)
        (funcall cont result)))
-    ((:abort)
-     (message "Evaluation aborted.")))
+    ((:abort reason)
+     (message "Evaluation aborted: %s" reason)))
   ;; Guard against arbitrary return values which once upon a time
   ;; showed up in the minibuffer spuriously (due to a bug in
   ;; ensime-autodoc.)  If this ever happens again, returning the
