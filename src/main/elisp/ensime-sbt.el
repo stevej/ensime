@@ -126,13 +126,14 @@
 
 
 (defun ensime-sbt-switch ()
-  "Switch to the sbt shell (create if necessary) if or if already there, back"
+  "Switch to the sbt shell (create if necessary) if or if already there, back."
   (interactive)
   (if (equal ensime-sbt-build-buffer-name (buffer-name))
       (switch-to-buffer-other-window (other-buffer))
     (if (get-buffer ensime-sbt-build-buffer-name)
 	(switch-to-buffer-other-window ensime-sbt-build-buffer-name)
-      (ensime-sbt))))
+      (ensime-sbt)))
+  (goto-char (point-max)))
 
 (defun ensime-sbt-clear ()
   "Clear (erase) the SBT buffer."

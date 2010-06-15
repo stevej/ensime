@@ -1234,8 +1234,10 @@ If PROCESS is not specified, `ensime-connection' is used.
 
 (defun ensime-connect (config host port)
   "Connect to a running Swank server. Return the connection."
-  (interactive (list (read-from-minibuffer "Host: " ensime-default-server-host)
-		     (read-from-minibuffer "Port: " (format "%d" ensime-default-port)
+  (interactive (list 
+		(ensime-find-and-load-config)
+		(read-from-minibuffer "Host: " ensime-default-server-host)
+		(read-from-minibuffer "Port: " (format "%d" ensime-default-port)
 					   nil t)))
   (when (and (interactive-p) ensime-net-processes
 	     (y-or-n-p "Close old connections first? "))
