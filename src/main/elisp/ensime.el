@@ -154,6 +154,7 @@
     (define-key map (kbd "C-c p") 'ensime-inspect-package)
     (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
     (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
+    (define-key map (kbd "C-c a") 'ensime-typecheck-all)
     (define-key map (kbd "M-.") 'ensime-edit-definition)
     (define-key map (kbd "M-,") 'ensime-pop-find-definition-stack)
     (define-key map (kbd "C-x 4") 'ensime-edit-definition-other-window)
@@ -181,6 +182,8 @@
 	  (make-local-variable 'tooltip-delay)
 	  (setq tooltip-delay 1.0)
 	  (define-key ensime-mode-map [mouse-movement] 'ensime-mouse-motion))
+
+	(ensime-refresh-note-overlays)
 
 	(define-key ensime-mode-map [double-mouse-1] 'ensime-mouse-1-double-click)
 	;; Clear these
@@ -1159,6 +1162,12 @@ This is automatically synchronized from Lisp.")
 (ensime-def-connection-var ensime-machine-instance nil
   "The name of the (remote) machine running the Lisp process.")
 
+(ensime-def-connection-var ensime-compiler-notes nil
+  "Warnings, Errors, and other notes produced by the compiler. We 
+   keep track of these so that we can create highlight overlays 
+   for newly opened buffers.")
+
+
 
 (defvar ensime-dispatching-connection nil
   "Network process currently executing.
@@ -1246,7 +1255,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 		(ensime-find-and-load-config)
 		(read-from-minibuffer "Host: " ensime-default-server-host)
 		(read-from-minibuffer "Port: " (format "%d" ensime-default-port)
-					   nil t)))
+				      nil t)))
   (when (and (interactive-p) ensime-net-processes
 	     (y-or-n-p "Close old connections first? "))
     (ensime-disconnect-all))
@@ -1609,47 +1618,54 @@ This idiom is preferred over `lexical-let'."
 
 
 
-
-
 ;; Compiler Notes (Error/Warning overlays)
 
-(defvar ensime-note-overlays '())
+;; Note: This might better be a connection-local variable, but
+;; a afraid that might lead to hanging overlays..
+(defvar ensime-note-overlays '()
+  "The overlay structures created to highlight notes.")
 
 (defun ensime-typecheck-finished (result)
-  (ensime-remove-old-overlays)
-  (destructuring-bind (&key notes &allow-other-keys) result
+  (setf (ensime-compiler-notes (ensime-connection))
+	(plist-get result :notes))
+  (ensime-refresh-note-overlays))
+
+(defun ensime-refresh-note-overlays ()
+  (let ((notes (ensime-compiler-notes (ensime-connection))))
+    (ensime-remove-old-overlays)
     (dolist (note notes)
       (destructuring-bind 
 	  (&key severity msg beg end line col file &allow-other-keys) note
 	(when-let (buf (find-buffer-visiting file))
-	  (switch-to-buffer buf)
-	  (save-excursion
-	    (goto-line line)
-	    (let* ((line-start (point-at-bol))
-		   (line-stop (point-at-eol)))
-	      (cond 
+	  (with-current-buffer buf
+	    (save-excursion
+	      (goto-line line)
+	      (let* ((line-start (point-at-bol))
+		     (line-stop (point-at-eol)))
+		(cond 
 
-	       ((equal severity 'error)
-		(progn 
-		  (push (ensime-make-overlay
-			 line-start line-stop msg 'ensime-errline nil)
-			ensime-note-overlays)
-		  (push (ensime-make-overlay
-			 (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
-			ensime-note-overlays)
-		  ))
-
-	       (t (progn 
+		 ((equal severity 'error)
+		  (progn 
 		    (push (ensime-make-overlay
-			   line-start line-stop msg 'ensime-warnline nil)
+			   line-start line-stop msg 'ensime-errline nil)
 			  ensime-note-overlays)
 		    (push (ensime-make-overlay
-			   (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
+			   (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
 			  ensime-note-overlays)
 		    ))
 
-	       ))
-	    ))))))
+		 (t (progn 
+		      (push (ensime-make-overlay
+			     line-start line-stop msg 'ensime-warnline nil)
+			    ensime-note-overlays)
+		      (push (ensime-make-overlay
+			     (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
+			    ensime-note-overlays)
+		      ))
+
+		 ))
+	      )))))))
+
 
 (defface ensime-errline
   '((((class color) (background dark)) (:background "Firebrick4"))
@@ -1705,8 +1721,6 @@ This idiom is preferred over `lexical-let'."
   ;; Guard against nil overlays here..
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
-
-
 
 
 ;; Jump to definition
@@ -1767,14 +1781,21 @@ This idiom is preferred over `lexical-let'."
   (goto-char (ensime-pos-offset pos)))
 
 
-;; Test compile current file
+;; Compilation on request
 
 (defun ensime-typecheck-current-file ()
-  "Send a request for re-typecheck to the ENSIME server.
+  "Send a request for re-typecheck of current file to the ENSIME server.
    Current file is saved if it has unwritten modifications."
   (interactive)
   (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
   (ensime-rpc-async-typecheck-file buffer-file-name))
+
+(defun ensime-typecheck-all ()
+  "Send a request for re-typecheck of whole project to the ENSIME server.
+   Current file is saved if it has unwritten modifications."
+  (interactive)
+  (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
+  (ensime-rpc-async-typecheck-all))
 
 
 ;; Basic RPC calls
@@ -1785,6 +1806,9 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
+
+(defun ensime-rpc-async-typecheck-all ()
+  (ensime-eval-async `(swank:typecheck-all) #'identity))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
   (ensime-eval 
