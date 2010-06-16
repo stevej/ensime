@@ -344,6 +344,14 @@
 	  (ensime-inferior-connect config proc))))))
 
 
+(defun ensime-reload-config ()
+  "Re-read the config file, and tell the server to re-up the compiler."
+  (interactive)
+  (let* ((config (ensime-find-and-load-config)))
+    ;; Send the project initialization..
+    (ensime-eval-async `(swank:init-project ,config) #'identity)))
+
+
 (defun ensime-maybe-start-server (program program-args env directory buffer)
   "Return a new or existing inferior server process."
   (cond ((not (comint-check-proc buffer))
