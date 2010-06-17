@@ -46,6 +46,7 @@
 (require 'auto-complete)
 (require 'ensime-auto-complete)
 (require 'ensime-sbt)
+(require 'ensime-inf)
 (require 'ido)
 (eval-when (compile)
   (require 'apropos)
@@ -160,6 +161,7 @@
     (define-key map (kbd "C-x 4") 'ensime-edit-definition-other-window)
     (define-key map (kbd "C-x 5") 'ensime-edit-definition-other-frame)
     (define-key map (kbd "C-c C-a") 'ensime-sbt-switch)
+    (define-key map (kbd "C-c C-z") 'ensime-inf-switch)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -1631,40 +1633,41 @@ This idiom is preferred over `lexical-let'."
   (ensime-refresh-note-overlays))
 
 (defun ensime-refresh-note-overlays ()
-  (let ((notes (ensime-compiler-notes (ensime-connection))))
-    (ensime-remove-old-overlays)
-    (dolist (note notes)
-      (destructuring-bind 
-	  (&key severity msg beg end line col file &allow-other-keys) note
-	(when-let (buf (find-buffer-visiting file))
-	  (with-current-buffer buf
-	    (save-excursion
-	      (goto-line line)
-	      (let* ((line-start (point-at-bol))
-		     (line-stop (point-at-eol)))
-		(cond 
+  (when (ensime-current-connection)
+    (let ((notes (ensime-compiler-notes (ensime-connection))))
+      (ensime-remove-old-overlays)
+      (dolist (note notes)
+	(destructuring-bind 
+	    (&key severity msg beg end line col file &allow-other-keys) note
+	  (when-let (buf (find-buffer-visiting file))
+	    (with-current-buffer buf
+	      (save-excursion
+		(goto-line line)
+		(let* ((line-start (point-at-bol))
+		       (line-stop (point-at-eol)))
+		  (cond 
 
-		 ((equal severity 'error)
-		  (progn 
-		    (push (ensime-make-overlay
-			   line-start line-stop msg 'ensime-errline nil)
-			  ensime-note-overlays)
-		    (push (ensime-make-overlay
-			   (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
-			  ensime-note-overlays)
-		    ))
-
-		 (t (progn 
+		   ((equal severity 'error)
+		    (progn 
 		      (push (ensime-make-overlay
-			     line-start line-stop msg 'ensime-warnline nil)
+			     line-start line-stop msg 'ensime-errline nil)
 			    ensime-note-overlays)
 		      (push (ensime-make-overlay
-			     (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
+			     (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
 			    ensime-note-overlays)
 		      ))
 
-		 ))
-	      )))))))
+		   (t (progn 
+			(push (ensime-make-overlay
+			       line-start line-stop msg 'ensime-warnline nil)
+			      ensime-note-overlays)
+			(push (ensime-make-overlay
+			       (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
+			      ensime-note-overlays)
+			))
+
+		   ))
+		))))))))
 
 
 (defface ensime-errline
@@ -1803,6 +1806,10 @@ This idiom is preferred over `lexical-let'."
 (defun ensime-rpc-symbol-at-point ()
   (ensime-eval 
    `(swank:symbol-at-point ,buffer-file-name ,(ensime-computed-point))))
+
+(defun ensime-rpc-repl-args ()
+  (ensime-eval 
+   `(swank:repl-args)))
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))

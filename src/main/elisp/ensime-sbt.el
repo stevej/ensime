@@ -57,7 +57,7 @@
   :type 'string
   :group 'ensime-sbt)
 
-(defcustom ensime-sbt-build-buffer-name "*ENSIME-SBT*"
+(defcustom ensime-sbt-build-buffer-name "*ensime-sbt*"
   "Buffer name for sbt"
   :type 'string :group 'ensime-sbt)
 
