@@ -151,7 +151,7 @@
 	 (pmark (process-mark proc))
 	 (input (buffer-substring-no-properties pmark (point))))
     (comint-send-string ensime-inf-buffer-name input)
-    (comint-send-string ensime-inf-buffer-name "\t")))
+    (comint-send-string ensime-inf-buffer-name "\^i")))
 
 (defun ensime-inf-send-string (str &rest args)
   (comint-send-string ensime-inf-buffer-name (apply 'format str args))
