@@ -1191,6 +1191,11 @@ Return nil if there's no connection."
       ensime-buffer-connection
       (ensime-connection-for-source-file buffer-file-name)))
 
+(defun ensime-connected-p ()
+  "Return t if ensime-current-connection would return non-nil. 
+Return nil otherwise."
+  (not (null (ensime-current-connection))))
+
 (defun ensime-connection ()
   "Return the connection to use for Lisp interaction.
    Signal an error if there's no connection."
@@ -1619,7 +1624,6 @@ This idiom is preferred over `lexical-let'."
 
 
 
-
 ;; Compiler Notes (Error/Warning overlays)
 
 ;; Note: This might better be a connection-local variable, but
@@ -1633,41 +1637,43 @@ This idiom is preferred over `lexical-let'."
   (ensime-refresh-note-overlays))
 
 (defun ensime-refresh-note-overlays ()
-  (when (ensime-current-connection)
-    (let ((notes (ensime-compiler-notes (ensime-connection))))
-      (ensime-remove-old-overlays)
-      (dolist (note notes)
-	(destructuring-bind 
-	    (&key severity msg beg end line col file &allow-other-keys) note
-	  (when-let (buf (find-buffer-visiting file))
-	    (with-current-buffer buf
-	      (save-excursion
-		(goto-line line)
-		(let* ((line-start (point-at-bol))
-		       (line-stop (point-at-eol)))
-		  (cond 
+  (let ((notes (if (ensime-connected-p)
+		   (ensime-compiler-notes (ensime-current-connection))
+		 '()
+		 )))
+    (ensime-remove-old-overlays)
+    (dolist (note notes)
+      (destructuring-bind 
+	  (&key severity msg beg end line col file &allow-other-keys) note
+	(when-let (buf (find-buffer-visiting file))
+	  (with-current-buffer buf
+	    (save-excursion
+	      (goto-line line)
+	      (let* ((line-start (point-at-bol))
+		     (line-stop (point-at-eol)))
+		(cond 
 
-		   ((equal severity 'error)
-		    (progn 
+		 ((equal severity 'error)
+		  (progn 
+		    (push (ensime-make-overlay
+			   line-start line-stop msg 'ensime-errline nil)
+			  ensime-note-overlays)
+		    (push (ensime-make-overlay
+			   (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
+			  ensime-note-overlays)
+		    ))
+
+		 (t (progn 
 		      (push (ensime-make-overlay
-			     line-start line-stop msg 'ensime-errline nil)
+			     line-start line-stop msg 'ensime-warnline nil)
 			    ensime-note-overlays)
 		      (push (ensime-make-overlay
-			     (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
+			     (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
 			    ensime-note-overlays)
 		      ))
 
-		   (t (progn 
-			(push (ensime-make-overlay
-			       line-start line-stop msg 'ensime-warnline nil)
-			      ensime-note-overlays)
-			(push (ensime-make-overlay
-			       (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
-			      ensime-note-overlays)
-			))
-
-		   ))
-		))))))))
+		 ))
+	      )))))))
 
 
 (defface ensime-errline
@@ -1807,9 +1813,11 @@ This idiom is preferred over `lexical-let'."
   (ensime-eval 
    `(swank:symbol-at-point ,buffer-file-name ,(ensime-computed-point))))
 
-(defun ensime-rpc-repl-args ()
+(defun ensime-rpc-repl-cmd-line ()
+  "Get the command needed to launch a repl, including all
+the current project's dependencies. Returns list of form (cmd [arg]*)"
   (ensime-eval 
-   `(swank:repl-args)))
+   `(swank:repl-cmd-line)))
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))

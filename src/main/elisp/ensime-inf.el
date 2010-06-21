@@ -62,7 +62,8 @@
   :prefix "ensime-inf-")
 
 (defcustom ensime-inf-scala-cmd "scala"
-  "The command to launch the scala interpreter."
+  "The command to launch the scala interpreter. Only used
+when ENSIME connection is unavailable."
   :type 'string
   :group 'ensime-inf)
 
@@ -108,7 +109,7 @@
   (interactive)
 
   (let ((root-path (ensime-inf-get-project-root))
-	(args (ensime-inf-get-repl-args)))
+	(cmd-and-args (ensime-inf-get-repl-cmd-line)))
 
     (switch-to-buffer-other-window 
      (get-buffer-create ensime-inf-buffer-name))
@@ -118,9 +119,12 @@
     (cd root-path)
     (comint-exec (current-buffer) 
 		 "ensime-inferior-scala" 
-		 ensime-inf-scala-cmd
+		 (car cmd-and-args)
 		 nil 
-		 args)
+		 (cdr cmd-and-args))
+
+    (let ((proc (get-buffer-process (current-buffer))))
+      (ensime-set-query-on-exit-flag proc))
     ))
 
 
@@ -129,10 +133,12 @@
   (let ((config (ensime-config (ensime-connection))))
     (or (plist-get config :root-dir) ".")))
 
-(defun ensime-inf-get-repl-args ()
-  "Get the command needed to launch a repl, loading all
-   the current project's dependencies."
-  (ensime-rpc-repl-args))
+(defun ensime-inf-get-repl-cmd-line ()
+  "Get the command needed to launch a repl, including all
+the current project's dependencies. Returns list of form (cmd [arg]*)"
+  (if (ensime-connected-p)
+      (ensime-rpc-repl-cmd-line)
+    (list ensime-inf-scala-cmd)))
 
 (defun ensime-inf-switch ()
   "Switch to buffer containing the interpreter"
@@ -147,11 +153,8 @@
 (defun ensime-inf-send-tab ()
   (interactive)
   (ensime-inf-assert-running)
-  (let* ((proc (get-buffer-process ensime-inf-buffer-name))
-	 (pmark (process-mark proc))
-	 (input (buffer-substring-no-properties pmark (point))))
-    (comint-send-string ensime-inf-buffer-name input)
-    (comint-send-string ensime-inf-buffer-name "\^i")))
+  ;; TODO Fix completion...
+  )
 
 (defun ensime-inf-send-string (str &rest args)
   (comint-send-string ensime-inf-buffer-name (apply 'format str args))
