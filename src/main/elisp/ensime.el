@@ -1972,7 +1972,7 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 (defun ensime-type-inspector-show (info)
   "Display a list of all the members of the type under point, sorted by
    owner type."
-  (let* ((supers (plist-get info :supers))
+  (let* ((interfaces (plist-get info :interfaces))
 	 (type (plist-get info :type))
 	 (buffer-name ensime-inspector-buffer-name)
 	 (ensime-indent-level 0))
@@ -1993,13 +1993,15 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 
 
 	 ;; Display each member, arranged by owner type
-	 (dolist (super supers)
-	   (let* ((owner-type super)
-		  (members (plist-get super :members)))
+	 (dolist (interface interfaces)
+	   (let* ((owner-type (plist-get interface :type))
+		  (implicit (plist-get interface :via-view))
+		  (members (plist-get owner-type :members)))
 
 	     (ensime-insert-with-face 
-	      (format "\n\n%s\n" 
-		      (ensime-type-declared-as-str owner-type))
+	      (format "\n\n%s%s\n" 
+		      (ensime-type-declared-as-str owner-type)
+		      (if implicit (concat " (via implicit, " implicit ")") ""))
 	      font-lock-comment-face)
 	     (ensime-inspector-insert-linked-type owner-type t t)
 	     (insert "\n")
