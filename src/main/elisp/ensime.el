@@ -1889,12 +1889,17 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
       (setq accum (concat accum "."))
       )))
 
-(defun ensime-inspector-insert-linked-type (type &optional with-doc-link)
+(defun ensime-inspector-insert-linked-type (type &optional with-doc-link detailed)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (if (ensime-type-is-arrow type) 
-      (ensime-inspector-insert-linked-arrow-type type)
-    (let* ((type-name (ensime-type-name type)))
+      (ensime-inspector-insert-linked-arrow-type type with-doc-link detailed)
+    (let* ((type-name (if detailed
+			  (ensime-type-full-name type)
+			(ensime-type-name type)
+			))
+	   (type-args (ensime-type-type-args type))
+	   (last-type-arg (car (last type-args))))
       (ensime-with-path-and-name 
        type-name (path name)
        (when path
@@ -1907,6 +1912,15 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 	    (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
 	    )) font-lock-type-face))
 
+      (when type-args
+	(let ((ensime-indent-level 0))
+	  (insert "[")
+	  (dolist (tpe type-args)
+	    (ensime-inspector-insert-linked-type tpe nil nil)
+	    (if (not (eq tpe last-type-arg))
+		(insert ", ")))
+	  (insert "]")))
+
       (when with-doc-link
 	(let* ((pos (plist-get type :pos))
 	       (url (or (ensime-pos-file pos)
@@ -1917,7 +1931,7 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 
       )))
 
-(defun ensime-inspector-insert-linked-arrow-type (type)
+(defun ensime-inspector-insert-linked-arrow-type (type  &optional with-doc-link detailed)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (let*  ((param-types (ensime-type-param-types type))
@@ -1925,11 +1939,12 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 	  (result-type (ensime-type-result-type type)))
     (insert "(")
     (dolist (tpe param-types)
-      (ensime-inspector-insert-linked-type tpe)
+      (ensime-inspector-insert-linked-type tpe nil detailed)
       (if (not (eq tpe last-param-type))
 	  (insert ", ")))
     (insert ") => ")
-    (ensime-inspector-insert-linked-type result-type)))
+    (ensime-inspector-insert-linked-type result-type nil detailed)
+    ))
 
 
 (defun ensime-inspector-insert-linked-member (owner-type m)
@@ -1945,7 +1960,7 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
     (ensime-insert-link 
      (format "%s" member-name) url (ensime-pos-offset pos))
     (tab-to-tab-stop)
-    (ensime-inspector-insert-linked-type type)
+    (ensime-inspector-insert-linked-type type nil nil)
     ))
 
 (defun ensime-inspect-type ()
@@ -1973,7 +1988,7 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 	 (ensime-insert-with-face (format "%s\n" 
 					  (ensime-type-declared-as-str type))
 				  font-lock-comment-face)
-	 (ensime-inspector-insert-linked-type type t)
+	 (ensime-inspector-insert-linked-type type t t)
 	 (insert "\n")
 
 
@@ -1986,7 +2001,7 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 	      (format "\n\n%s\n" 
 		      (ensime-type-declared-as-str owner-type))
 	      font-lock-comment-face)
-	     (ensime-inspector-insert-linked-type owner-type t)
+	     (ensime-inspector-insert-linked-type owner-type t t)
 	     (insert "\n")
 	     (insert "---------------------------\n")
 	     (dolist (m members)
@@ -2051,7 +2066,7 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
     (let ((ensime-indent-level (+ ensime-indent-level 5)))
       (dolist (ea members)
 	(when (not (ensime-package-p ea))
-	  (ensime-inspector-insert-linked-type ea)
+	  (ensime-inspector-insert-linked-type ea nil nil)
 	  (insert "\n")))
       (dolist (ea members)
 	(when (ensime-package-p ea)
@@ -2247,6 +2262,9 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-type-result-type (type)
   (plist-get type :result-type))
+
+(defun ensime-type-type-args (type)
+  (plist-get type :type-args))
 
 (defun ensime-member-name (member)
   (plist-get member :name))
