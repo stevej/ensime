@@ -61,9 +61,15 @@
   :group 'ensime-inf
   :prefix "ensime-inf-")
 
-(defcustom ensime-inf-scala-cmd "scala"
-  "The command to launch the scala interpreter. Only used
-when ENSIME connection is unavailable."
+(defcustom ensime-inf-cmd-template '("scala" "-classpath" :classpath)
+  "The command to launch the scala interpreter. Keywords will be replaced
+with data loaded from server."
+  :type 'string
+  :group 'ensime-inf)
+
+(defcustom ensime-inf-default-cmd-line '("scala")
+  "Default command to launch the repl, used when not connected to an ENSIME
+server."
   :type 'string
   :group 'ensime-inf)
 
@@ -73,6 +79,7 @@ when ENSIME connection is unavailable."
   :type 'boolean)
 
 (defconst ensime-inf-buffer-name "*ensime-inferior-scala*")
+
 
 (define-derived-mode ensime-inf-mode comint-mode "ENSIME Inferior Scala"
   "Major mode for interacting with a Scala interpreter.
@@ -137,8 +144,10 @@ when ENSIME connection is unavailable."
   "Get the command needed to launch a repl, including all
 the current project's dependencies. Returns list of form (cmd [arg]*)"
   (if (ensime-connected-p)
-      (ensime-rpc-repl-cmd-line)
-    (list ensime-inf-scala-cmd)))
+      (ensime-replace-keywords 
+       ensime-inf-cmd-template
+       (ensime-rpc-repl-config))
+    ensime-inf-default-cmd-line))
 
 (defun ensime-inf-switch ()
   "Switch to buffer containing the interpreter"
@@ -239,3 +248,4 @@ Used for determining the default in the next one.")
   (ensime-inf-assert-running)
   (ensime-inf-send-string "\n:quit"))
 
+(provide 'ensime-inf)

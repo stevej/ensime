@@ -857,6 +857,18 @@ corresponding values in the CDR of VALUE."
 	  (equal face 'font-lock-string-face)
 	  (equal face 'font-lock-comment-face)))))
 
+(defun ensime-replace-keywords (template proplist)
+  "Replace keywords in the template list with the associated
+values in the provided proplist."
+  (let* ((result '()))
+    (dolist (ea template)
+      (cond
+       ((keywordp ea) 
+	(setq result (cons (or (plist-get proplist ea) "") result)))
+       (t 
+	(setq result (cons ea result)))))
+    (reverse result)))
+
 
 (defvar ensime-net-processes nil
   "List of processes (sockets) connected to Lisps.")
@@ -1813,11 +1825,11 @@ This idiom is preferred over `lexical-let'."
   (ensime-eval 
    `(swank:symbol-at-point ,buffer-file-name ,(ensime-computed-point))))
 
-(defun ensime-rpc-repl-cmd-line ()
-  "Get the command needed to launch a repl, including all
-the current project's dependencies. Returns list of form (cmd [arg]*)"
+(defun ensime-rpc-repl-config ()
+  "Get the configuration information needed to launch the scala interpreter
+with the current project's dependencies loaded. Return a property list."
   (ensime-eval 
-   `(swank:repl-cmd-line)))
+   `(swank:repl-config)))
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
