@@ -47,6 +47,7 @@
 (require 'ensime-auto-complete)
 (require 'ensime-sbt)
 (require 'ensime-inf)
+(require 'ensime-debug)
 (require 'ido)
 (eval-when (compile)
   (require 'apropos)
@@ -459,6 +460,14 @@ See `ensime-start'.")
 		  ))))
     (ensime-load-config file)))
 
+(defun ensime-configured-project-root ()
+  "Return root path of the current project as defined in the 
+config file and stored in the current connection. Nil is returned
+if there is no active connection, or if the project root was not
+defined."
+  (when (ensime-connected-p)
+    (let ((config (ensime-config (ensime-connection))))
+      (plist-get config :root-dir) ".")))
 
 (defun ensime-load-config (file-name)
   "Load and parse a project config file. Return the resulting plist.
@@ -864,7 +873,7 @@ values in the provided proplist."
     (dolist (ea template)
       (cond
        ((keywordp ea) 
-	(setq result (cons (or (plist-get proplist ea) "") result)))
+	(setq result (cons (plist-get proplist ea) result)))
        (t 
 	(setq result (cons ea result)))))
     (reverse result)))
@@ -1827,9 +1836,15 @@ This idiom is preferred over `lexical-let'."
 
 (defun ensime-rpc-repl-config ()
   "Get the configuration information needed to launch the scala interpreter
-with the current project's dependencies loaded. Return a property list."
+with the current project's dependencies loaded. Returns a property list."
   (ensime-eval 
    `(swank:repl-config)))
+
+(defun ensime-rpc-debug-config ()
+  "Get the configuration information needed to launch the debugger
+with the current project's dependencies loaded. Returns a property list."
+  (ensime-eval 
+   `(swank:debug-config)))
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
