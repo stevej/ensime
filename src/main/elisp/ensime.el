@@ -1511,12 +1511,12 @@ This idiom is preferred over `lexical-let'."
 ;;;
 ;;; This is the protocol in all its glory. The input to this function
 ;;; is a protocol event that either originates within Emacs or arrived
-;;; over the network from Lisp.
+;;; over the network from the ENSIME server.
 ;;;
 ;;; Each event is a list beginning with a keyword and followed by
 ;;; arguments. The keyword identifies the type of event. Events
 ;;; originating from Emacs have names starting with :emacs- and events
-;;; from Lisp don't.
+;;; from the ENSIME server don't.
 
 (ensime-def-connection-var ensime-rex-continuations '()
   "List of (ID . FUNCTION) continuations waiting for RPC results.")
@@ -1552,17 +1552,6 @@ This idiom is preferred over `lexical-let'."
 	  ((:quick-typecheck-result result)
 	   (ensime-typecheck-finished result)
 	   (ensime-event-sig :quick-typecheck-finished result))
-	  ((:debug-activate thread level &optional select)
-	   (assert thread)
-	   (sldb-activate thread level select))
-	  ((:debug thread level condition restarts frames conts)
-	   (assert thread)
-	   (sldb-setup thread level condition restarts frames conts))
-	  ((:debug-return thread level stepping)
-	   (assert thread)
-	   (sldb-exit thread level stepping))
-	  ((:emacs-interrupt thread)
-	   (ensime-send `(:emacs-interrupt ,thread)))
 	  ((:channel-send id msg)
 	   (ensime-channel-send (or (ensime-find-channel id)
 				    (error "Invalid channel id: %S %S" id msg))
@@ -1577,8 +1566,6 @@ This idiom is preferred over `lexical-let'."
 	   (ensime-send `(:emacs-return-string ,thread ,tag ,string)))
 	  ((:new-features features)
 	   (setf (ensime-server-features) features))
-	  ((:indentation-update info)
-	   (ensime-handle-indentation-update info))
 	  ((:eval-no-wait fun args)
 	   (apply (intern fun) args))
 	  ((:eval thread tag form-string)
@@ -1588,20 +1575,8 @@ This idiom is preferred over `lexical-let'."
 	   (ensime-send `(:emacs-return ,thread ,tag ,value)))
 	  ((:ed what)
 	   (ensime-ed what))
-	  ((:inspect what wait-thread wait-tag)
-	   (let ((hook (when (and wait-thread wait-tag)
-			 (lexical-let ((thread wait-thread)
-				       (tag wait-tag))
-			   (lambda ()
-			     (ensime-send `(:emacs-return ,thread ,tag nil)))))))
-	     (ensime-open-inspector what nil hook)))
 	  ((:background-message message)
 	   (ensime-background-message "%s" message))
-	  ((:debug-condition thread message)
-	   (assert thread)
-	   (message "%s" message))
-	  ((:ping thread tag)
-	   (ensime-send `(:emacs-pong ,thread ,tag)))
 	  ((:reader-error packet condition)
 	   (ensime-with-popup-buffer ("*Ensime Error*")
 				     (princ (format "Invalid protocol message:\n%s\n\n%S"
