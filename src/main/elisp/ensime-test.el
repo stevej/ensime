@@ -150,7 +150,12 @@
 	    (let ((handler-func (plist-get handler :func))
 		  (is-last (plist-get handler :is-last)))
 	      (pop ensime-async-handler-stack)
-	      (funcall handler-func value)
+	      (condition-case signal
+		  (funcall handler-func value)
+		(error
+		 (message "Error executing test, moving to next.")
+		 (setq is-last t)
+		 ))
 	      (when is-last
 		(pop ensime-test-queue)
 		(ensime-run-next-test)))))))))
@@ -192,7 +197,9 @@
      (error
       (ensime-output-test-result 
        ,context
-       (format "Assertion failed at '%s': %s" ,context signal)))))
+       (format "Assertion failed at '%s': %s" ,context signal))
+      (error (format "Test interrupted."))
+      )))
 
 
 (defmacro* ensime-async-test (title trigger &rest handlers)
@@ -248,7 +255,11 @@
 	    ;; Synchronous test
 	    (progn
 	      (pop ensime-test-queue)
-	      (funcall (plist-get test :func))
+	      (condition-case signal
+		  (funcall (plist-get test :func))
+		(error
+		 (message "Error executing test, moving to next.")
+		 ))
 	      (ensime-run-next-test))))
       (insert "\nFinished."))))
 
