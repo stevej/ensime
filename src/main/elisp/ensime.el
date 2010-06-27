@@ -1342,8 +1342,7 @@ If PROCESS is not specified, `ensime-connection' is used.
       (run-hooks 'ensime-connected-hook)
       (when-let (fun (plist-get args ':init-function))
 	(funcall fun)))
-    (message "Connected. %s" (ensime-random-words-of-encouragement))
-
+    (message "Connected.")
     ;; Send the project initialization..
     (ensime-eval-async `(swank:init-project ,config) #'identity)
     ))
@@ -1544,6 +1543,9 @@ This idiom is preferred over `lexical-let'."
 			(force-mode-line-update t))
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
+	  ((:compiler-ready status)
+	   (message "Compiler ready. %s" (ensime-random-words-of-encouragement))
+	   (ensime-event-sig :compiler-ready status))
 	  ((:full-typecheck-result result)
 	   (ensime-typecheck-finished result)
 	   (ensime-event-sig :full-typecheck-finished result))
