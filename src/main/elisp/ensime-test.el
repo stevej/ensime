@@ -41,6 +41,12 @@
 (defvar ensime-test-env-classpath '("/home/aemon/lib/scala/lib/scala-library.jar")
   "Hard-code a classpath for testing purposes. Not great.")
 
+(put 'ensime-test-assert-failed 'error-conditions '(error ensime-test-assert-failed))
+(put 'ensime-test-assert-failed 'error-message "Assertion Failed")
+
+(put 'ensime-test-interrupted 'error-conditions '(error ensime-test-interrupted))
+(put 'ensime-test-interrupted 'error-message "Test Interrupted")
+
 
 (defun ensime-create-file (file-name contents)
   "Create file named file-name. Write contents to the file. Return file's name."
@@ -68,10 +74,9 @@
   (let* ((root-dir (file-name-as-directory (make-temp-file "ensime_test_proj_" t)))
 	 (conf-file (ensime-create-file 
 		     (concat root-dir ".ensime")
-		     (format "%S" (list :source '("src")
+		     (format "%S" (list :sources '("src")
 					:project-package "com.test"
-					:classpath ensime-test-env-classpath
-					:test-mode t
+					:dependency-jars ensime-test-env-classpath
 					))))
 	 (src-dir (file-name-as-directory (concat root-dir "src"))))
     (mkdir src-dir)
@@ -150,23 +155,29 @@
 	    (let ((handler-func (plist-get handler :func))
 		  (is-last (plist-get handler :is-last)))
 	      (pop ensime-async-handler-stack)
-	      (condition-case signal
-		  (funcall handler-func value)
-		(error
-		 (message "Error executing test, moving to next.")
-		 (setq is-last t)
-		 ))
+	      (save-excursion
+		(condition-case signal
+		    (funcall handler-func value)
+		  (ensime-test-interrupted
+		   (message "Error executing test, moving to next.")
+		   (setq is-last t))))
 	      (when is-last
+		(setq ensime-async-handler-stack nil)
 		(pop ensime-test-queue)
 		(ensime-run-next-test)))))))))
 
 
-(defun ensime-output-test-result (title result)
-  "Helper for writing results to testing buffer."
+(defun ensime-test-output (txt)
+  "Helper for writing text to testing buffer."
   (with-current-buffer ensime-testing-buffer
-    (if (equal result t)
-	(insert ".")
-      (insert (format "\n%s:\n%s\n" title result)))))
+    (goto-char (point-max))
+    (insert (format "\n%s" txt))))
+
+(defun ensime-test-output-result (result)
+  "Helper for writing results to testing buffer."
+  (if (equal result t)
+      (ensime-test-output (format "OK" ))
+    (ensime-test-output (format "%s\n" result))))
 
 
 (defmacro ensime-test-suite (&rest tests)
@@ -174,6 +185,7 @@
    Tests may be synchronous or asynchronous."
   `(progn
      (switch-to-buffer ensime-testing-buffer)
+     (erase-buffer)
      (setq ensime-test-queue (list ,@tests))
      (ensime-run-next-test)))
 
@@ -190,16 +202,16 @@
 (defmacro ensime-test-run-with-handlers (context &rest body)
   "Evaluate body in the context of an error handler. Handle errors by
    writing to the testing output buffer."
-  `(condition-case signal
-       (progn
-	 ,@body
-	 (ensime-output-test-result ,context t))
-     (error
-      (ensime-output-test-result 
-       ,context
-       (format "Assertion failed at '%s': %s" ,context signal))
-      (error (format "Test interrupted."))
-      )))
+  `(save-excursion 
+     (condition-case signal
+	 (progn
+	   ,@body
+	   (ensime-test-output-result t))
+       (ensime-test-assert-failed
+	(ensime-test-output-result 
+	 (format "Assertion failed at '%s': %s" ,context signal))
+	(signal 'ensime-test-interrupted (format "Test interrupted."))
+	))))
 
 
 (defmacro* ensime-async-test (title trigger &rest handlers)
@@ -244,6 +256,9 @@
 	      (test (car ensime-test-queue)))
 	  (setq ensime-shared-test-state '())
 	  (setq ensime-async-handler-stack '())
+
+	  (ensime-test-output (format "\n%s" (plist-get test :title)))
+
 	  (if (plist-get test :async)
 
 	      ;; Asynchronous test
@@ -255,20 +270,22 @@
 	    ;; Synchronous test
 	    (progn
 	      (pop ensime-test-queue)
-	      (condition-case signal
-		  (funcall (plist-get test :func))
-		(error
-		 (message "Error executing test, moving to next.")
-		 ))
+	      (save-excursion
+		(condition-case signal
+		    (funcall (plist-get test :func))
+		  (ensime-test-interrupted
+		   (message "Error executing test, moving to next."))))
 	      (ensime-run-next-test))))
-      (insert "\nFinished."))))
+      (goto-char (point-max))
+      (insert "\n\nFinished.")
+      )))
 
 
 (defmacro ensime-assert (pred)
   `(let ((val ,pred))
      (with-current-buffer ensime-testing-buffer
        (if (not val)
-	   (error (format "Expected truth of %s." ',pred))))))
+	   (signal 'ensime-test-assert-failed (format "Expected truth of %s." ',pred))))))
 
 
 (defmacro ensime-assert-equal (a b)
@@ -276,7 +293,15 @@
 	 (val-b ,b))
      (with-current-buffer ensime-testing-buffer
        (if (equal val-a val-b) t
-	 (error (format "Expected %s to equal %s" ',a ',b))))))
+	 (signal 'ensime-test-assert-failed (format "Expected %s to equal %s but was %s" ',a ',b val-a))))))
+
+(defun ensime-stop-tests ()
+  "Forcibly stop all tests in progress."
+  (interactive)
+  (with-current-buffer ensime-testing-buffer
+    (setq ensime-async-handler-stack nil)
+    (setq ensime-test-queue nil))
+  (switch-to-buffer ensime-testing-buffer))
 
 
 (defun ensime-run-tests ()
@@ -294,11 +319,11 @@
 	   (format "%S"
 		   '( :server-cmd 
 		      "bin/server.sh"
-		      :classpath ("hello" "world")
+		      :dependendency-dirs ("hello" "world")
 		      )))
      (let ((conf (ensime-load-config file)))
        (ensime-assert (equal (plist-get conf :server-cmd) "bin/server.sh"))
-       (ensime-assert (equal (plist-get conf :classpath) '("hello" "world")))
+       (ensime-assert (equal (plist-get conf :dependendency-dirs) '("hello" "world")))
        (ensime-assert (equal (plist-get conf :root-dir) 
 			     (expand-file-name (file-name-directory file)))))))
 
@@ -440,6 +465,59 @@
        (ensime-kill-all-ensime-servers)
        ))
     )
+
+
+   (ensime-async-test 
+    "Test get repl config."
+    (let* ((proj (ensime-create-tmp-project
+		  ensime-tmp-project-hello-world))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:compiler-ready status)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+
+       (let ((conf (ensime-rpc-repl-config)))
+	 (ensime-assert (not (null conf)))
+	 (ensime-assert (not (null (plist-get conf :classpath)))))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
+
+   (ensime-async-test 
+    "Test get debug config."
+    (let* ((proj (ensime-create-tmp-project
+		  ensime-tmp-project-hello-world))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:compiler-ready status)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+
+       (let ((conf (ensime-rpc-debug-config)))
+	 (ensime-assert (not (null conf)))
+	 (ensime-assert (not (null (plist-get conf :classpath))))
+	 (ensime-assert (not (null (plist-get conf :sourcepath))))
+	 )
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
 
 
    ))
