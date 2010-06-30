@@ -2073,6 +2073,9 @@ with the current project's dependencies loaded. Returns a property list."
       (dolist (ea members)
 	(when (not (ensime-package-p ea))
 	  (ensime-inspector-insert-linked-type ea nil nil)
+	  (ensime-insert-with-face 
+	   (format " %s" (ensime-type-declared-as-str ea))
+	   font-lock-comment-face)
 	  (insert "\n")))
       (dolist (ea members)
 	(when (ensime-package-p ea)
