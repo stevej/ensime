@@ -72,7 +72,7 @@
   (save-excursion (forward-line -1)(point-at-eol)))
 
 (defun ensime-ac-name-prefix ()
-  "Starting at current point. Find the point of completion for a symbol.
+  "Starting at current point - find the point of completion for a symbol.
    Return nil if we are not currently looking at a symbol."
   (if (looking-back "[(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
       (let ((point (- (point) (length (match-string 1)))))
@@ -196,6 +196,9 @@
 
 (defun ensime-ac-enable ()
   (make-local-variable 'ac-sources)
+
+  ;; Note, we try to complete names before members.
+  ;; This simplifies the regexes.
   (setq ac-sources '(ac-source-ensime-scope-names
 		     ac-source-ensime-members ))
 
