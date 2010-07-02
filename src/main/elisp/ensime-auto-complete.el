@@ -74,7 +74,7 @@
 (defun ensime-ac-name-prefix ()
   "Starting at current point - find the point of completion for a symbol.
    Return nil if we are not currently looking at a symbol."
-  (if (looking-back "[(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
+  (if (looking-back "[=(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
       (let ((point (- (point) (length (match-string 1)))))
 	(goto-char point)
 	point
