@@ -1805,6 +1805,14 @@ This idiom is preferred over `lexical-let'."
   (ensime-rpc-async-typecheck-all))
 
 
+;; RPC Helpers
+
+(defun ensime-debug-unit-info-at-point ()
+  (interactive)
+  (ensime-rpc-debug-unit-info (file-name-nondirectory buffer-file-name) 
+			      (line-number-at-pos (point))
+			      ""))
+
 ;; Basic RPC calls
 
 (defun ensime-rpc-symbol-at-point ()
@@ -1822,6 +1830,11 @@ with the current project's dependencies loaded. Returns a property list."
 with the current project's dependencies loaded. Returns a property list."
   (ensime-eval 
    `(swank:debug-config)))
+
+(defun ensime-rpc-debug-unit-info (file-name-no-path line-number &optional package-prefix)
+  "Get descriptive info for the compilation unit defined at file-name/line-number."
+  (ensime-eval 
+   `(swank:debug-unit-info ,file-name-no-path ,line-number ,(or package-prefix ""))))
 
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
