@@ -47,16 +47,6 @@ server."
   :type 'string
   :group 'ensime-db)
 
-
-(defun ensime-db-get-cmd-line ()
-  "Get the command needed to launch a debugger, including all
-the current project's dependencies. Returns list of form (cmd [arg]*)"
-  (if (ensime-connected-p)
-      (let* ((conf (ensime-rpc-debug-config)))
-	(ensime-replace-keywords ensime-db-cmd-template conf))
-    ensime-db-default-cmd-line))
-
-
 (defvar ensime-db-history nil
   "History of argument lists passed to jdb.")
 
@@ -65,18 +55,29 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 (defvar ensime-db-output-acc-max-length 50000)
 
 (defvar ensime-db-filter-funcs
-  '(("Deferring breakpoint \\(.+\\):\\([0-9]+\\)" . 
+  '(("Deferring breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
      ensime-db-handle-deferred-breakpoint)
 
-    ("Set breakpoint \\(.+\\):\\([0-9]+\\)" . 
+    ("Set breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
      ensime-db-handle-set-breakpoint)
 
-    ("Removed: breakpoint \\(.+\\):\\([0-9]+\\)" . 
+    ("Removed: breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
      ensime-db-handle-removed-breakpoint)
 
-    ("Not found: breakpoint \\(.+\\):\\([0-9]+\\)" . 
+    ("Not found: breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
      ensime-db-handle-not-found-breakpoint)
+
+    ("Breakpoints set:\\(?:[ \t\n]+breakpoint \\(.+\\):\\([0-9]+\\)\\)*\n>" . 
+     ensime-db-handle-breakpoints-list)
     ))
+
+(defun ensime-db-get-cmd-line ()
+  "Get the command needed to launch a debugger, including all
+the current project's dependencies. Returns list of form (cmd [arg]*)"
+  (if (ensime-connected-p)
+      (let* ((conf (ensime-rpc-debug-config)))
+	(ensime-replace-keywords ensime-db-cmd-template conf))
+    ensime-db-default-cmd-line))
 
 (defun ensime-db-handle-deferred-breakpoint (str)
   (let ((class (match-string 1 str))
@@ -98,10 +99,50 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 	(line (string-to-number (match-string 2 str))))
     (message "No breakpoint to clear at: %s : %s" class line)))
 
+
+(defface ensime-breakpoint-face
+  '((((class color) (background dark)) (:background "DarkGreen"))
+    (((class color) (background light)) (:background "LightGreen2"))
+    (t (:bold t)))
+  "Face used for marking lines with breakpoints."
+  :group 'ensime-ui)
+
+
+(defun ensime-db-handle-breakpoints-list (str)
+  (ensime-db-clear-breakpoint-overlays)
+  (let* ((start (match-beginning 0))
+	 (end (match-end 0))
+	 (pos start))
+    (while (and (< pos end) 
+		(integerp (string-match "breakpoint \\(.+\\):\\([0-9]+\\)" str pos)))
+      (setq pos (match-end 0))
+      (let ((class (match-string 1 str))
+	    (line (string-to-number (match-string 2 str)))
+	    (source-file (ensime-db-source-for-class class)))
+	(when source-file
+	  (push (ensime-make-overlay-at 
+		 source-file line "Breakpoint" 'ensime-breakpoint-face)
+		(ensime-db-breakpoint-overlays)))))
+    ))
+
+
+(defun ensime-db-source-for-class (class)
+  "Return the fully qualified pathname of the sourcefile that defines
+class, where class is a fully qualified classname."
+  nil
+  )
+
+(defvar ensime-db-breakpoint-overlays '())
+
+(defun ensime-db-clear-breakpoint-overlays ()
+  "Remove all overlays that ensime-debug has created."
+  (mapc #'delete-overlay ensime-db-breakpoint-overlays)
+  (setq ensime-db-breakpoint-overlays '()))
+
 (defun ensime-db-find-first-handler (str filters)
   "Find the car in filters that matches str earliest in the text. 
-Return that car's corresponding cdr (a filter function). Guarantee that
-match-end, match-beginning are set correctly on return."
+Return that car's corresponding cdr (a filter function). Guarantees that
+match-end, match-beginning, match-string are set correctly on return."
   (let ((best-start (length str))
 	(best-filter))
     
@@ -112,7 +153,7 @@ match-end, match-beginning are set correctly on return."
 	  (setq best-start (match-beginning 0))
 	  (setq best-filter filter))))
 
-    ;; Make sure match-end, match-beginning 
+    ;; Make sure match-end, match-beginning, match-string
     ;; are correct on return
     (when best-filter
       (string-match (car best-filter) str)
@@ -156,6 +197,11 @@ match-end, match-beginning are set correctly on return."
   string)
 
 
+(defun ensime-db-refresh-breakpoint-overlays ()
+  "Cause debugger to output a list of all active breakpoints.
+Output filter will grab this output and use it to update overlays."
+  (ensime-db-send-str "clear"))
+
 (defun ensime-db-set-break (f line)
   "Set a breakpoint in the current source file at point."
   (interactive (list buffer-file-name (line-number-at-pos (point))))
@@ -163,8 +209,8 @@ match-end, match-beginning are set correctly on return."
     (if info
 	(let ((class (plist-get info :full-name)))
 	  (ensime-db-send-str (format "stop at %s:%s" class line)))
-      (message "Could not find class information for given position."))
-    ))
+      (message "Could not find class information for given position.")))
+  (ensime-db-refresh-breakpoint-overlays))
 
 (defun ensime-db-clear-break (f line)
   "Set a breakpoint in the current source file at point."
@@ -173,8 +219,12 @@ match-end, match-beginning are set correctly on return."
     (if info
 	(let ((class (plist-get info :full-name)))
 	  (ensime-db-send-str (format "clear %s:%s" class line)))
-      (message "Could not find class information for given position."))
-    ))
+      (message "Could not find class information for given position.")))
+  (ensime-db-refresh-breakpoint-overlays))
+
+(defun ensime-db-list-breakpoints (f line)
+  "Cause debugger to output a list of all active breakpoints."
+  (ensime-db-send-str "clear"))
 
 (defun ensime-db-send-str (str &optional no-newline)
   "Sends a string to the debug process. Automatically append a newline."

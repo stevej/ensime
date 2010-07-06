@@ -1634,44 +1634,55 @@ This idiom is preferred over `lexical-let'."
 	(plist-get result :notes))
   (ensime-refresh-note-overlays))
 
+
+(defun ensime-make-overlay-at (file line b e msg face)
+  "Create an overlay highlighting the given line in 
+any buffer visiting the given file."
+  (let ((beg b)
+	(end e))
+    (when-let (buf (find-buffer-visiting file))
+      (with-current-buffer buf
+	(when (integerp line)
+	  (save-excursion
+	    (goto-line line)
+	    (setq beg (point-at-bol))
+	    (setq end (point-at-eol))))
+	(ensime-make-overlay beg end msg face nil))
+      )))
+
+
 (defun ensime-refresh-note-overlays ()
   (let ((notes (if (ensime-connected-p)
 		   (ensime-compiler-notes (ensime-current-connection))
 		 '()
 		 )))
-    (ensime-remove-old-overlays)
+    (ensime-clear-note-overlays)
     (dolist (note notes)
       (destructuring-bind 
 	  (&key severity msg beg end line col file &allow-other-keys) note
-	(when-let (buf (find-buffer-visiting file))
-	  (with-current-buffer buf
-	    (save-excursion
-	      (goto-line line)
-	      (let* ((line-start (point-at-bol))
-		     (line-stop (point-at-eol)))
-		(cond 
+	(cond 
+	 ((equal severity 'error)
+	  (progn 
+	    (push (ensime-make-overlay-at 
+		   file line nil nil msg 'ensime-errline)
+		  ensime-note-overlays)
+	    (push (ensime-make-overlay-at
+		   file nil (+ 1 beg) (+ 1 end) 
+		   msg 'ensime-errline-highlight)
+		  ensime-note-overlays)
+	    ))
 
-		 ((equal severity 'error)
-		  (progn 
-		    (push (ensime-make-overlay
-			   line-start line-stop msg 'ensime-errline nil)
-			  ensime-note-overlays)
-		    (push (ensime-make-overlay
-			   (+ 1 beg) (+ 1 end) msg 'ensime-errline-highlight nil)
-			  ensime-note-overlays)
-		    ))
+	 (t (progn
+	      (push (ensime-make-overlay-at
+		     file line nil nil msg 'ensime-warnline)
+		    ensime-note-overlays)
+	      (push (ensime-make-overlay-at
+		     file nil (+ 1 beg) (+ 1 end)
+		     msg 'ensime-warnline-highlight)
+		    ensime-note-overlays)
+	      ))
 
-		 (t (progn 
-		      (push (ensime-make-overlay
-			     line-start line-stop msg 'ensime-warnline nil)
-			    ensime-note-overlays)
-		      (push (ensime-make-overlay
-			     (+ 1 beg) (+ 1 end) msg 'ensime-warnline-highlight nil)
-			    ensime-note-overlays)
-		      ))
-
-		 ))
-	      )))))))
+	 )))))
 
 
 (defface ensime-errline
@@ -1723,9 +1734,8 @@ This idiom is preferred over `lexical-let'."
      ovs)
     ))
 
-(defun ensime-remove-old-overlays ()
+(defun ensime-clear-note-overlays ()
   "Delete the existing note overlays."
-  ;; Guard against nil overlays here..
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
 
