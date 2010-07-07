@@ -244,8 +244,11 @@ cause the output filter to refresh the breakpoint overlays."
 (defun ensime-db-send-str (str &optional no-newline)
   "Sends a string to the debug process. Automatically append a newline."
   (interactive)
-  (comint-send-string (get-buffer ensime-db-buffer-name) 
-		      (concat str (if no-newline "" "\n"))))
+  (let* ((buf (get-buffer ensime-db-buffer-name))
+	(proc (get-buffer-process buf)))
+    (if (not proc)
+	(message "Project is not being debugged. Use M-x ensime-db-start to start debugger.")
+      (comint-send-string proc (concat str (if no-newline "" "\n"))))))
 
 
 (defun ensime-db-start ()
