@@ -109,28 +109,35 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 
 
 (defun ensime-db-handle-breakpoints-list (str)
+  "If we find a listing of breakpoint locations, use that information
+to refresh the buffer overlays."
   (ensime-db-clear-breakpoint-overlays)
   (let* ((start (match-beginning 0))
 	 (end (match-end 0))
-	 (pos start))
+	 (pos start)
+	 (bp-list '()))
+
+    ;; Build a list of class,line pairs
     (while (and (< pos end) 
 		(integerp (string-match "breakpoint \\(.+\\):\\([0-9]+\\)" str pos)))
       (setq pos (match-end 0))
       (let ((class (match-string 1 str))
-	    (line (string-to-number (match-string 2 str)))
-	    (source-file (ensime-db-source-for-class class)))
-	(when source-file
-	  (push (ensime-make-overlay-at 
-		 source-file line "Breakpoint" 'ensime-breakpoint-face)
-		(ensime-db-breakpoint-overlays)))))
+	    (line (string-to-number (match-string 2 str))))
+	(push (list class line) bp-list)))
+
+    ;; Lookup source locations of class,line pairs.
+    ;; Create buffer overlays...
+    (let ((bp-locs (ensime-rpc-debug-class-locs-to-source-locs bp-list)))
+      (dolist (bp bp-locs)
+	(let ((file (car bp))
+	      (line (cadr bp)))
+	  (when (and (stringp file) (integerp line))
+	    (push (ensime-make-overlay-at 
+		   file line nil nil 
+		   "Breakpoint" 'ensime-breakpoint-face)
+		  ensime-db-breakpoint-overlays)))))
+
     ))
-
-
-(defun ensime-db-source-for-class (class)
-  "Return the fully qualified pathname of the sourcefile that defines
-class, where class is a fully qualified classname."
-  nil
-  )
 
 (defvar ensime-db-breakpoint-overlays '())
 
@@ -138,6 +145,12 @@ class, where class is a fully qualified classname."
   "Remove all overlays that ensime-debug has created."
   (mapc #'delete-overlay ensime-db-breakpoint-overlays)
   (setq ensime-db-breakpoint-overlays '()))
+
+(defun ensime-db-refresh-breakpoint-overlays ()
+  "Cause debugger to output a list of all active breakpoints.
+Output filter will grab this output and use it to update overlays."
+  (ensime-db-send-str "clear"))
+
 
 (defun ensime-db-find-first-handler (str filters)
   "Find the car in filters that matches str earliest in the text. 
@@ -169,7 +182,7 @@ match-end, match-beginning, match-string are set correctly on return."
   ;; following loop we process at most one marker. After we've found a
   ;; marker, delete ensime-db-output-acc up to and including the match
 
-  ;; Markers are consumed by filter functions. Note, we assume that 
+  ;; Markers are consumed by filter functions. We assume that 
   ;; markers do not overlap.
   (catch 'done
     (while
@@ -185,7 +198,7 @@ match-end, match-beginning, match-string are set correctly on return."
 	      (throw 'done t))))))
 
 
-  ;; Do not allow ensime-db-output-acc to grow without bound. 
+  ;; Do not allow accumulator to grow without bound. 
   (when (> (length ensime-db-output-acc)
 	   ensime-db-output-acc-max-length)
     (setq ensime-db-output-acc
@@ -197,10 +210,6 @@ match-end, match-beginning, match-string are set correctly on return."
   string)
 
 
-(defun ensime-db-refresh-breakpoint-overlays ()
-  "Cause debugger to output a list of all active breakpoints.
-Output filter will grab this output and use it to update overlays."
-  (ensime-db-send-str "clear"))
 
 (defun ensime-db-set-break (f line)
   "Set a breakpoint in the current source file at point."
@@ -212,6 +221,7 @@ Output filter will grab this output and use it to update overlays."
       (message "Could not find class information for given position.")))
   (ensime-db-refresh-breakpoint-overlays))
 
+
 (defun ensime-db-clear-break (f line)
   "Set a breakpoint in the current source file at point."
   (interactive (list buffer-file-name (line-number-at-pos (point))))
@@ -222,8 +232,10 @@ Output filter will grab this output and use it to update overlays."
       (message "Could not find class information for given position.")))
   (ensime-db-refresh-breakpoint-overlays))
 
+
 (defun ensime-db-list-breakpoints (f line)
-  "Cause debugger to output a list of all active breakpoints."
+  "Cause debugger to output a list of all active breakpoints. Note, this will
+cause the output filter to refresh the breakpoint overlays."
   (ensime-db-send-str "clear"))
 
 (defun ensime-db-send-str (str &optional no-newline)
@@ -231,6 +243,7 @@ Output filter will grab this output and use it to update overlays."
   (interactive)
   (comint-send-string (get-buffer ensime-db-buffer-name) 
 		      (concat str (if no-newline "" "\n"))))
+
 
 (defun ensime-db-start ()
   "Run a Scala interpreter in an Emacs buffer"

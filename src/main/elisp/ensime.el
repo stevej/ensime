@@ -1846,6 +1846,11 @@ with the current project's dependencies loaded. Returns a property list."
   (ensime-eval 
    `(swank:debug-unit-info ,file-name-no-path ,line-number ,(or package-prefix ""))))
 
+(defun ensime-rpc-debug-class-locs-to-source-locs (locs)
+  "Get source locations corresponding to class,line pairs."
+  (ensime-eval 
+   `(swank:debug-class-locs-to-source-locs ,locs)))
+
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
 
