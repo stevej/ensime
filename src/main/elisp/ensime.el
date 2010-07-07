@@ -1461,7 +1461,7 @@ versions cannot deal with that."
 	 (while t 
 	   (unless (eq (process-status conn) 'open)
 	     (error "Lisp connection closed unexpectedly"))
-	   (accept-process-output nil 1 0 t)))))))
+	   (accept-process-output nil 1 0)))))))
 
 
 (defun ensime-eval-async (sexp &optional cont)

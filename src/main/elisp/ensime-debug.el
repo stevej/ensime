@@ -40,12 +40,19 @@ with data loaded from server."
   "Buffer name for debug process"
   :type 'string :group 'ensime-db)
 
-
 (defcustom ensime-db-default-cmd-line '("jdb")
   "Default command to launch the debugger, used when not connected to an ENSIME
 server."
   :type 'string
   :group 'ensime-db)
+
+(defface ensime-breakpoint-face
+  '((((class color) (background dark)) (:background "DarkGreen"))
+    (((class color) (background light)) (:background "LightGreen2"))
+    (t (:bold t)))
+  "Face used for marking lines with breakpoints."
+  :group 'ensime-ui)
+
 
 (defvar ensime-db-history nil
   "History of argument lists passed to jdb.")
@@ -69,6 +76,9 @@ server."
 
     ("Breakpoints set:\\(?:[ \t\n]+breakpoint \\(.+\\):\\([0-9]+\\)\\)*\n>" . 
      ensime-db-handle-breakpoints-list)
+
+    ("No breakpoints set.\n>" . 
+     ensime-db-handle-empty-breakpoints-list)
     ))
 
 (defun ensime-db-get-cmd-line ()
@@ -82,31 +92,25 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 (defun ensime-db-handle-deferred-breakpoint (str)
   (let ((class (match-string 1 str))
 	(line (string-to-number (match-string 2 str))))
-    (message "Found deferred breakpoint: %s : %s" class line)))
+    (message "Deferred breakpoint: %s : %s" class line)))
 
 (defun ensime-db-handle-set-breakpoint (str)
   (let ((class (match-string 1 str))
 	(line (string-to-number (match-string 2 str))))
-    (message "Found set breakpoint: %s : %s" class line)))
+    (message "Set breakpoint: %s : %s" class line)))
 
 (defun ensime-db-handle-removed-breakpoint (str)
   (let ((class (match-string 1 str))
 	(line (string-to-number (match-string 2 str))))
-    (message "Found removed breakpoint: %s : %s" class line)))
+    (message "Removed breakpoint: %s : %s" class line)))
 
 (defun ensime-db-handle-not-found-breakpoint (str)
   (let ((class (match-string 1 str))
 	(line (string-to-number (match-string 2 str))))
     (message "No breakpoint to clear at: %s : %s" class line)))
 
-
-(defface ensime-breakpoint-face
-  '((((class color) (background dark)) (:background "DarkGreen"))
-    (((class color) (background light)) (:background "LightGreen2"))
-    (t (:bold t)))
-  "Face used for marking lines with breakpoints."
-  :group 'ensime-ui)
-
+(defun ensime-db-handle-empty-breakpoints-list (str)
+  (ensime-db-clear-breakpoint-overlays))
 
 (defun ensime-db-handle-breakpoints-list (str)
   "If we find a listing of breakpoint locations, use that information
@@ -175,7 +179,6 @@ match-end, match-beginning, match-string are set correctly on return."
 
 
 (defun ensime-db-output-filter (string)
-
   ;; Build up the accumulator.
   (setq ensime-db-output-acc (concat ensime-db-output-acc string))
 
@@ -191,13 +194,12 @@ match-end, match-beginning, match-string are set correctly on return."
 	       (ensime-db-find-first-handler 
 		ensime-db-output-acc ensime-db-filter-funcs)))
 	  (if handler
-	      (progn
+	      (let ((match-end-index (match-end 0))) ;; <- save in case changed in handler
 		(funcall handler ensime-db-output-acc)
 		(setq ensime-db-output-acc 
-		      (substring ensime-db-output-acc (match-end 0))))
+		      (substring ensime-db-output-acc match-end-index)))
 	    (progn
 	      (throw 'done t))))))
-
 
   ;; Do not allow accumulator to grow without bound. 
   (when (> (length ensime-db-output-acc)
@@ -269,6 +271,9 @@ cause the output filter to refresh the breakpoint overlays."
 
     (setq ensime-db-output-acc "")
     (setq ensime-buffer-connection conn)
+
+    (add-hook 'kill-buffer-hook 'ensime-db-clear-breakpoint-overlays nil t)
+    (ensime-db-clear-breakpoint-overlays)
 
     (cd root-path)
     (comint-exec (current-buffer) 
