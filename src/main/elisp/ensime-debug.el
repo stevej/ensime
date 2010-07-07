@@ -132,10 +132,11 @@ to refresh the buffer overlays."
 	(let ((file (car bp))
 	      (line (cadr bp)))
 	  (when (and (stringp file) (integerp line))
-	    (push (ensime-make-overlay-at 
-		   file line nil nil 
-		   "Breakpoint" 'ensime-breakpoint-face)
-		  ensime-db-breakpoint-overlays)))))
+	    (when-let (ov (ensime-make-overlay-at 
+			   file line nil nil 
+			   "Breakpoint" 
+			   'ensime-breakpoint-face))
+	      (push ov ensime-db-breakpoint-overlays))))))
 
     ))
 
@@ -248,7 +249,10 @@ cause the output filter to refresh the breakpoint overlays."
 (defun ensime-db-start ()
   "Run a Scala interpreter in an Emacs buffer"
   (interactive)
-  (let* ((root-path (or (ensime-configured-project-root) "."))
+
+  (let* ((conn (or (ensime-current-connection)
+		   (ensime-prompt-for-connection)))
+	 (root-path (or (ensime-configured-project-root) "."))
 	 (cmd-line (ensime-db-get-cmd-line)))
 
     (switch-to-buffer-other-window 
@@ -262,6 +266,9 @@ cause the output filter to refresh the breakpoint overlays."
     (set (make-local-variable 'comint-prompt-read-only) t)
     (set (make-local-variable 'comint-output-filter-functions)
 	 '(ensime-db-output-filter comint-postoutput-scroll-to-bottom))
+
+    (setq ensime-db-output-acc "")
+    (setq ensime-buffer-connection conn)
 
     (cd root-path)
     (comint-exec (current-buffer) 

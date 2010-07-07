@@ -1233,13 +1233,32 @@ Return nil otherwise."
   "Return the connection to use for a given file name.
    Find the first connection with a project root directory that contains 
    file-name (directly or indirectly)."
-  (catch 'return
-    (dolist (p ensime-net-processes)
-      (let* ((config (ensime-config p))
-	     (root-dir-name (plist-get config :root-dir)))
-	(when (ensime-file-in-directory-p file root-dir-name)
-	  (throw 'return p))
-	))))
+  (when file
+    (catch 'return
+      (dolist (p ensime-net-processes)
+	(let* ((config (ensime-config p))
+	       (root-dir-name (plist-get config :root-dir)))
+	  (when (ensime-file-in-directory-p file root-dir-name)
+	    (throw 'return p))
+	  )))))
+
+
+(defun ensime-prompt-for-connection ()
+  "Prompt the user to select a server connection. Used in situations where
+the active connection is ambiguous."
+  (let* ((options 
+	  (mapcar 
+	   (lambda (p) 
+	     (let* ((conf (ensime-config p))
+		    (root (plist-get conf :root-dir))
+		    (num (ensime-connection-number p)))
+	       `(,(format "%s#%s" root num) . ,p)))
+	   ensime-net-processes))
+	 (keys (mapcar (lambda (opt) (car opt)) options))
+	 (key (ido-completing-read "Which project to use? " keys
+				   nil t nil)))
+    (cdr (assoc key options))))
+
 
 ;; FIXME: should be called auto-start
 (defcustom ensime-auto-connect 'never
@@ -1442,7 +1461,7 @@ versions cannot deal with that."
 	 (while t 
 	   (unless (eq (process-status conn) 'open)
 	     (error "Lisp connection closed unexpectedly"))
-	   (ensime-accept-process-output nil 0.01)))))))
+	   (accept-process-output nil 1 0 t)))))))
 
 
 (defun ensime-eval-async (sexp &optional cont)
@@ -1663,23 +1682,25 @@ any buffer visiting the given file."
 	(cond 
 	 ((equal severity 'error)
 	  (progn 
-	    (push (ensime-make-overlay-at 
-		   file line nil nil msg 'ensime-errline)
-		  ensime-note-overlays)
-	    (push (ensime-make-overlay-at
-		   file nil (+ 1 beg) (+ 1 end) 
-		   msg 'ensime-errline-highlight)
-		  ensime-note-overlays)
+	    (when-let (ov (ensime-make-overlay-at 
+			   file line nil nil msg 
+			   'ensime-errline))
+	      (push ov ensime-note-overlays))
+	    (when-let (ov (ensime-make-overlay-at
+			   file nil (+ 1 beg) (+ 1 end) 
+			   msg 'ensime-errline-highlight))
+	      (push ov ensime-note-overlays))
 	    ))
 
 	 (t (progn
-	      (push (ensime-make-overlay-at
-		     file line nil nil msg 'ensime-warnline)
-		    ensime-note-overlays)
-	      (push (ensime-make-overlay-at
-		     file nil (+ 1 beg) (+ 1 end)
-		     msg 'ensime-warnline-highlight)
-		    ensime-note-overlays)
+	      (when-let (ov (ensime-make-overlay-at
+			     file line nil nil msg 
+			     'ensime-warnline))
+		(push ov ensime-note-overlays))
+	      (when-let (ov (ensime-make-overlay-at
+			     file nil (+ 1 beg) (+ 1 end)
+			     msg 'ensime-warnline-highlight))
+		(push ov ensime-note-overlays))
 	      ))
 
 	 )))))
@@ -1738,7 +1759,6 @@ any buffer visiting the given file."
   "Delete the existing note overlays."
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
-
 
 ;; Jump to definition
 
@@ -2338,19 +2358,6 @@ It should be used for \"background\" messages such as argument lists."
      ))
 
 
-(defvar ensime-accept-process-output-supports-floats 
-  (ignore-errors (accept-process-output nil 0.0) t))
-
-(defun ensime-accept-process-output (&optional process timeout)
-  "Like `accept-process-output' but the TIMEOUT argument can be a float."
-  (cond (ensime-accept-process-output-supports-floats
-	 (accept-process-output process timeout))
-	(t
-	 (accept-process-output process 
-				(if timeout (truncate timeout))
-				;; Emacs 21 uses microsecs; Emacs 22 millisecs
-				(if timeout (truncate (* timeout 1000000)))))))
-
 
 ;; Popup Buffer
 
@@ -2387,7 +2394,6 @@ See `view-return-to-alist' for a similar idea.")
 
 ;; keep compiler quiet
 (defvar ensime-buffer-package)
-(defvar ensime-buffer-connection)
 
 ;; Interface
 (defmacro* ensime-with-popup-buffer ((name &optional connection select)

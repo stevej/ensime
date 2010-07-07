@@ -75,7 +75,9 @@
   "Setup and launch sbt."
   (interactive)
 
-  (let ((root-path (ensime-sbt-find-path-to-parent-project)))
+  (let ((conn (or (ensime-current-connection)
+		  (ensime-prompt-for-connection)))
+	(root-path (ensime-sbt-find-path-to-parent-project)))
 
     (switch-to-buffer-other-window 
      (get-buffer-create ensime-sbt-build-buffer-name))
@@ -109,6 +111,8 @@
     (set (make-local-variable 'comint-prompt-read-only) t)
     (set (make-local-variable 'comint-output-filter-functions)
 	 '(ansi-color-process-output comint-postoutput-scroll-to-bottom))
+
+    (setq ensime-buffer-connection conn)
 
     (if ensime-sbt-comint-ansi-support
 	(set (make-local-variable 'ansi-color-for-comint-mode) t)
