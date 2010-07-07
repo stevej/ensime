@@ -79,15 +79,14 @@ server."
 
     ("No breakpoints set.\n[^ ]" . 
      ensime-db-handle-empty-breakpoints-list)
+
+    ("Breakpoint hit: \"[^\"]+\", \\([^,]+\\), line=\\([0-9]+\\) bci=[0-9]+\n[^ ]" .
+     ensime-db-handle-breakpoint-hit)
+
+    ("Step completed: \"[^\"]+\", \\([^,]+\\), line=\\([0-9]+\\) bci=[0-9]+\n[^ ]" .
+     ensime-db-handle-step)
     ))
 
-(defun ensime-db-get-cmd-line ()
-  "Get the command needed to launch a debugger, including all
-the current project's dependencies. Returns list of form (cmd [arg]*)"
-  (if (ensime-connected-p)
-      (let* ((conf (ensime-rpc-debug-config)))
-	(ensime-replace-keywords ensime-db-cmd-template conf))
-    ensime-db-default-cmd-line))
 
 (defun ensime-db-handle-deferred-breakpoint (str)
   (let ((class (match-string 1 str))
@@ -103,6 +102,23 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
   (let ((class (match-string 1 str))
 	(line (string-to-number (match-string 2 str))))
     (message "Removed breakpoint: %s : %s" class line)))
+
+(defun ensime-db-handle-breakpoint-hit (str)
+  (let ((class-and-method (match-string 1 str))
+	(line (string-to-number (match-string 2 str))))
+    (ensime-db-goto-source-helper class-and-method line)))
+
+(defun ensime-db-handle-breakpoint-hit (str)
+  (let* ((class-and-method (match-string 1 str))
+	 (line (string-to-number (match-string 2 str)))
+	 (class (ensime-db-class-from-class-and-method class-and-method)))
+    (ensime-db-goto-source-helper class line)))
+
+(defun ensime-db-handle-step (str)
+  (let* ((class-and-method (match-string 1 str))
+	 (line (string-to-number (match-string 2 str)))
+	 (class (ensime-db-class-from-class-and-method class-and-method)))
+    (ensime-db-goto-source-helper class line)))
 
 (defun ensime-db-handle-not-found-breakpoint (str)
   (let ((class (match-string 1 str))
@@ -144,6 +160,35 @@ to refresh the buffer overlays."
 
     ))
 
+
+(defun ensime-db-class-from-class-and-method (class-and-method)
+  "Given qualified class+method of form package.class.method() return
+just the qualified class, package.class."
+  (if (integerp (string-match "\\(.+\\)\\..+()" class-and-method))
+      (match-string 1 class-and-method)
+    class-and-method))
+
+
+(defun ensime-db-goto-source-helper (class line)
+  "Find source location for given qualified class and line. Open
+that location in a new window, *without* changing the active buffer."
+  (let ((locs (ensime-rpc-debug-class-locs-to-source-locs 
+	       (list (list class line)))))
+    (let* ((loc (car locs))
+	   (file (car loc))
+	   (line (cadr loc)))
+
+      (when (and file (integerp line))
+
+	;; comint filters must not change active buffer!
+	(save-selected-window 
+
+	  (ensime-goto-source-location 
+	   (list :file file :line line)
+	   'window
+	   ))))))
+
+
 (defvar ensime-db-breakpoint-overlays '())
 
 (defun ensime-db-clear-breakpoint-overlays ()
@@ -161,21 +206,24 @@ Output filter will grab this output and use it to update overlays."
   "Find the car in filters that matches str earliest in the text. 
 Return that car's corresponding cdr (a filter function). Guarantees that
 match-end, match-beginning, match-string are set correctly on return."
-  (let ((best-start (length str))
-	(best-filter))
-    
-    (dolist (filter filters)
-      (let ((regexp (car filter)))
-	(when (and (integerp (string-match regexp str))
-		   (< (match-beginning 0) best-start))
-	  (setq best-start (match-beginning 0))
-	  (setq best-filter filter))))
+  (condition-case err
+      (let ((best-start (length str))
+	    (best-filter))
+	
+	(dolist (filter filters)
+	  (let ((regexp (car filter)))
+	    (when (and (integerp (string-match regexp str))
+		       (< (match-beginning 0) best-start))
+	      (setq best-start (match-beginning 0))
+	      (setq best-filter filter))))
 
-    ;; Make sure match-end, match-beginning, match-string
-    ;; are correct on return
-    (when best-filter
-      (string-match (car best-filter) str)
-      (cdr best-filter))))
+	;; Make sure match-end, match-beginning, match-string
+	;; are correct on return
+	(when best-filter
+	  (string-match (car best-filter) str)
+	  (cdr best-filter)))
+    (error
+     (message "Error in ENSIME debug output handler: %s" err))))
 
 
 (defun ensime-db-output-filter (string)
@@ -245,11 +293,18 @@ cause the output filter to refresh the breakpoint overlays."
   "Sends a string to the debug process. Automatically append a newline."
   (interactive)
   (let* ((buf (get-buffer ensime-db-buffer-name))
-	(proc (get-buffer-process buf)))
+	 (proc (get-buffer-process buf)))
     (if (not proc)
 	(message "Project is not being debugged. Use M-x ensime-db-start to start debugger.")
       (comint-send-string proc (concat str (if no-newline "" "\n"))))))
 
+(defun ensime-db-get-cmd-line ()
+  "Get the command needed to launch a debugger, including all
+the current project's dependencies. Returns list of form (cmd [arg]*)"
+  (if (ensime-connected-p)
+      (let* ((conf (ensime-rpc-debug-config)))
+	(ensime-replace-keywords ensime-db-cmd-template conf))
+    ensime-db-default-cmd-line))
 
 (defun ensime-db-start ()
   "Run a Scala interpreter in an Emacs buffer"

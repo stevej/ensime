@@ -1815,7 +1815,12 @@ any buffer visiting the given file."
     ((nil)     (find-file (ensime-pos-file pos)))
     (window    (find-file-other-window (ensime-pos-file pos)))
     (frame     (find-file-other-frame (ensime-pos-file pos))))
-  (goto-char (ensime-pos-offset pos)))
+
+  (if (> (ensime-pos-line pos) 0)
+      (goto-line (ensime-pos-line pos))
+
+    (if (> (ensime-pos-offset pos) 0)
+	(goto-char (ensime-pos-offset pos)))))
 
 
 ;; Compilation on request
@@ -1842,6 +1847,7 @@ any buffer visiting the given file."
   (ensime-rpc-debug-unit-info (file-name-nondirectory buffer-file-name) 
 			      (line-number-at-pos (point))
 			      ""))
+
 
 ;; Basic RPC calls
 
@@ -2337,6 +2343,9 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-pos-offset (pos)
   (or (plist-get pos :offset) -1))
+
+(defun ensime-pos-line (pos)
+  (or (plist-get pos :line) -1))
 
 (defun ensime-pos-valid-local-p (pos)
   (and (stringp (ensime-pos-file pos))
