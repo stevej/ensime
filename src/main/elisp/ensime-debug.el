@@ -62,22 +62,22 @@ server."
 (defvar ensime-db-output-acc-max-length 50000)
 
 (defvar ensime-db-filter-funcs
-  '(("Deferring breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
+  '(("Deferring breakpoint \\(.+\\):\\([0-9]+\\)\n[^ ]" . 
      ensime-db-handle-deferred-breakpoint)
 
-    ("Set breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
+    ("Set breakpoint \\(.+\\):\\([0-9]+\\)\n[^ ]" . 
      ensime-db-handle-set-breakpoint)
 
-    ("Removed: breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
+    ("Removed: breakpoint \\(.+\\):\\([0-9]+\\)\n[^ ]" . 
      ensime-db-handle-removed-breakpoint)
 
-    ("Not found: breakpoint \\(.+\\):\\([0-9]+\\)\n>" . 
+    ("Not found: breakpoint \\(.+\\):\\([0-9]+\\)\n[^ ]" . 
      ensime-db-handle-not-found-breakpoint)
 
-    ("Breakpoints set:\\(?:[ \t\n]+breakpoint \\(.+\\):\\([0-9]+\\)\\)*\n>" . 
+    ("Breakpoints set:\\(?:[ \t\n]+breakpoint \\(.+\\):\\([0-9]+\\)\\)*\n[^ ]" . 
      ensime-db-handle-breakpoints-list)
 
-    ("No breakpoints set.\n>" . 
+    ("No breakpoints set.\n[^ ]" . 
      ensime-db-handle-empty-breakpoints-list)
     ))
 
