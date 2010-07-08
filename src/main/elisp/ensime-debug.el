@@ -48,7 +48,14 @@ server."
 
 (defface ensime-breakpoint-face
   '((((class color) (background dark)) (:background "DarkGreen"))
-    (((class color) (background light)) (:background "LightGreen2"))
+    (((class color) (background light)) (:background "LightGreen"))
+    (t (:bold t)))
+  "Face used for marking lines with breakpoints."
+  :group 'ensime-ui)
+
+(defface ensime-marker-face
+  '((((class color) (background dark)) (:background "DarkGoldenrod4"))
+    (((class color) (background light)) (:background "DarkGoldenrod2"))
     (t (:bold t)))
   "Face used for marking lines with breakpoints."
   :group 'ensime-ui)
@@ -106,19 +113,19 @@ server."
 (defun ensime-db-handle-breakpoint-hit (str)
   (let ((class-and-method (match-string 1 str))
 	(line (string-to-number (match-string 2 str))))
-    (ensime-db-goto-source-helper class-and-method line)))
+    (ensime-db-set-debug-marker class-and-method line)))
 
 (defun ensime-db-handle-breakpoint-hit (str)
   (let* ((class-and-method (match-string 1 str))
 	 (line (string-to-number (match-string 2 str)))
 	 (class (ensime-db-class-from-class-and-method class-and-method)))
-    (ensime-db-goto-source-helper class line)))
+    (ensime-db-set-debug-marker class line)))
 
 (defun ensime-db-handle-step (str)
   (let* ((class-and-method (match-string 1 str))
 	 (line (string-to-number (match-string 2 str)))
 	 (class (ensime-db-class-from-class-and-method class-and-method)))
-    (ensime-db-goto-source-helper class line)))
+    (ensime-db-set-debug-marker class line)))
 
 (defun ensime-db-handle-not-found-breakpoint (str)
   (let ((class (match-string 1 str))
@@ -169,7 +176,7 @@ just the qualified class, package.class."
     class-and-method))
 
 
-(defun ensime-db-goto-source-helper (class line)
+(defun ensime-db-set-debug-marker (class line)
   "Find source location for given qualified class and line. Open
 that location in a new window, *without* changing the active buffer."
   (let ((locs (ensime-rpc-debug-class-locs-to-source-locs 
@@ -183,10 +190,18 @@ that location in a new window, *without* changing the active buffer."
 	;; comint filters must not change active buffer!
 	(save-selected-window 
 
+	  (ensime-db-clear-marker-overlays)
+	  (when-let (ov (ensime-make-overlay-at
+			 file line nil nil 
+			 "Debug Marker" 
+			 'ensime-marker-face))
+	    (push ov ensime-db-marker-overlays))
+	  
 	  (ensime-goto-source-location 
 	   (list :file file :line line)
-	   'window
-	   ))))))
+	   'window)
+
+)))))
 
 
 (defvar ensime-db-breakpoint-overlays '())
@@ -200,6 +215,14 @@ that location in a new window, *without* changing the active buffer."
   "Cause debugger to output a list of all active breakpoints.
 Output filter will grab this output and use it to update overlays."
   (ensime-db-send-str "clear"))
+
+
+(defvar ensime-db-marker-overlays '())
+
+(defun ensime-db-clear-marker-overlays ()
+  "Remove all overlays that ensime-debug has created."
+  (mapc #'delete-overlay ensime-db-marker-overlays)
+  (setq ensime-db-marker-overlays '()))
 
 
 (defun ensime-db-find-first-handler (str filters)
@@ -353,7 +376,9 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
     (setq ensime-buffer-connection conn)
 
     (add-hook 'kill-buffer-hook 'ensime-db-clear-breakpoint-overlays nil t)
+    (add-hook 'kill-buffer-hook 'ensime-db-clear-marker-overlays nil t)
     (ensime-db-clear-breakpoint-overlays)
+    (ensime-db-clear-marker-overlays)
 
     (cd root-path)
     (comint-exec (current-buffer) 

@@ -164,8 +164,10 @@
     (define-key map (kbd "C-c C-a") 'ensime-sbt-switch)
     (define-key map (kbd "C-c C-z") 'ensime-inf-switch)
 
+    (define-key map (kbd "C-c C-d") 'ensime-db-start)
+
     (define-key map (kbd "C-c d b") 'ensime-db-set-break)
-    (define-key map (kbd "C-c d c") 'ensime-db-clear-break)
+    (define-key map (kbd "C-c d u") 'ensime-db-clear-break)
     (define-key map (kbd "C-c d s") 'ensime-db-step)
     (define-key map (kbd "C-c d n") 'ensime-db-next)
     (define-key map (kbd "C-c d r") 'ensime-db-run)
