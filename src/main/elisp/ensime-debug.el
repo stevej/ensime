@@ -230,12 +230,13 @@ match-end, match-beginning, match-string are set correctly on return."
   ;; Build up the accumulator.
   (setq ensime-db-output-acc (concat ensime-db-output-acc string))
 
-  ;; We process STRING from left to right.  Each time through the
-  ;; following loop we process at most one marker. After we've found a
-  ;; marker, delete ensime-db-output-acc up to and including the match
-
-  ;; Markers are consumed by filter functions. We assume that 
-  ;; markers do not overlap.
+  ;; We process string left to right.  Each time through the
+  ;; following loop we select the best (earliest matching) filter 
+  ;; and call its handler. Then we delete ensime-db-output-acc up to
+  ;; and including the match
+  ;; 
+  ;; We make the assumption that the text sections matched by the 
+  ;; various filters do not overlap.
   (catch 'done
     (while
 	(let ((handler
@@ -261,6 +262,27 @@ match-end, match-beginning, match-string are set correctly on return."
   string)
 
 
+(defun ensime-db-next ()
+  "Cause debugger to go to next line, without stepping into
+method invocations."
+  (interactive)
+  (ensime-db-send-str "next"))
+
+(defun ensime-db-step ()
+  "Cause debugger to go to next line, stepping into
+method invocations."
+  (interactive)
+  (ensime-db-send-str "step"))
+
+(defun ensime-db-continue ()
+  "Continue stopped debugger."
+  (interactive)
+  (ensime-db-send-str "cont"))
+
+(defun ensime-db-run ()
+  "Start debugging the current program."
+  (interactive)
+  (ensime-db-send-str "run"))
 
 (defun ensime-db-set-break (f line)
   "Set a breakpoint in the current source file at point."
