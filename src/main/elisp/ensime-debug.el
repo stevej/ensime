@@ -116,7 +116,27 @@ server."
   (save-selected-window
     (switch-to-buffer-other-window "*ensime-db-locals*")
     (erase-buffer)
-    (insert (match-string 0 str))
+    (let ((lines (split-string (match-string 0 str) "\n")))
+      (dolist (l lines)
+	(cond 
+	 ((equal l "Method arguments:")
+	  (ensime-insert-with-face 
+	   (concat "\n" l "\n") 
+	   font-lock-type-face))
+	 ((equal l "Local variables:")
+	  (ensime-insert-with-face 
+	   (concat "\n" l "\n") 
+	   font-lock-type-face))
+	 (t (progn 
+	      (when (string-match "\\(.+\\) = \\(.+\\)" l)
+		(ensime-insert-with-face 
+		 (match-string 1 l) font-lock-variable-name-face)
+		(insert " = ")
+		(ensime-insert-with-face 
+		 (match-string 2 l) font-lock-constant-face)
+		(insert "\n")
+		)))
+	 )))
     (setq buffer-read-only t)
     ))
 
