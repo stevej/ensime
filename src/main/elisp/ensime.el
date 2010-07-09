@@ -172,6 +172,8 @@
     (define-key map (kbd "C-c d n") 'ensime-db-next)
     (define-key map (kbd "C-c d r") 'ensime-db-run)
     (define-key map (kbd "C-c d c") 'ensime-db-continue)
+    (define-key map (kbd "C-c d q") 'ensime-db-quit)
+    (define-key map (kbd "C-c d l") 'ensime-db-list-locals)
     map)
   "Keymap for `ensime-mode'.")
 
@@ -1232,7 +1234,7 @@ Return nil otherwise."
   (let ((conn (ensime-current-connection)))
     (cond ((not conn)
 	   (or (ensime-auto-connect)
-	       (error "Not connected.")))
+	       (error "Not connected. M-x ensime to connect")))
 	  ((not (eq (process-status conn) 'open))
 	   (error "Connection closed."))
 	  (t conn))))
@@ -1818,18 +1820,37 @@ any buffer visiting the given file."
       (message "Sorry, no definition found.")))))
 
 
+(defun ensime-files-equal-p (f1 f2)
+  "Return t if file-names refer to same file."
+  (equal (expand-file-name f1) (expand-file-name f2)))
+
+
 (defun ensime-goto-source-location (pos &optional where)
-  "Move to the source location POS."
-  (ecase where
-    ((nil)     (find-file (ensime-pos-file pos)))
-    (window    (find-file-other-window (ensime-pos-file pos)))
-    (frame     (find-file-other-frame (ensime-pos-file pos))))
+  "Move to the source location POS. Don't open a new window or buffer if file is open
+and visible already."
+  (let* ((file (ensime-pos-file pos))
+	 (file-visible-buf 
+	  (catch 'result
+	    (dolist (w (window-list))
+	      (let* ((buf (window-buffer w))
+		     (window-file (buffer-file-name buf)))
+		(when (and window-file 
+			   (ensime-files-equal-p file window-file))
+		  (throw 'result buf)))))))
 
-  (if (> (ensime-pos-line pos) 0)
-      (goto-line (ensime-pos-line pos))
+    (when (not file-visible-buf)
+      (ecase where
+	((nil)     
+	 (find-file file))
+	(window    
+	 (find-file-other-window file)))
+      (setq file-visible-buf (current-buffer)))
 
-    (if (> (ensime-pos-offset pos) 0)
-	(goto-char (ensime-pos-offset pos)))))
+    (with-current-buffer file-visible-buf
+      (if (> (ensime-pos-line pos) 0)
+	  (goto-line (ensime-pos-line pos))
+	(if (> (ensime-pos-offset pos) 0)
+	    (goto-char (ensime-pos-offset pos)))))))
 
 
 ;; Compilation on request

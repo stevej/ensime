@@ -92,8 +92,31 @@ server."
 
     ("Step completed: \"[^\"]+\", \\([^,]+\\), line=\\([0-9]+\\) bci=[0-9]+\n[^ ]" .
      ensime-db-handle-step)
+
+    ("Nothing suspended.\n[^ ]" .
+     ensime-db-handle-nothing-suspended)
+
+    ("No local variables\n[^ ]" .
+     ensime-db-handle-no-local-variables)
+
+    ("Method arguments:\\(?:[\t\n]+.+=.+\\)*\nLocal variables:\\(?:[\t\n]+.+=.+\\)*\n[^ ]" .
+     ensime-db-handle-local-variables)
     ))
 
+
+(defun ensime-db-handle-no-local-variables (str)
+  (message "No local variables."))
+
+(defun ensime-db-handle-local-variables (str)
+  (save-selected-window
+    (switch-to-buffer-other-window "*ensime-db-locals*")
+    (erase-buffer)
+    (insert (match-string 0 str))
+    (setq buffer-read-only t)
+    ))
+
+(defun ensime-db-handle-nothing-suspended (str)
+  (message "Nothing suspended."))
 
 (defun ensime-db-handle-deferred-breakpoint (str)
   (let ((class (match-string 1 str))
@@ -201,7 +224,7 @@ that location in a new window, *without* changing the active buffer."
 	   (list :file file :line line)
 	   'window)
 
-)))))
+	  )))))
 
 
 (defvar ensime-db-breakpoint-overlays '())
@@ -334,6 +357,18 @@ method invocations."
 cause the output filter to refresh the breakpoint overlays."
   (ensime-db-send-str "clear"))
 
+
+(defun ensime-db-list-locals ()
+  "Cause debugger to output a list of all local variables and
+their values."
+  (interactive)
+  (ensime-db-send-str "locals"))
+
+(defun ensime-db-quit ()
+  "Stop debugging the current program. Kills the debug buffer."
+  (interactive)
+  (kill-buffer ensime-db-buffer-name))
+
 (defun ensime-db-send-str (str &optional no-newline)
   "Sends a string to the debug process. Automatically append a newline."
   (interactive)
@@ -360,34 +395,35 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 	 (root-path (or (ensime-configured-project-root) "."))
 	 (cmd-line (ensime-db-get-cmd-line)))
 
-    (switch-to-buffer-other-window 
-     (get-buffer-create ensime-db-buffer-name))
+    (save-selected-window
+      (switch-to-buffer-other-window 
+       (get-buffer-create ensime-db-buffer-name))
 
-    (comint-mode)
+      (comint-mode)
 
-    (set (make-local-variable 'comint-prompt-regexp) "^> \\|^[^ ]+\\[[0-9]+\\] ")
-    (set (make-local-variable 'comint-process-echoes) nil)
-    (set (make-local-variable 'comint-scroll-to-bottom-on-output) t)
-    (set (make-local-variable 'comint-prompt-read-only) t)
-    (set (make-local-variable 'comint-output-filter-functions)
-	 '(ensime-db-output-filter comint-postoutput-scroll-to-bottom))
+      (set (make-local-variable 'comint-prompt-regexp) "^> \\|^[^ ]+\\[[0-9]+\\] ")
+      (set (make-local-variable 'comint-process-echoes) nil)
+      (set (make-local-variable 'comint-scroll-to-bottom-on-output) t)
+      (set (make-local-variable 'comint-prompt-read-only) t)
+      (set (make-local-variable 'comint-output-filter-functions)
+	   '(ensime-db-output-filter comint-postoutput-scroll-to-bottom))
 
-    (setq ensime-db-output-acc "")
-    (setq ensime-buffer-connection conn)
+      (setq ensime-db-output-acc "")
+      (setq ensime-buffer-connection conn)
 
-    (add-hook 'kill-buffer-hook 'ensime-db-clear-breakpoint-overlays nil t)
-    (add-hook 'kill-buffer-hook 'ensime-db-clear-marker-overlays nil t)
-    (ensime-db-clear-breakpoint-overlays)
-    (ensime-db-clear-marker-overlays)
+      (add-hook 'kill-buffer-hook 'ensime-db-clear-breakpoint-overlays nil t)
+      (add-hook 'kill-buffer-hook 'ensime-db-clear-marker-overlays nil t)
+      (ensime-db-clear-breakpoint-overlays)
+      (ensime-db-clear-marker-overlays)
 
-    (cd root-path)
-    (comint-exec (current-buffer) 
-		 "ensime-debug-cmd" 
-		 (car cmd-line)
-		 nil (cdr cmd-line))
+      (cd root-path)
+      (comint-exec (current-buffer) 
+		   "ensime-debug-cmd" 
+		   (car cmd-line)
+		   nil (cdr cmd-line))
 
-    (let ((proc (get-buffer-process (current-buffer))))
-      (ensime-set-query-on-exit-flag proc))))
+      (let ((proc (get-buffer-process (current-buffer))))
+	(ensime-set-query-on-exit-flag proc)))))
 
 
 
