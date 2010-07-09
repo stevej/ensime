@@ -99,10 +99,15 @@ server."
     ("No local variables\n[^ ]" .
      ensime-db-handle-no-local-variables)
 
+    ("is not valid until the VM is started with the 'run' command\n[^ ]" .
+     ensime-db-handle-not-valid-until-run)
+
     ("Method arguments:\\(?:[\t\n]+.+=.+\\)*\nLocal variables:\\(?:[\t\n]+.+=.+\\)*\n[^ ]" .
      ensime-db-handle-local-variables)
     ))
 
+(defun ensime-db-handle-not-valid-until-run (str)
+  (message "Command not valid until the VM is started with the 'run' command."))
 
 (defun ensime-db-handle-no-local-variables (str)
   (message "No local variables."))
