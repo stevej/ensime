@@ -2036,10 +2036,19 @@ with the current project's dependencies loaded. Returns a property list."
 		  (ensime-make-scaladoc-url owner-type m)
 		  (ensime-make-javadoc-url owner-type m)
 		  )))
-    (ensime-insert-link 
-     (format "%s" member-name) url (ensime-pos-offset pos))
-    (tab-to-tab-stop)
-    (ensime-inspector-insert-linked-type type nil nil)
+    (if (equal 'method (plist-get m :decl-as))
+	(progn
+	  (ensime-insert-link 
+	   (format "%s" member-name) url (ensime-pos-offset pos))
+	  (tab-to-tab-stop)
+	  (ensime-inspector-insert-linked-type type nil nil))
+      (progn
+	(ensime-insert-with-face 
+	 (ensime-declared-as-str m)
+	 'font-lock-comment-face)
+	(tab-to-tab-stop)
+	(ensime-inspector-insert-linked-type type nil nil)
+	))
     ))
 
 (defun ensime-inspect-type ()
@@ -2065,7 +2074,7 @@ with the current project's dependencies loaded. Returns a property list."
        ;; Display main type
        (let* ((full-type-name (plist-get type :name)))
 	 (ensime-insert-with-face (format "%s\n" 
-					  (ensime-type-declared-as-str type))
+					  (ensime-declared-as-str type))
 				  font-lock-comment-face)
 	 (ensime-inspector-insert-linked-type type t t)
 	 (insert "\n")
@@ -2079,7 +2088,7 @@ with the current project's dependencies loaded. Returns a property list."
 
 	     (ensime-insert-with-face 
 	      (format "\n\n%s%s\n" 
-		      (ensime-type-declared-as-str owner-type)
+		      (ensime-declared-as-str owner-type)
 		      (if implicit (concat " (via implicit, " implicit ")") ""))
 	      font-lock-comment-face)
 	     (ensime-inspector-insert-linked-type owner-type t t)
@@ -2149,7 +2158,7 @@ with the current project's dependencies loaded. Returns a property list."
 	(when (not (ensime-package-p ea))
 	  (ensime-inspector-insert-linked-type ea nil nil)
 	  (ensime-insert-with-face 
-	   (format " %s" (ensime-type-declared-as-str ea))
+	   (format " %s" (ensime-declared-as-str ea))
 	   font-lock-comment-face)
 	  (insert "\n")))
       (dolist (ea members)
@@ -2320,13 +2329,17 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-type-id (type)
   (plist-get type :type-id))
 
+(defun ensime-outer-type-id (type)
+  (plist-get type :outer-type-id))
+
 (defun ensime-type-full-name (type)
   (if (plist-get type :arrow-type)
       (plist-get type :name)
     (plist-get type :full-name)))
 
-(defun ensime-type-declared-as-str (type)
-  (case (plist-get type :declared-as)
+(defun ensime-declared-as-str (obj)
+  (case (plist-get obj :decl-as)
+    (method "method")
     (trait "trait")
     (interface "interface")
     (class "class")
