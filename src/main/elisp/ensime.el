@@ -757,16 +757,18 @@ The default condition handler for timer functions (see
     (set-text-properties start (point) `(face ,face))))
 
 (defvar ensime-qualified-type-regexp 
-  "^\\(?:object \\)?\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(.+\\)$")
+  "^\\(?:object \\)?\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(?:\\([^\\.]+\\)\\$\\)?\\([^\\.\$]+\\)$"
+  "Match strings of form pack.pack1.pack2.Types$Type or pack.pack1.pack2.Type")
 
-(defmacro* ensime-with-path-and-name (type-name (path name) &rest body)
+(defmacro* ensime-partition-qualified-type-name (type-name (path outer-type-name name) &rest body)
   "Evaluate BODY with path bound to the dot-separated path of this type-name, and
    name bound to the final type name."
   `(let ((matchedp (integerp (string-match 
 			      ensime-qualified-type-regexp 
 			      ,type-name))))
      (let ((,path (if matchedp (match-string 1 ,type-name) nil))
-	   (,name (if matchedp (match-string 2 ,type-name) ,type-name)))
+	   (,outer-type-name (if matchedp (match-string 2 ,type-name) nil))
+	   (,name (if matchedp (match-string 3 ,type-name) ,type-name)))
        ,@body)))
 
 
@@ -1968,6 +1970,16 @@ with the current project's dependencies loaded. Returns a property list."
       (setq accum (concat accum "."))
       )))
 
+
+(defun ensime-inspector-insert-link-to-type-id (text type-id)
+  "A helper for type link insertion. See below."
+  (ensime-insert-action-link
+   text
+   `(lambda (x)
+      (ensime-type-inspector-show 
+       (ensime-rpc-inspect-type-by-id ,type-id)
+       )) font-lock-type-face))
+
 (defun ensime-inspector-insert-linked-type (type &optional with-doc-link detailed)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
@@ -1979,17 +1991,20 @@ with the current project's dependencies loaded. Returns a property list."
 			))
 	   (type-args (ensime-type-type-args type))
 	   (last-type-arg (car (last type-args))))
-      (ensime-with-path-and-name 
-       type-name (path name)
+
+      (insert (make-string ensime-indent-level ?\s))
+
+      (ensime-partition-qualified-type-name 
+       type-name (path outer-type-name name)
        (when path
 	 (ensime-inspector-insert-linked-package-path path))
-       (insert (make-string ensime-indent-level ?\s))
-       (ensime-insert-action-link
-	name
-	`(lambda (x)
-	   (ensime-type-inspector-show 
-	    (ensime-rpc-inspect-type-by-id ,(ensime-type-id type))
-	    )) font-lock-type-face))
+       (if (and outer-type-name (integerp (ensime-outer-type-id type)))
+	   (progn
+	     (ensime-inspector-insert-link-to-type-id outer-type-name (ensime-outer-type-id type))
+	     (insert "$")
+	     (ensime-inspector-insert-link-to-type-id name (ensime-type-id type)))
+	 (progn
+	   (ensime-inspector-insert-link-to-type-id name (ensime-type-id type)))))
 
       (when type-args
 	(let ((ensime-indent-level 0))

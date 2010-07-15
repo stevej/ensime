@@ -283,16 +283,16 @@
 
 (defmacro ensime-assert (pred)
   `(let ((val ,pred))
-     (with-current-buffer ensime-testing-buffer
-       (if (not val)
+     (if (not val)
+	 (with-current-buffer ensime-testing-buffer
 	   (signal 'ensime-test-assert-failed (format "Expected truth of %s." ',pred))))))
 
 
 (defmacro ensime-assert-equal (a b)
   `(let ((val-a ,a)
 	 (val-b ,b))
-     (with-current-buffer ensime-testing-buffer
-       (if (equal val-a val-b) t
+     (if (equal val-a val-b) t
+       (with-current-buffer ensime-testing-buffer
 	 (signal 'ensime-test-assert-failed (format "Expected %s to equal %s but was %s" ',a ',b val-a))))))
 
 (defun ensime-stop-tests ()
@@ -338,8 +338,29 @@
        (ensime-assert (null conf)))))
 
 
+   (ensime-test 
+    "Test name partitioning..."
+    (ensime-partition-qualified-class-name 
+     "scala.tools.nsc.symtab.Types$Type" (path outer-type-name name)
+     (ensime-assert-equal path "scala.tools.nsc.symtab")
+     (ensime-assert-equal outer-type-name "Types")
+     (ensime-assert-equal name "Type"))
 
+    (ensime-partition-qualified-class-name 
+     "scala.tools.nsc.symtab.Types" (path outer-type-name name)
+     (ensime-assert-equal path "scala.tools.nsc.symtab")
+     (ensime-assert-equal outer-type-name nil)
+     (ensime-assert-equal name "Types"))
 
+    (ensime-partition-qualified-class-name 
+     "scala.tools.nsc.symtab.Types$Dude$AbsType" (path outer-type-name name)
+     (ensime-assert-equal path "scala.tools.nsc.symtab")
+     (ensime-assert-equal outer-type-name "Types$Dude")
+     (ensime-assert-equal name "AbsType"))
+
+    )
+   
+   
 
    (ensime-async-test 
     "Load and compile 'hello world'."
