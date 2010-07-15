@@ -617,19 +617,19 @@ The default condition handler for timer functions (see
 
 (defcustom ensime-scaladoc-stdlib-url-base 
   "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/library/"
-  "url for constructing scaladoc links."
+  "URL base for constructing scaladoc stdlib links."
   :type 'string
   :group 'ensime)
 
 (defcustom ensime-scaladoc-compiler-url-base 
   "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/compiler/"
-  "url for constructing scaladoc links."
+  "URL for constructing scaladoc compiler links."
   :type 'string
   :group 'ensime)
 
 (defcustom ensime-javadoc-stdlib-url-base 
   "http://java.sun.com/javase/6/docs/api/"
-  "url for constructing scaladoc links."
+  "URL for constructing javadoc links."
   :type 'string
   :group 'ensime)
 
@@ -644,15 +644,17 @@ The default condition handler for timer functions (see
 			 (is-std-lib ensime-scaladoc-stdlib-url-base)
 			 (t nil))))
     (if (or is-std-lib is-compiler-lib)
-	(concat url-base
-		(replace-regexp-in-string "\\." "/" full-type-name)
-		".html"
-		(if member
-		    (let* ((name (ensime-member-name member))
-			   (type (ensime-member-type member))
-			   (param-types (ensime-type-param-types type)))
-		      (concat "#" full-type-name "#" name))))
-      )))
+	(let* ((s (replace-regexp-in-string "\\." "/" full-type-name)))
+	  (concat url-base 
+		  s
+		  ".html"
+		  (if member
+		      (let* ((name (ensime-member-name member))
+			     (type (ensime-member-type member))
+			     (param-types (ensime-type-param-types type)))
+			(concat "#" full-type-name "#" name))))
+	  ))))
+
 
 (defvar ensime-javadoc-type-replacements 
   '(("^scala.Int$" . "int")
@@ -661,7 +663,8 @@ The default condition handler for timer functions (see
     ("^scala.Byte$" . "byte")
     ("^scala.Long$" . "long")
     ("^scala.Float$" . "float")
-    ("^scala.Boolean$" . "char")
+    ("^scala.Boolean$" . "boolean")
+    ("^scala.Char$" . "char")
     ("^scala.Unit$" . "void"))
   "When creating javadoc urls, 
    use this mapping to replace scala types with java types.")
@@ -759,11 +762,11 @@ The default condition handler for timer functions (see
 (defmacro* ensime-with-path-and-name (type-name (path name) &rest body)
   "Evaluate BODY with path bound to the dot-separated path of this type-name, and
    name bound to the final type name."
-  `(let ((result (not (null (string-match 
-			     ensime-qualified-type-regexp 
-			     ,type-name)))))
-     (let ((,path (if result (match-string 1 ,type-name) nil))
-	   (,name (if result (match-string 2 ,type-name) ,type-name)))
+  `(let ((matchedp (integerp (string-match 
+			      ensime-qualified-type-regexp 
+			      ,type-name))))
+     (let ((,path (if matchedp (match-string 1 ,type-name) nil))
+	   (,name (if matchedp (match-string 2 ,type-name) ,type-name)))
        ,@body)))
 
 
