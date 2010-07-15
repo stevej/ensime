@@ -482,12 +482,7 @@ defined."
 
 (defun ensime-load-config (file-name)
   "Load and parse a project config file. Return the resulting plist.
-
-   The :root-dir setting will be deduced from the location of the project file.
-
-   The :classpath setting may be specified as a list of file-names or
-   the name of a function which will be called at load time. The configuration
-   plist will be passed to this function as it's only argument."
+   The :root-dir setting will be deduced from the location of the project file."
   (let ((dir (expand-file-name (file-name-directory file-name))))
     (save-excursion
       (condition-case error
@@ -498,20 +493,13 @@ defined."
 		   (kill-buffer buf)
 		   (read src))))
 
-	    ;; We use the project file's location as th project root.
+	    ;; We use the project file's location as the project root.
 	    (plist-put config :root-dir dir)
-
-	    ;; If 'classpath' is a symbol bound to a function, call it
-	    ;; to compute the classpath.
-	    (let ((cp (plist-get config :classpath)))
-	      (if (and cp (symbolp cp) (boundp cp))
-		  (let ((val (eval cp)))
-		    (if (functionp val)
-			(plist-put config :classpath (funcall val config))))))
 
 	    config)
 	(error
-	 '())))
+	 (error "Error reading configuration file: %s" error)
+	 )))
     ))
 
 (defun ensime-swank-port-file ()

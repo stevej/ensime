@@ -69,7 +69,7 @@ server."
 (defvar ensime-db-output-acc-max-length 50000)
 
 (defvar ensime-db-filter-funcs
-  '(("Deferring breakpoint \\(.+\\):\\([0-9]+\\)\n[^ ]" . 
+  `(("Deferring breakpoint \\(.+\\):\\([0-9]+\\)\n[^ ]" . 
      ensime-db-handle-deferred-breakpoint)
 
     ("Set breakpoint \\(.+\\):\\([0-9]+\\)\n[^ ]" . 
@@ -102,12 +102,14 @@ server."
     ("is not valid until the VM is started with the 'run' command\n[^ ]" .
      ensime-db-handle-not-valid-until-run)
 
-    ("Method arguments:\\(?:[\t\n]+.+=.+\\)*\nLocal variables:\\(?:[\t\n]+.+=.+\\)*\n[^ ]" .
-     ensime-db-handle-local-variables)
+    (,(concat "Method arguments:\\(?:[\n]+.+=.+\\)*\n"
+	      "Local variables:\\(?:[\n]+.+=.+\\)*\n"
+	      "[^=]+\n" ) .
+	      ensime-db-handle-local-variables)
     ))
 
 (defun ensime-db-handle-not-valid-until-run (str)
-  (message "Command not valid until the VM is started with the 'run' command."))
+  (message "Command not valid until the VM is started with the 'run' command, C-c d r."))
 
 (defun ensime-db-handle-no-local-variables (str)
   (message "No local variables."))

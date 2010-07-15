@@ -340,19 +340,6 @@
 
 
 
-   (ensime-test 
-    "Test specifying classpath as function."
-    (ensime-with-tmp-file 
-     (file "ensime_test_conf_"
-	   (format "%S" '( :server-cmd 
-			   "bin/server.sh"
-			   :classpath gen-class-path)))
-     (let* ((gen-class-path #'(lambda (conf) (list "one" "two" "three")))
-	    (conf (ensime-load-config file)))
-       (ensime-assert (equal (plist-get conf :classpath) '("one" "two" "three"))))))
-
-
-
 
    (ensime-async-test 
     "Load and compile 'hello world'."
