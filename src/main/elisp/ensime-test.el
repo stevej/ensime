@@ -340,19 +340,19 @@
 
    (ensime-test 
     "Test name partitioning..."
-    (ensime-partition-qualified-class-name 
+    (ensime-partition-qualified-type-name 
      "scala.tools.nsc.symtab.Types$Type" (path outer-type-name name)
      (ensime-assert-equal path "scala.tools.nsc.symtab")
      (ensime-assert-equal outer-type-name "Types")
      (ensime-assert-equal name "Type"))
 
-    (ensime-partition-qualified-class-name 
+    (ensime-partition-qualified-type-name 
      "scala.tools.nsc.symtab.Types" (path outer-type-name name)
      (ensime-assert-equal path "scala.tools.nsc.symtab")
      (ensime-assert-equal outer-type-name nil)
      (ensime-assert-equal name "Types"))
 
-    (ensime-partition-qualified-class-name 
+    (ensime-partition-qualified-type-name 
      "scala.tools.nsc.symtab.Types$Dude$AbsType" (path outer-type-name name)
      (ensime-assert-equal path "scala.tools.nsc.symtab")
      (ensime-assert-equal outer-type-name "Types$Dude")

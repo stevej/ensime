@@ -181,7 +181,7 @@
     (action . ensime-ac-complete-action)
     (requires . 0)
     (symbol . "f")
-    (cache . t)
+    (cache . nil)
     ))
 
 (ac-define-source ensime-scope-names
@@ -191,7 +191,7 @@
     (action . ensime-ac-complete-action)
     (requires . 0)
     (symbol . "s")
-    (cache . t)
+    (cache . nil)
     ))
 
 (defun ensime-ac-enable ()

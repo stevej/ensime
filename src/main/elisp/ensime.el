@@ -712,7 +712,7 @@ The default condition handler for timer functions (see
 (defun ensime-make-code-hyperlink (start end http-path &optional face)
   "Make an emacs button, from start to end in current buffer, hyperlinking to http-path."
   (make-button start end
-	       'face (or face font-lock-constant-face)
+	       'face (or face font-lock-keyword-face)
 	       'action `(lambda (x)
 			  (browse-url ,http-path)
 			  (message "Opening documentation in browser..")
@@ -721,7 +721,7 @@ The default condition handler for timer functions (see
 (defun ensime-http-url-p (s)
   (and (stringp s) (string-match "http://" s)))
 
-(defun ensime-insert-link (text file-path &optional offset)
+(defun ensime-insert-link (text file-path &optional offset face)
   "Insert text in current buffer and make it into an emacs 
    button, linking to file-path and offset. Intelligently decide
    whether to make a source link or an http link based on the file-path."
@@ -730,12 +730,12 @@ The default condition handler for timer functions (see
      ((and file-path (ensime-http-url-p file-path))
       (progn
 	(insert text)
-	(ensime-make-code-hyperlink start (point) file-path)))
+	(ensime-make-code-hyperlink start (point) file-path face)))
 
      ((and file-path (integerp offset))
       (progn
 	(insert text)
-	(ensime-make-code-link start (point) file-path offset)))
+	(ensime-make-code-link start (point) file-path offset face)))
 
      (t 
       (progn
@@ -1971,40 +1971,52 @@ with the current project's dependencies loaded. Returns a property list."
       )))
 
 
-(defun ensime-inspector-insert-link-to-type-id (text type-id)
-  "A helper for type link insertion. See below."
+(defun ensime-inspector-insert-link-to-type-id (text type-id &optional is-obj)
+  "A helper for type link insertion. See usage in ensime-inspector-insert-linked-type. 
+If is-obj is non-nil, use an alternative color for the link."
   (ensime-insert-action-link
    text
    `(lambda (x)
       (ensime-type-inspector-show 
        (ensime-rpc-inspect-type-by-id ,type-id)
-       )) font-lock-type-face))
+       ))
+   (if (ensime-type-is-object-p type)
+       font-lock-constant-face
+     font-lock-type-face)
+   ))
 
-(defun ensime-inspector-insert-linked-type (type &optional with-doc-link detailed)
+(defun ensime-inspector-insert-linked-type (type &optional with-doc-link qualified)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
-  (if (ensime-type-is-arrow type) 
-      (ensime-inspector-insert-linked-arrow-type type with-doc-link detailed)
-    (let* ((type-name (if detailed
-			  (ensime-type-full-name type)
-			(ensime-type-name type)
-			))
-	   (type-args (ensime-type-type-args type))
-	   (last-type-arg (car (last type-args))))
+  (if (ensime-type-is-arrow-p type)
+      (ensime-inspector-insert-linked-arrow-type type with-doc-link qualified)
+
+    (let* ((type-args (ensime-type-type-args type))
+	   (last-type-arg (car (last type-args)))
+	   (is-obj (ensime-type-is-object-p type)))
 
       (insert (make-string ensime-indent-level ?\s))
 
-      (ensime-partition-qualified-type-name 
-       type-name (path outer-type-name name)
-       (when path
-	 (ensime-inspector-insert-linked-package-path path))
-       (if (and outer-type-name (integerp (ensime-outer-type-id type)))
-	   (progn
-	     (ensime-inspector-insert-link-to-type-id outer-type-name (ensime-outer-type-id type))
-	     (insert "$")
-	     (ensime-inspector-insert-link-to-type-id name (ensime-type-id type)))
-	 (progn
-	   (ensime-inspector-insert-link-to-type-id name (ensime-type-id type)))))
+      (if qualified
+	  (ensime-partition-qualified-type-name 
+	   (ensime-type-full-name type) 
+	   (path outer-type-name name)
+	   (when path
+	     (ensime-inspector-insert-linked-package-path path))
+	   (if (and outer-type-name (integerp (ensime-outer-type-id type)))
+	       (progn
+		 (ensime-inspector-insert-link-to-type-id 
+		  outer-type-name (ensime-outer-type-id type))
+		 (insert "$")
+		 (ensime-inspector-insert-link-to-type-id 
+		  name (ensime-type-id type) is-obj))
+	     (progn
+	       (ensime-inspector-insert-link-to-type-id 
+		name (ensime-type-id type) is-obj))))
+
+	;; Otherwise, insert short name..
+	(ensime-inspector-insert-link-to-type-id 
+	 (ensime-type-name type) (ensime-type-id type) is-obj))
 
       (when type-args
 	(let ((ensime-indent-level 0))
@@ -2025,7 +2037,7 @@ with the current project's dependencies loaded. Returns a property list."
 
       )))
 
-(defun ensime-inspector-insert-linked-arrow-type (type  &optional with-doc-link detailed)
+(defun ensime-inspector-insert-linked-arrow-type (type  &optional with-doc-link qualified)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
   (let*  ((param-types (ensime-type-param-types type))
@@ -2033,11 +2045,11 @@ with the current project's dependencies loaded. Returns a property list."
 	  (result-type (ensime-type-result-type type)))
     (insert "(")
     (dolist (tpe param-types)
-      (ensime-inspector-insert-linked-type tpe nil detailed)
+      (ensime-inspector-insert-linked-type tpe nil qualified)
       (if (not (eq tpe last-param-type))
 	  (insert ", ")))
     (insert ") => ")
-    (ensime-inspector-insert-linked-type result-type nil detailed)
+    (ensime-inspector-insert-linked-type result-type nil qualified)
     ))
 
 
@@ -2051,10 +2063,11 @@ with the current project's dependencies loaded. Returns a property list."
 		  (ensime-make-scaladoc-url owner-type m)
 		  (ensime-make-javadoc-url owner-type m)
 		  )))
-    (if (equal 'method (plist-get m :decl-as))
+    (if (equal 'method (ensime-declared-as m))
 	(progn
 	  (ensime-insert-link 
-	   (format "%s" member-name) url (ensime-pos-offset pos))
+	   (format "%s" member-name) url (ensime-pos-offset pos) 
+	   font-lock-function-name-face)
 	  (tab-to-tab-stop)
 	  (ensime-inspector-insert-linked-type type nil nil))
       (progn
@@ -2352,6 +2365,9 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-type-id (type)
   (plist-get type :type-id))
 
+(defun ensime-type-is-object-p (type)
+  (equal (plist-get type :decl-as) 'object))
+
 (defun ensime-outer-type-id (type)
   (plist-get type :outer-type-id))
 
@@ -2359,6 +2375,9 @@ It should be used for \"background\" messages such as argument lists."
   (if (plist-get type :arrow-type)
       (plist-get type :name)
     (plist-get type :full-name)))
+
+(defun ensime-declared-as (obj)
+  (plist-get obj :decl-as))
 
 (defun ensime-declared-as-str (obj)
   (case (plist-get obj :decl-as)
@@ -2371,7 +2390,7 @@ It should be used for \"background\" messages such as argument lists."
     (otherwise "type")
     ))
 
-(defun ensime-type-is-arrow (type)
+(defun ensime-type-is-arrow-p (type)
   (plist-get type :arrow-type))
 
 (defun ensime-type-param-types (type)
