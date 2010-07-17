@@ -485,22 +485,22 @@ defined."
    The :root-dir setting will be deduced from the location of the project file."
   (let ((dir (expand-file-name (file-name-directory file-name))))
     (save-excursion
-      (condition-case error
-	  (let ((config
-		 (let ((buf (find-file-read-only file-name ensime-config-file-name))
-		       (src (buffer-substring-no-properties
-			     (point-min) (point-max))))
-		   (kill-buffer buf)
-		   (read src))))
+      (let ((config
+	     (let ((buf (find-file-read-only file-name ensime-config-file-name))
+		   (src (buffer-substring-no-properties
+			 (point-min) (point-max))))
+	       (kill-buffer buf)
+	       (condition-case error
+		   (read src)
+		 (error
+		  (error "Error reading configuration file, %s: %s" src error)
+		  ))
+	       )))
 
-	    ;; We use the project file's location as the project root.
-	    (plist-put config :root-dir dir)
-
-	    config)
-	(error
-	 (error "Error reading configuration file: %s" error)
-	 )))
-    ))
+	;; We use the project file's location as the project root.
+	(plist-put config :root-dir dir)
+	config)
+      )))
 
 (defun ensime-swank-port-file ()
   "Filename where the SWANK server writes its TCP port number."
@@ -2193,7 +2193,7 @@ with the current project's dependencies loaded. Returns a property list."
      )))
 
 (defvar ensime-inspector-history '()
-  "Maintain a history of the info objects viewed in the type inspector.")
+  "Maintain a history of the info objects viewed in the inspector buffer.")
 
 (defvar ensime-inspector-history-cursor 0
   "Where are we in the history?")
@@ -2227,7 +2227,12 @@ with the current project's dependencies loaded. Returns a property list."
     (cond ((ensime-package-p info)
 	   (ensime-package-inspector-show info))
 
-	  (t (ensime-type-inspector-show info)))
+	  ((ensime-type-inspection-p info)
+	   (ensime-type-inspector-show info))
+
+	  (t (error 
+	      (format "Cannot inspect unknown structure: %s" 
+		      info))))
     ))
 
 
@@ -2337,6 +2342,9 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-package-p (info)
   (equal 'package (plist-get info :info-type)))
+
+(defun ensime-type-inspection-p (info)
+  (equal 'typeInspect (plist-get info :info-type)))
 
 (defun ensime-type-name (type)
   (plist-get type :name))

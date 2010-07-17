@@ -293,7 +293,7 @@
 	 (val-b ,b))
      (if (equal val-a val-b) t
        (with-current-buffer ensime-testing-buffer
-	 (signal 'ensime-test-assert-failed (format "Expected %s to equal %s but was %s" ',a ',b val-a))))))
+	 (signal 'ensime-test-assert-failed (format "Expected %s to equal %s." ',a ',b))))))
 
 (defun ensime-stop-tests ()
   "Forcibly stop all tests in progress."
@@ -328,15 +328,15 @@
 			     (expand-file-name (file-name-directory file)))))))
 
 
-
-
    (ensime-test 
     "Test loading a broken(syntactically) config file."
     (ensime-with-tmp-file 
      (file "ensime_test_conf_" "(lkjsdfkjskfjs")
-     (let ((conf (ensime-load-config file)))
+     (let ((conf 
+	    (condition-case er
+		(ensime-load-config file)
+	      (error nil))))
        (ensime-assert (null conf)))))
-
 
    (ensime-test 
     "Test name partitioning..."
@@ -359,7 +359,6 @@
      (ensime-assert-equal name "AbsType"))
 
     )
-   
    
 
    (ensime-async-test 
@@ -403,7 +402,8 @@
 		    "com.helloworld")))
 	 (ensime-assert (not (null info)))
 	 (ensime-assert-equal (ensime-package-full-name info) "com.helloworld")
-	 (ensime-assert-equal 1 (length (ensime-package-members info)))
+	 ;; Should be one class, one object
+	 (ensime-assert-equal 2 (length (ensime-package-members info)))
 	 )
        (ensime-cleanup-tmp-project proj)
        (ensime-kill-all-ensime-servers)
