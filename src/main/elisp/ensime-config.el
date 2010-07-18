@@ -80,32 +80,32 @@
   (ido-read-directory-name 
    "Where are classes written by the compiler? " root))
 
+(defmacro ensime-set-key (conf key val)
+  `(setq ,conf (plist-put ,conf ,key ,val)))
+
 
 (defun ensime-config-build-maven (root)
   (let ((conf '()))
 
-    (plist-put conf :server-root 
-	       (ensime-config-find-ensime-root root))
+    (ensime-set-key conf :server-root 
+		    (ensime-config-find-ensime-root root))
 
-    (plist-put conf :project-package
-	       (ensime-config-read-proj-package))
+    (ensime-set-key conf :project-package
+		    (ensime-config-read-proj-package))
 
-    (plist-put conf :use-maven t)
+    (ensime-set-key conf :use-maven t)
 
     (when (yes-or-no-p 
 	   "Does your project use custom scopes?")
-      (plist-put conf :maven-compile-scopes
-		 (read-string 
-		  "What scopes should be used to compile? (space separated): " "compile"))
-      (plist-put conf :maven-runtime-scopes
-		 (read-string 
-		  "What scopes should be used at runtime? (space separated): " "runtime")))
+      (ensime-set-key conf :maven-compile-scopes
+		      (read-string 
+		       "What scopes should be used to compile? (space separated): " "compile"))
+      (ensime-set-key conf :maven-runtime-scopes
+		      (read-string 
+		       "What scopes should be used at runtime? (space separated): " "runtime")))
 
     conf
     ))
-
-(defmacro ensime-set-key (conf key val)
-  `(setq ,conf (plist-put ,conf ,key ,val)))
 
 (defun ensime-config-build-custom-with-ivy (root)
   (let ((conf '()))
