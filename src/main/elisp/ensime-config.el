@@ -95,15 +95,6 @@
 
     (ensime-set-key conf :use-maven t)
 
-    (when (yes-or-no-p 
-	   "Does your project use custom scopes?")
-      (ensime-set-key conf :maven-compile-scopes
-		      (read-string 
-		       "What scopes should be used to compile? (space separated): " "compile"))
-      (ensime-set-key conf :maven-runtime-scopes
-		      (read-string 
-		       "What scopes should be used at runtime? (space separated): " "runtime")))
-
     conf
     ))
 
