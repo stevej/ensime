@@ -35,7 +35,7 @@
 
       ;; Check if config already exists for this project...
       (if (file-exists-p conf-file)
-	  (if (yes-or-no-p (format (concat "Founding an existing "
+	  (if (yes-or-no-p (format (concat "Found an existing "
 					   "%s file for this project. " 
 					   "Back up existing file and "
 					   "continue?") ensime-config-file-name))
