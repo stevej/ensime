@@ -43,12 +43,13 @@
 (require 'pp)
 (require 'hideshow)
 (require 'font-lock)
+(require 'ido)
 (require 'auto-complete)
+(require 'ensime-config)
 (require 'ensime-auto-complete)
 (require 'ensime-sbt)
 (require 'ensime-inf)
 (require 'ensime-debug)
-(require 'ido)
 (eval-when (compile)
   (require 'apropos)
   (require 'compile))
@@ -339,7 +340,7 @@
   (interactive)
   (when (not ensime-mode) 
     (ensime-mode 1))
-  (let* ((config (ensime-find-and-load-config))
+  (let* ((config (ensime-config-find-and-load))
 	 (cmd (or (plist-get config :server-cmd) 
 		  ensime-default-server-cmd))
 	 (env (plist-get config :server-env))
@@ -365,7 +366,7 @@
 (defun ensime-reload-config ()
   "Re-read the config file, and tell the server to re-up the compiler."
   (interactive)
-  (let* ((config (ensime-find-and-load-config)))
+  (let* ((config (ensime-config-find-and-load)))
     ;; Send the project initialization..
     (ensime-eval-async `(swank:init-project ,config) #'identity)))
 
@@ -425,10 +426,6 @@ See `ensime-start'.")
   "Start a Swank server in the inferior Server and connect."
   (ensime-read-port-and-connect config process nil))
 
-(defvar ensime-config-file-name ".ensime"
-  "The default file name for ensime project configurations.")
-
-(add-to-list 'auto-mode-alist '("\\.ensime$" . emacs-lisp-mode))
 
 (defun ensime-file-in-directory-p (file-name dir-name)
   "Determine if file named by file-name is contained in the 
@@ -447,31 +444,6 @@ See `ensime-start'.")
 	    (throw 'return nil))
 	  )))))
 
-(defun ensime-find-config-file (file-name)
-  "Search up the directory tree starting at file-name 
-   for a suitable config file to load, return it's path. Return nil if 
-   no such file found."
-  (let* ((dir (file-name-directory file-name))
-	 (possible-path (concat dir ensime-config-file-name)))
-    (if (file-directory-p dir)
-	(if (file-exists-p possible-path)
-	    possible-path
-	  (if (not (equal dir (directory-file-name dir)))
-	      (ensime-find-config-file (directory-file-name dir)))))))
-
-(defun ensime-find-and-load-config ()
-  "Query the user for the path to a config file, then load it."
-  (let* ((default (ensime-find-config-file buffer-file-name))
-	 (file (if ensime-prefer-noninteractive default
-		 (read-file-name 
-		  "ENSIME Project file: "
-		  (if default (file-name-directory default))
-		  default
-		  nil
-		  (if default (file-name-nondirectory default))
-		  ))))
-    (ensime-load-config file)))
-
 (defun ensime-configured-project-root ()
   "Return root path of the current project as defined in the 
 config file and stored in the current connection. Nil is returned
@@ -480,28 +452,6 @@ defined."
   (when (ensime-connected-p)
     (let ((config (ensime-config (ensime-connection))))
       (plist-get config :root-dir) ".")))
-
-(defun ensime-load-config (file-name)
-  "Load and parse a project config file. Return the resulting plist.
-   The :root-dir setting will be deduced from the location of the project file."
-  (let ((dir (expand-file-name (file-name-directory file-name))))
-    (save-excursion
-      (let ((config
-	     (let ((buf (find-file-read-only file-name ensime-config-file-name))
-		   (src (buffer-substring-no-properties
-			 (point-min) (point-max))))
-	       (kill-buffer buf)
-	       (condition-case error
-		   (read src)
-		 (error
-		  (error "Error reading configuration file, %s: %s" src error)
-		  ))
-	       )))
-
-	;; We use the project file's location as the project root.
-	(plist-put config :root-dir dir)
-	config)
-      )))
 
 (defun ensime-swank-port-file ()
   "Filename where the SWANK server writes its TCP port number."
@@ -1304,7 +1254,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 (defun ensime-connect (config host port)
   "Connect to a running Swank server. Return the connection."
   (interactive (list 
-		(ensime-find-and-load-config)
+		(ensime-config-find-and-load)
 		(read-from-minibuffer "Host: " ensime-default-server-host)
 		(read-from-minibuffer "Port: " (format "%d" ensime-default-port)
 				      nil t)))

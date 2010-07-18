@@ -321,7 +321,7 @@
 		      "bin/server.sh"
 		      :dependendency-dirs ("hello" "world")
 		      )))
-     (let ((conf (ensime-load-config file)))
+     (let ((conf (ensime-config-load file)))
        (ensime-assert (equal (plist-get conf :server-cmd) "bin/server.sh"))
        (ensime-assert (equal (plist-get conf :dependendency-dirs) '("hello" "world")))
        (ensime-assert (equal (plist-get conf :root-dir) 
@@ -334,7 +334,7 @@
      (file "ensime_test_conf_" "(lkjsdfkjskfjs")
      (let ((conf 
 	    (condition-case er
-		(ensime-load-config file)
+		(ensime-config-load file)
 	      (error nil))))
        (ensime-assert (null conf)))))
 

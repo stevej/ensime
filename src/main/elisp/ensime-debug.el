@@ -4,15 +4,6 @@
 ;;
 ;;     Copyright (C) 2010 Aemon Cannon
 ;;
-;;     This file includes code from slime.el of the SLIME project
-;;     (also licensend under the GNU General Public License.) The
-;;     following copyrights therefore apply:
-;;     
-;;     Copyright (C) 2003  Eric Marsden, Luke Gorrie, Helmut Eller
-;;     Copyright (C) 2004,2005,2006  Luke Gorrie, Helmut Eller
-;;     Copyright (C) 2007,2008,2009  Helmut Eller, Tobias C. Rittweiler
-;;
-;;
 ;;     This program is free software; you can redistribute it and/or
 ;;     modify it under the terms of the GNU General Public License as
 ;;     published by the Free Software Foundation; either version 2 of
@@ -59,6 +50,12 @@ server."
     (t (:bold t)))
   "Face used for marking lines with breakpoints."
   :group 'ensime-ui)
+
+(defvar ensime-db-default-main-args nil
+  "History of arguments passed to main class.")
+
+(defvar ensime-db-default-main-class nil
+  "History of main class to debugger.")
 
 
 (defvar ensime-db-history nil
@@ -409,7 +406,17 @@ their values."
   "Get the command needed to launch a debugger, including all
 the current project's dependencies. Returns list of form (cmd [arg]*)"
   (if (ensime-connected-p)
-      (let* ((conf (ensime-rpc-debug-config)))
+      (let* ((conf (ensime-rpc-debug-config))
+	     (debug-class (read-string 
+			   "Qualified name of class to debug: "
+			   ensime-db-default-main-class))
+	     (debug-args (read-string 
+			  "Commandline arguments: "
+			  ensime-db-default-main-args)))
+	(setq ensime-db-default-main-class debug-class)
+	(setq ensime-db-default-main-args debug-args)
+	(plist-put conf :debug-class debug-class)
+	(plist-put conf :debug-args debug-args)
 	(ensime-replace-keywords ensime-db-cmd-template conf))
     ensime-db-default-cmd-line))
 
