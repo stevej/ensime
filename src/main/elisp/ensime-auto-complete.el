@@ -17,7 +17,6 @@ target of the call. Point should be be over last character of call target."
 	(file-name buffer-file-name)
 	(p (point))
 	(conn (ensime-current-connection)))
-
     (let ((members 
 	   (with-temp-buffer
 	     (let ((ensime-buffer-connection conn)
@@ -57,31 +56,41 @@ target of the call. Point should be be over last character of call target."
 
 (defun ensime-ac-name-candidates (prefix)
   "Return candidate list."
-  (ensime-save-buffer-no-hooks)
 
   ;; Are we completing a 'new Symbol' expression?
   (let* ((is-constructor (ensime-ac-completing-constructor-p prefix)))
 
-    ;; Move point before prefix so we have a clean context
-    ;; when we ask for completion..
-    (backward-char (length prefix))
-    
-    (let ((names (ensime-rpc-name-completions-at-point 
-		  prefix is-constructor)))
-      (mapcar (lambda (m)
-		(let* ((type-name (plist-get m :type-name))
-		       (type-id (plist-get m :type-id))
-		       (is-callable (plist-get m :is-callable))
-		       (name (plist-get m :name))
-		       (candidate (concat name ":" type-name)))
-		  ;; Save the type for later display
-		  (propertize candidate
-			      'symbol-name name
-			      'scala-type-name type-name 
-			      'scala-type-id type-id
-			      'is-callable is-callable
-			      ))
-		) names))))
+    (let ((buf (current-buffer))
+	  (file-name buffer-file-name)
+	  (p (point))
+	  (conn (ensime-current-connection)))
+      (let ((names 
+	     (with-temp-buffer
+	       (let ((ensime-buffer-connection conn)
+		     (buffer-file-name file-name))
+		 (insert-buffer-substring buf)
+		 (goto-char p)
+		 (backward-delete-char (length prefix))
+		 (ensime-save-buffer-no-hooks)
+		 (ensime-rpc-name-completions-at-point prefix is-constructor)))))
+
+	(clear-visited-file-modtime)
+	(ensime-save-buffer-no-hooks)
+
+	(mapcar (lambda (m)
+		  (let* ((type-name (plist-get m :type-name))
+			 (type-id (plist-get m :type-id))
+			 (is-callable (plist-get m :is-callable))
+			 (name (plist-get m :name))
+			 (candidate (concat name ":" type-name)))
+		    ;; Save the type for later display
+		    (propertize candidate
+				'symbol-name name
+				'scala-type-name type-name 
+				'scala-type-id type-id
+				'is-callable is-callable
+				))
+		  ) names)))))
 
 
 (defun ensime-ac-get-doc (item)
@@ -233,6 +242,9 @@ be used later to give contextual help when entering arguments."
   ;; This simplifies the regexes.
   (setq ac-sources '(ac-source-ensime-scope-names
 		     ac-source-ensime-members ))
+
+  (make-local-variable 'ac-use-comphist)
+  (setq ac-use-comphist nil)
 
   (make-local-variable 'ac-auto-start)
   (setq ac-auto-start nil)
