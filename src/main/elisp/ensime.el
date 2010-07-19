@@ -149,7 +149,8 @@
 
 (defun ensime-save-buffer-no-hooks ()
   "Just save the buffer per usual, don't type-check!"
-  (let ((after-save-hook nil))
+  (let ((after-save-hook nil)
+	(before-save-hook nil))
     (save-buffer)))
 
 (defvar ensime-mode-map
