@@ -237,7 +237,7 @@
    inspect that package. Otherwise, try to inspect the type
    of the thing at point."
   (interactive "e")
-  (let ((pack-path (ensime-import-or-package-path-at-point)))
+  (let ((pack-path (ensime-package-path-at-point)))
     (if pack-path
 	(ensime-inspect-package-by-path pack-path)
       (ensime-inspect-type))))
@@ -2094,28 +2094,37 @@ If is-obj is non-nil, use an alternative color for the link."
   (let ((p (or path (read-string "Package path: "))))
     (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))))
 
-(defun ensime-import-or-package-path-at-point ()
-  "Return the path of the package that is declared or imported at point."
+(defun ensime-package-path-at-point ()
+  "Return the package path at point, or nil if point is not in a package path."
   (let* ((case-fold-search nil)
-	 (re "\\(?:package\\|import\\)\\s-+\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)"))
+	 (re "\\(\\(?:[a-z0-9]+\\.\\)+[a-z0-9]+\\)"))
     (save-excursion
-      (goto-char (point-at-bol))
-      (if (search-forward-regexp re (point-at-eol) t)
-	  (ensime-kill-txt-props (match-string 1))))))
+      (catch 'return
+	(let ((init-point (point))
+	      (limit (point-at-eol)))
+	  (goto-char (point-at-bol))
+	  (while (search-forward-regexp re limit t)
+	    (if (and (>= init-point (match-beginning 1))
+		     (<= init-point (match-end 1)))
+		(throw 'return 
+		       (ensime-kill-txt-props 
+			(match-string 1))))))))))
 
 (defun ensime-inspect-package ()
-  "Inspect the package of the current source file."
+  "If cursor is over a package path, inspect that path. Otherwise, 
+inspect the package of the current source file."
   (interactive)
-  (save-excursion
-    (goto-char (point-min))
-    (if (search-forward-regexp 
-	 "package \\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)"
-	 (point-max) t)
-	(let ((path (match-string 1)))
-	  (ensime-kill-txt-props path)
-	  (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))
-      (message "No package declaration found."))))
-
+  (let ((pack (ensime-package-path-at-point)))
+    (if pack
+	(ensime-package-inspector-show (ensime-rpc-inspect-package-by-path pack))
+      (save-excursion
+	(if (search-backward-regexp 
+	     "package \\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)"
+	     (point-min) t)
+	    (let ((path (match-string 1)))
+	      (ensime-kill-txt-props path)
+	      (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))
+	  (message "No package declaration found."))))))
 
 (defun ensime-inspect-project-package ()
   "Inspect the package declared as the project package in the config file."
