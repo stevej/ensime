@@ -2097,7 +2097,7 @@ If is-obj is non-nil, use an alternative color for the link."
 (defun ensime-package-path-at-point ()
   "Return the package path at point, or nil if point is not in a package path."
   (let* ((case-fold-search nil)
-	 (re "\\(\\(?:[a-z0-9]+\\.\\)+[a-z0-9]+\\)"))
+	 (re "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9]+\\.\\)+[a-z0-9]+\\)"))
     (save-excursion
       (catch 'return
 	(let ((init-point (point))
