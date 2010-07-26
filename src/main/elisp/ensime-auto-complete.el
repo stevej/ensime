@@ -56,7 +56,7 @@ target of the call. Point should be be over last character of call target."
 
 (defun ensime-ac-name-candidates (prefix)
   "Return candidate list."
-
+  
   ;; Are we completing a 'new Symbol' expression?
   (let* ((is-constructor (ensime-ac-completing-constructor-p prefix)))
 
