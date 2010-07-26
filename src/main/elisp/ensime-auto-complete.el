@@ -74,6 +74,10 @@ target of the call. Point should be be over last character of call target."
 		     (goto-char p)
 		     (backward-delete-char (length prefix))
 		     (save-excursion
+		       ;; Insert a dummy value after (point), so that
+		       ;; if we are at the end of a method body, the
+		       ;; method context will be extended to include
+		       ;; the completion point.
 		       (insert "()"))
 		     (ensime-save-buffer-no-hooks)
 		     (ensime-rpc-name-completions-at-point 
