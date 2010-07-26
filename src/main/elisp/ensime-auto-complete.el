@@ -1,36 +1,19 @@
 (require 'auto-complete)
 
-(defun ensime-ac-delete-text-back-to-call-target ()
-  "Assuming the point is in a member prefix, delete all text back to the
-target of the call. Point should be be over last character of call target."
-  (let ((p (point)))
-    (re-search-backward "[^\\. ][\\. ]" (point-at-bol) t)
-    (let ((text (buffer-substring (1+ (point)) p))
-	  (deactivate-mark nil))
-      (delete-region (1+ (point)) p)
-      text)))
+
+(defun ensime-ac-move-point-back-to-call-target (prefix)
+  "Assuming the point is in a member prefix, move the point back so it's
+at the last char of the call target."
+  (backward-char (length prefix))
+  (re-search-backward "[^\\. ]" (point-at-bol) t))
 
 
 (defun ensime-ac-member-candidates (prefix)
   "Return candidate list."
-  (let ((buf (current-buffer))
-	(file-name buffer-file-name)
-	(p (point))
-	(conn (ensime-current-connection)))
-    (let ((members 
-	   (unwind-protect
-	       (with-temp-buffer
-		 (let ((ensime-buffer-connection conn)
-		       (buffer-file-name file-name))
-		   (insert-buffer-substring buf)
-		   (goto-char p)
-		   (ensime-ac-delete-text-back-to-call-target)
-		   (ensime-save-buffer-no-hooks)
-		   (ensime-rpc-members-for-type-at-point prefix)))
-	     (clear-visited-file-modtime)
-	     (ensime-save-buffer-no-hooks)
-	     )))
-
+  (ensime-save-buffer-no-hooks)
+  (save-excursion
+    (ensime-ac-move-point-back-to-call-target prefix)
+    (let ((members (ensime-rpc-members-for-type-at-point prefix)))
       (mapcar (lambda (m)
 		(let* ((type-name (plist-get m :type-name))
 		       (type-id (plist-get m :type-id))
@@ -43,7 +26,7 @@ target of the call. Point should be be over last character of call target."
 			      'scala-type-name type-name 
 			      'scala-type-id type-id
 			      'is-callable is-callable
-			      ))) 
+			      )))
 	      members)
       )))
 
@@ -57,49 +40,27 @@ target of the call. Point should be be over last character of call target."
 
 (defun ensime-ac-name-candidates (prefix)
   "Return candidate list."
-  
+
+  (ensime-save-buffer-no-hooks)
+
   ;; Are we completing a 'new Symbol' expression?
-  (let* ((is-constructor (ensime-ac-completing-constructor-p prefix)))
-
-    (let ((buf (current-buffer))
-	  (file-name buffer-file-name)
-	  (p (point))
-	  (conn (ensime-current-connection)))
-      (let ((names 
-	     (unwind-protect
-		 (with-temp-buffer
-		   (let ((ensime-buffer-connection conn)
-			 (buffer-file-name file-name))
-		     (insert-buffer-substring buf)
-		     (goto-char p)
-		     (backward-delete-char (length prefix))
-		     (save-excursion
-		       ;; Insert a dummy value after (point), so that
-		       ;; if we are at the end of a method body, the
-		       ;; method context will be extended to include
-		       ;; the completion point.
-		       (insert "()"))
-		     (ensime-save-buffer-no-hooks)
-		     (ensime-rpc-name-completions-at-point 
-		      prefix is-constructor)))
-	       (clear-visited-file-modtime)
-	       (ensime-save-buffer-no-hooks)
-	       )))
-
-	(mapcar (lambda (m)
-		  (let* ((type-name (plist-get m :type-name))
-			 (type-id (plist-get m :type-id))
-			 (is-callable (plist-get m :is-callable))
-			 (name (plist-get m :name))
-			 (candidate (concat name ":" type-name)))
-		    ;; Save the type for later display
-		    (propertize candidate
-				'symbol-name name
-				'scala-type-name type-name 
-				'scala-type-id type-id
-				'is-callable is-callable
-				))
-		  ) names)))))
+  (let* ((is-constructor (ensime-ac-completing-constructor-p prefix))
+	 (names (ensime-rpc-name-completions-at-point 
+		 prefix is-constructor)))
+    (mapcar (lambda (m)
+	      (let* ((type-name (plist-get m :type-name))
+		     (type-id (plist-get m :type-id))
+		     (is-callable (plist-get m :is-callable))
+		     (name (plist-get m :name))
+		     (candidate (concat name ":" type-name)))
+		;; Save the type for later display
+		(propertize candidate
+			    'symbol-name name
+			    'scala-type-name type-name 
+			    'scala-type-id type-id
+			    'is-callable is-callable
+			    ))
+	      ) names)))
 
 
 (defun ensime-ac-get-doc (item)
