@@ -18,17 +18,18 @@ target of the call. Point should be be over last character of call target."
 	(p (point))
 	(conn (ensime-current-connection)))
     (let ((members 
-	   (with-temp-buffer
-	     (let ((ensime-buffer-connection conn)
-		   (buffer-file-name file-name))
-	       (insert-buffer-substring buf)
-	       (goto-char p)
-	       (ensime-ac-delete-text-back-to-call-target)
-	       (ensime-save-buffer-no-hooks)
-	       (ensime-rpc-members-for-type-at-point prefix)))))
-
-      (clear-visited-file-modtime)
-      (ensime-save-buffer-no-hooks)
+	   (unwind-protect
+	       (with-temp-buffer
+		 (let ((ensime-buffer-connection conn)
+		       (buffer-file-name file-name))
+		   (insert-buffer-substring buf)
+		   (goto-char p)
+		   (ensime-ac-delete-text-back-to-call-target)
+		   (ensime-save-buffer-no-hooks)
+		   (ensime-rpc-members-for-type-at-point prefix)))
+	     (clear-visited-file-modtime)
+	     (ensime-save-buffer-no-hooks)
+	     )))
 
       (mapcar (lambda (m)
 		(let* ((type-name (plist-get m :type-name))
@@ -65,17 +66,21 @@ target of the call. Point should be be over last character of call target."
 	  (p (point))
 	  (conn (ensime-current-connection)))
       (let ((names 
-	     (with-temp-buffer
-	       (let ((ensime-buffer-connection conn)
-		     (buffer-file-name file-name))
-		 (insert-buffer-substring buf)
-		 (goto-char p)
-		 (backward-delete-char (length prefix))
-		 (ensime-save-buffer-no-hooks)
-		 (ensime-rpc-name-completions-at-point prefix is-constructor)))))
-
-	(clear-visited-file-modtime)
-	(ensime-save-buffer-no-hooks)
+	     (unwind-protect
+		 (with-temp-buffer
+		   (let ((ensime-buffer-connection conn)
+			 (buffer-file-name file-name))
+		     (insert-buffer-substring buf)
+		     (goto-char p)
+		     (backward-delete-char (length prefix))
+		     (save-excursion
+		       (insert "()"))
+		     (ensime-save-buffer-no-hooks)
+		     (ensime-rpc-name-completions-at-point 
+		      prefix is-constructor)))
+	       (clear-visited-file-modtime)
+	       (ensime-save-buffer-no-hooks)
+	       )))
 
 	(mapcar (lambda (m)
 		  (let* ((type-name (plist-get m :type-name))
