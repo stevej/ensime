@@ -1,52 +1,44 @@
+;;; ensime-auto-complete.el
+;;
+;;;; License
+;;
+;;     Copyright (C) 2010 Aemon Cannon
+;;
+;;     This program is free software; you can redistribute it and/or
+;;     modify it under the terms of the GNU General Public License as
+;;     published by the Free Software Foundation; either version 2 of
+;;     the License, or (at your option) any later version.
+;;
+;;     This program is distributed in the hope that it will be useful,
+;;     but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;;     GNU General Public License for more details.
+;;
+;;     You should have received a copy of the GNU General Public
+;;     License along with this program; if not, write to the Free
+;;     Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+;;     MA 02111-1307, USA.
+
 (require 'auto-complete)
 
-
-(defun ensime-ac-move-point-back-to-call-target (prefix)
-  "Assuming the point is in a member prefix, move the point back so it's
-at the last char of the call target."
-  (backward-char (length prefix))
-  (re-search-backward "[^\\. ]" (point-at-bol) t))
+(defun ensime-ac-delete-text-back-to-call-target ()
+  "Assuming the point is in a member prefix, delete all text back to the
+target of the call. Point should be be over last character of call target."
+  (let ((p (point)))
+    (re-search-backward "[^\\. ][\\. ]" (point-at-bol) t)
+    (let ((text (buffer-substring (1+ (point)) p))
+	  (deactivate-mark nil))
+      (delete-region (1+ (point)) p)
+      text)))
 
 
 (defun ensime-ac-member-candidates (prefix)
   "Return candidate list."
-  (ensime-save-buffer-no-hooks)
-  (save-excursion
-    (ensime-ac-move-point-back-to-call-target prefix)
-    (let ((members (ensime-rpc-members-for-type-at-point prefix)))
-      (mapcar (lambda (m)
-		(let* ((type-name (plist-get m :type-name))
-		       (type-id (plist-get m :type-id))
-		       (is-callable (plist-get m :is-callable))
-		       (name (plist-get m :name))
-		       (candidate (concat name ":" type-name)))
-		  ;; Save the type for later display
-		  (propertize candidate
-			      'symbol-name name
-			      'scala-type-name type-name 
-			      'scala-type-id type-id
-			      'is-callable is-callable
-			      )))
-	      members)
-      )))
-
-
-(defun ensime-ac-completing-constructor-p (prefix)
-  "Are we trying to complete a call of the form 'new [prefix]' ?"
-  (save-excursion
-    (goto-char (- (point) (length prefix)))
-    (looking-back "new\\s-+" (ensime-pt-at-end-of-prev-line))
-    ))
-
-(defun ensime-ac-name-candidates (prefix)
-  "Return candidate list."
-
-  (ensime-save-buffer-no-hooks)
-
-  ;; Are we completing a 'new Symbol' expression?
-  (let* ((is-constructor (ensime-ac-completing-constructor-p prefix))
-	 (names (ensime-rpc-name-completions-at-point 
-		 prefix is-constructor)))
+  (let ((members 
+	 (ensime-ac-with-buffer-copy 
+	  (ensime-ac-delete-text-back-to-call-target)
+	  (ensime-save-buffer-no-hooks)
+	  (ensime-rpc-members-for-type-at-point prefix))))
     (mapcar (lambda (m)
 	      (let* ((type-name (plist-get m :type-name))
 		     (type-id (plist-get m :type-id))
@@ -59,8 +51,74 @@ at the last char of the call target."
 			    'scala-type-name type-name 
 			    'scala-type-id type-id
 			    'is-callable is-callable
-			    ))
-	      ) names)))
+			    ))) 
+	    members)
+    ))
+
+
+(defmacro* ensime-ac-with-buffer-copy (&rest body)
+  "Create a duplicate of the current buffer, copying all contents. 
+Bind ensime-buffer-connection and buffer-file-name to the given values.
+Execute forms in body in the context of this new buffer. The idea is that
+We can abuse this buffer, even saving it's contents to disk, and all the 
+changes will be forgotten."
+  `(let ((buf (current-buffer))
+	 (file-name buffer-file-name)
+	 (p (point))
+	 (conn (ensime-current-connection)))
+     (let ((val (unwind-protect
+		    (with-temp-buffer
+		      (let ((ensime-buffer-connection conn)
+			    (buffer-file-name file-name))
+			(insert-buffer-substring buf)
+			(goto-char p)
+			,@body
+			)))))
+       ;; Make sure we overwrite any changes
+       ;; saved from temp buffer.
+       (clear-visited-file-modtime)
+       (ensime-save-buffer-no-hooks)
+       val
+       )))
+
+
+(defun ensime-ac-completing-constructor-p (prefix)
+  "Are we trying to complete a call of the form 'new [prefix]' ?"
+  (save-excursion
+    (goto-char (- (point) (length prefix)))
+    (looking-back "new\\s-+" (ensime-pt-at-end-of-prev-line))
+    ))
+
+(defun ensime-ac-name-candidates (prefix)
+  "Return candidate list."
+  (let ((is-constructor (ensime-ac-completing-constructor-p prefix)))
+    (let ((names 
+	   (ensime-ac-with-buffer-copy 
+	    (backward-delete-char (length prefix))
+	    (save-excursion
+	      ;; Insert a dummy value after (point), so that
+	      ;; if we are at the end of a method body, the
+	      ;; method context will be extended to include
+	      ;; the completion point.
+	      (insert "()"))
+	    (ensime-save-buffer-no-hooks)
+	    (ensime-rpc-name-completions-at-point
+	     prefix is-constructor))))
+
+      (mapcar (lambda (m)
+		(let* ((type-name (plist-get m :type-name))
+		       (type-id (plist-get m :type-id))
+		       (is-callable (plist-get m :is-callable))
+		       (name (plist-get m :name))
+		       (candidate (concat name ":" type-name)))
+		  ;; Save the type for later display
+		  (propertize candidate
+			      'symbol-name name
+			      'scala-type-name type-name 
+			      'scala-type-id type-id
+			      'is-callable is-callable
+			      ))
+		) names))))
 
 
 (defun ensime-ac-get-doc (item)
