@@ -177,12 +177,19 @@
     (define-key map (kbd "C-c d c") 'ensime-db-continue)
     (define-key map (kbd "C-c d q") 'ensime-db-quit)
     (define-key map (kbd "C-c d l") 'ensime-db-list-locals)
+
+    (define-key map [C-down-mouse-1] 'ignore)
+    (define-key map [C-up-mouse-1] 'ignore)
+    (define-key map [C-mouse-1] 'ignore)
+    (define-key map [double-mouse-1] 'ensime-mouse-1-double-click)
+    (define-key map [C-mouse-1] 'ensime-control-mouse-1-single-click)
     map)
   "Keymap for `ensime-mode'.")
 
 
 (define-minor-mode ensime-mode
-  "ENSIME: The ENhanced Scala Interaction Mode for Emacs (minor-mode)."
+  "ENSIME: The ENhanced Scala Interaction Mode for Emacs (minor-mode).
+\\{ensime-mode-map}"
   nil
   nil
   ensime-mode-map
@@ -200,15 +207,7 @@
 	  (setq tooltip-delay 1.0)
 	  (define-key ensime-mode-map [mouse-movement] 'ensime-mouse-motion))
 
-	(ensime-refresh-note-overlays)
-
-	(define-key ensime-mode-map [double-mouse-1] 'ensime-mouse-1-double-click)
-	;; Clear these
-	(define-key ensime-mode-map [C-down-mouse-1] 'ignore)
-	(define-key ensime-mode-map [C-up-mouse-1] 'ignore)
-	(define-key ensime-mode-map [C-mouse-1] 'ignore)
-
-	(define-key ensime-mode-map [C-mouse-1] 'ensime-control-mouse-1-single-click))
+	(ensime-refresh-note-overlays))
     (progn
       (ensime-ac-disable)
       (remove-hook 'after-save-hook 'ensime-run-after-save-hooks t)
@@ -216,9 +215,6 @@
       (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
       (make-local-variable 'track-mouse)
       (setq track-mouse nil)
-      (define-key ensime-mode-map [mouse-movement] 'ignore)
-      (define-key ensime-mode-map [double-mouse-1] 'ignore)
-      (define-key ensime-mode-map [C-mouse-1] 'ignore)
       )))
 
 ;;;;;; Mouse handlers
