@@ -160,8 +160,6 @@
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
 
-    (ensime-set-key conf :use-ivy t)
-
     (ensime-set-key conf :project-package
 		    (ensime-config-read-proj-package))
 
