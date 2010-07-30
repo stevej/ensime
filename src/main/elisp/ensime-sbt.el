@@ -141,7 +141,6 @@
 (defun ensime-sbt-maybe-auto-compile ()
   "Compile the code."
   (interactive)
-  (message "hello")
   (when (and 
 	 (ensime-connected-p)
 	 (plist-get (ensime-config 
