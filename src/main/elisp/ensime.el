@@ -364,9 +364,10 @@
 (defun ensime-reload-config ()
   "Re-read the config file, and tell the server to re-up the compiler."
   (interactive)
-  (let* ((config (ensime-config-find-and-load)))
-    ;; Send the project initialization..
-    (ensime-eval-async `(swank:init-project ,config) #'identity)))
+  (ensime-assert-connected
+   (let* ((config (ensime-config-find-and-load)))
+     (ensime-set-config (current-connection) config)
+     (ensime-eval-async `(swank:init-project ,config) #'identity))))
 
 
 (defun ensime-maybe-start-server (program program-args env directory buffer)
@@ -450,6 +451,13 @@ defined."
   (when (ensime-connected-p)
     (let ((config (ensime-config (ensime-connection))))
       (plist-get config :root-dir) ".")))
+
+(defmacro ensime-assert-connected (&rest body)
+  "Surround body forms with a check to see if we're connected.
+If not, message the user."
+  `(if (ensime-connected-p)
+       (progn ,@body)
+     (message "This command is requires a connection to an ENSIME server.")))
 
 (defun ensime-swank-port-file ()
   "Filename where the SWANK server writes its TCP port number."
