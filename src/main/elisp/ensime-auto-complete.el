@@ -40,15 +40,15 @@ target of the call. Point should be be over last character of call target."
 	  (ensime-save-buffer-no-hooks)
 	  (ensime-rpc-members-for-type-at-point prefix))))
     (mapcar (lambda (m)
-	      (let* ((type-name (plist-get m :type-name))
+	      (let* ((type-sig (plist-get m :type-sig))
 		     (type-id (plist-get m :type-id))
 		     (is-callable (plist-get m :is-callable))
 		     (name (plist-get m :name))
-		     (candidate (concat name " : " type-name)))
+		     (candidate (concat name " : " type-sig)))
 		;; Save the type for later display
 		(propertize candidate
 			    'symbol-name name
-			    'scala-type-name type-name 
+			    'scala-type-sig type-sig 
 			    'scala-type-id type-id
 			    'is-callable is-callable
 			    ))) 
@@ -106,15 +106,15 @@ changes will be forgotten."
 	     prefix is-constructor))))
 
       (mapcar (lambda (m)
-		(let* ((type-name (plist-get m :type-name))
+		(let* ((type-sig (plist-get m :type-sig))
 		       (type-id (plist-get m :type-id))
 		       (is-callable (plist-get m :is-callable))
 		       (name (plist-get m :name))
-		       (candidate (concat name " : " type-name)))
+		       (candidate (concat name " : " type-sig)))
 		  ;; Save the type for later display
 		  (propertize candidate
 			      'symbol-name name
-			      'scala-type-name type-name 
+			      'scala-type-sig type-sig 
 			      'scala-type-id type-id
 			      'is-callable is-callable
 			      ))
@@ -123,7 +123,7 @@ changes will be forgotten."
 
 (defun ensime-ac-get-doc (item)
   "Return doc for given item."
-  (get-text-property 0 'scala-type-name item))
+  (get-text-property 0 'scala-type-sig item))
 
 (defun ensime-ac-member-prefix ()
   "Starting at current point. Find the point of completion for a member access. 
