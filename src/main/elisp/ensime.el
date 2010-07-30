@@ -366,7 +366,7 @@
   (interactive)
   (ensime-assert-connected
    (let* ((config (ensime-config-find-and-load)))
-     (ensime-set-config (current-connection) config)
+     (ensime-set-config (ensime-current-connection) config)
      (ensime-eval-async `(swank:init-project ,config) #'identity))))
 
 
@@ -2357,7 +2357,9 @@ It should be used for \"background\" messages such as argument lists."
   (let ((args (ensime-type-type-args type)))
     (if args
 	(concat "[" 
-		(mapconcat (lambda(tpe)(ensime-type-name tpe)) args ", ")
+		(mapconcat 
+		 (lambda(tpe)
+		   (ensime-type-name-with-args tpe)) args ", ")
 		"]")
       "")))
 
