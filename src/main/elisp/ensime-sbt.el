@@ -178,8 +178,8 @@
       path)))
 
 (defun ensime-sbt-find-path-to-parent-project ()
-  (interactive)
   "Search up the directory tree find an SBT project dir, then see if it has a parent above it."
+  (interactive)
   (let ((path (ensime-sbt-find-path-to-project)))
     (let ((parent-path (file-truename (concat path "/.."))))
       (if (not (ensime-sbt-project-dir-p parent-path))
