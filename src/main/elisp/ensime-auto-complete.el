@@ -44,7 +44,7 @@ target of the call. Point should be be over last character of call target."
 		     (type-id (plist-get m :type-id))
 		     (is-callable (plist-get m :is-callable))
 		     (name (plist-get m :name))
-		     (candidate (concat name ":" type-name)))
+		     (candidate (concat name " : " type-name)))
 		;; Save the type for later display
 		(propertize candidate
 			    'symbol-name name
@@ -110,7 +110,7 @@ changes will be forgotten."
 		       (type-id (plist-get m :type-id))
 		       (is-callable (plist-get m :is-callable))
 		       (name (plist-get m :name))
-		       (candidate (concat name ":" type-name)))
+		       (candidate (concat name " : " type-name)))
 		  ;; Save the type for later display
 		  (propertize candidate
 			      'symbol-name name
@@ -235,8 +235,10 @@ be used later to give contextual help when entering arguments."
 			     (incf i)
 			     (format 
 			      "%s:%s" 
-			      (propertize (nth i param-names) 'face font-lock-variable-name-face)
-			      (propertize (ensime-type-name pt) 'face font-lock-type-face)
+			      (propertize (nth i param-names) 
+					  'face font-lock-variable-name-face)
+			      (propertize (ensime-type-name-with-args pt)
+					  'face font-lock-type-face)
 			      ))
 			   param-types ", ")))
 	  (message (concat "( " param-str " )")))

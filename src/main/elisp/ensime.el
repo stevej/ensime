@@ -280,6 +280,7 @@
 			 (overlay-get (car note-overlays) 'help-echo))
 			t))
 
+
        ;; Otherwise show a type hint..
        ((and ident ensime-tooltip-type-hints)
 	(progn 
@@ -287,7 +288,7 @@
 	   `(swank:type-at-point ,buffer-file-name ,point)
 	   #'(lambda (type)
 	       (when type
-		 (let ((msg (format "%s" (ensime-type-full-name type))))
+		 (let ((msg (ensime-type-full-name-with-args type)))
 		   (ensime-tooltip-show-message msg)
 		   ))))
 	  t
@@ -1304,7 +1305,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 	(setf (ensime-machine-instance) instance)))
     (let ((args (when-let (p (ensime-inferior-process))
 		  (ensime-inferior-server-args p))))
-      (when-let (name (plist-get args ':name))
+      (when-let (name (plist-get args :name))
 	(unless (string= (ensime-server-implementation-name) name)
 	  (setf (ensime-connection-name)
 		(ensime-generate-connection-name (symbol-name name)))))
@@ -2319,6 +2320,10 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-type-name (type)
   (plist-get type :name))
 
+(defun ensime-type-name-with-args (type)
+  (concat (plist-get type :name)
+	  (ensime-type-type-args-postfix type)))
+
 (defun ensime-type-id (type)
   (plist-get type :type-id))
 
@@ -2332,6 +2337,21 @@ It should be used for \"background\" messages such as argument lists."
   (if (plist-get type :arrow-type)
       (plist-get type :name)
     (plist-get type :full-name)))
+
+(defun ensime-type-full-name-with-args (type)
+  (if (plist-get type :arrow-type)
+      (plist-get type :name)
+    (concat 
+     (plist-get type :full-name)
+     (ensime-type-type-args-postfix type))))
+
+(defun ensime-type-type-args-postfix (type)
+  (let ((args (ensime-type-type-args type)))
+    (if args
+	(concat "[" 
+		(mapconcat (lambda(tpe)(ensime-type-name tpe)) args ", ")
+		"]")
+      "")))
 
 (defun ensime-declared-as (obj)
   (plist-get obj :decl-as))
