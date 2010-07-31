@@ -199,6 +199,7 @@
 	(ensime-ac-enable)
 	(add-hook 'after-save-hook 'ensime-run-after-save-hooks nil t)
 	(add-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
+	(add-hook 'ensime-source-buffer-saved-hook 'ensime-notify-builder-of-update)
 	(when ensime-tooltip-hints
 	  (add-hook 'tooltip-functions 'ensime-tooltip-handler)
 	  (make-local-variable 'track-mouse)
@@ -212,6 +213,7 @@
       (ensime-ac-disable)
       (remove-hook 'after-save-hook 'ensime-run-after-save-hooks t)
       (remove-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
+      (remove-hook 'ensime-source-buffer-saved-hook 'ensime-notify-builder-of-update)
       (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
       (make-local-variable 'track-mouse)
       (setq track-mouse nil)
@@ -1820,6 +1822,19 @@ and visible already."
   (ensime-rpc-async-typecheck-all))
 
 
+;; The Incremental Builder
+
+(defun ensime-notify-builder-of-update ()
+  "Send a request for recompile of current file to the ENSIME server.
+   Current file is saved if it has unwritten modifications."
+  (interactive)
+  (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
+  (when (and (ensime-connected-p)
+	     (plist-get (ensime-config (ensime-connection)) 
+			:use-builder))
+    (ensime-rpc-async-notify-builder-of-update (list buffer-file-name))))
+
+
 ;; RPC Helpers
 
 (defun ensime-debug-unit-info-at-point ()
@@ -1862,6 +1877,9 @@ with the current project's dependencies loaded. Returns a property list."
 
 (defun ensime-rpc-async-typecheck-all ()
   (ensime-eval-async `(swank:typecheck-all) #'identity))
+
+(defun ensime-rpc-async-notify-builder-of-update (file-names)
+  (ensime-eval-async `(swank:builder-update-files ,file-names) #'identity))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
   (ensime-eval 
