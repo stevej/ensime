@@ -50,6 +50,7 @@
 (require 'ensime-sbt)
 (require 'ensime-inf)
 (require 'ensime-debug)
+(require 'ensime-builder)
 (eval-when (compile)
   (require 'apropos)
   (require 'compile))
@@ -199,7 +200,7 @@
 	(ensime-ac-enable)
 	(add-hook 'after-save-hook 'ensime-run-after-save-hooks nil t)
 	(add-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
-	(add-hook 'ensime-source-buffer-saved-hook 'ensime-builder-notify-of-update)
+	(add-hook 'ensime-source-buffer-saved-hook 'ensime-builder-track-changed-files)
 	(when ensime-tooltip-hints
 	  (add-hook 'tooltip-functions 'ensime-tooltip-handler)
 	  (make-local-variable 'track-mouse)
@@ -213,7 +214,7 @@
       (ensime-ac-disable)
       (remove-hook 'after-save-hook 'ensime-run-after-save-hooks t)
       (remove-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
-      (remove-hook 'ensime-source-buffer-saved-hook 'ensime-builder-notify-of-update)
+      (remove-hook 'ensime-source-buffer-saved-hook 'ensime-builder-track-changed-files)
       (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
       (make-local-variable 'track-mouse)
       (setq track-mouse nil)
@@ -1153,6 +1154,8 @@ This is automatically synchronized from Lisp.")
    keep track of these so that we can create highlight overlays 
    for newly opened buffers.")
 
+(ensime-def-connection-var ensime-builder-changed-files nil
+  "Files that have changed since the last rebuild.")
 
 
 (defvar ensime-dispatching-connection nil
@@ -1822,24 +1825,6 @@ and visible already."
   (ensime-rpc-async-typecheck-all))
 
 
-;; The Incremental Builder
-
-(defun ensime-builder-init ()
-  "Start the incremental builder. This command will trigger
-a full recompile of the entire project!"
-  (interactive)
-  (ensime-rpc-async-builder-init))
-
-(defun ensime-builder-notify-of-update ()
-  "Send a request for recompile of current file to the ENSIME server.
-   Current file is saved if it has unwritten modifications."
-  (interactive)
-  (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
-  (when (and (ensime-connected-p)
-	     (plist-get (ensime-config (ensime-connection)) 
-			:use-builder))
-    (ensime-rpc-async-builder-notify-of-update (list buffer-file-name))))
-
 
 ;; RPC Helpers
 
@@ -1887,7 +1872,7 @@ with the current project's dependencies loaded. Returns a property list."
 (defun ensime-rpc-async-builder-init ()
   (ensime-eval-async `(swank:builder-init) #'identity))
 
-(defun ensime-rpc-async-builder-notify-of-update (file-names)
+(defun ensime-rpc-async-builder-update (file-names)
   (ensime-eval-async `(swank:builder-update-files ,file-names) #'identity))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
