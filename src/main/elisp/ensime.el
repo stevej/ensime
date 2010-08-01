@@ -199,7 +199,7 @@
 	(ensime-ac-enable)
 	(add-hook 'after-save-hook 'ensime-run-after-save-hooks nil t)
 	(add-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
-	(add-hook 'ensime-source-buffer-saved-hook 'ensime-notify-builder-of-update)
+	(add-hook 'ensime-source-buffer-saved-hook 'ensime-builder-notify-of-update)
 	(when ensime-tooltip-hints
 	  (add-hook 'tooltip-functions 'ensime-tooltip-handler)
 	  (make-local-variable 'track-mouse)
@@ -213,7 +213,7 @@
       (ensime-ac-disable)
       (remove-hook 'after-save-hook 'ensime-run-after-save-hooks t)
       (remove-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
-      (remove-hook 'ensime-source-buffer-saved-hook 'ensime-notify-builder-of-update)
+      (remove-hook 'ensime-source-buffer-saved-hook 'ensime-builder-notify-of-update)
       (remove-hook 'tooltip-functions 'ensime-tooltip-handler)
       (make-local-variable 'track-mouse)
       (setq track-mouse nil)
@@ -1824,7 +1824,7 @@ and visible already."
 
 ;; The Incremental Builder
 
-(defun ensime-notify-builder-of-update ()
+(defun ensime-builder-notify-of-update ()
   "Send a request for recompile of current file to the ENSIME server.
    Current file is saved if it has unwritten modifications."
   (interactive)
@@ -1832,7 +1832,7 @@ and visible already."
   (when (and (ensime-connected-p)
 	     (plist-get (ensime-config (ensime-connection)) 
 			:use-builder))
-    (ensime-rpc-async-notify-builder-of-update (list buffer-file-name))))
+    (ensime-rpc-async-builder-notify-of-update (list buffer-file-name))))
 
 
 ;; RPC Helpers
@@ -1878,7 +1878,7 @@ with the current project's dependencies loaded. Returns a property list."
 (defun ensime-rpc-async-typecheck-all ()
   (ensime-eval-async `(swank:typecheck-all) #'identity))
 
-(defun ensime-rpc-async-notify-builder-of-update (file-names)
+(defun ensime-rpc-async-builder-notify-of-update (file-names)
   (ensime-eval-async `(swank:builder-update-files ,file-names) #'identity))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
