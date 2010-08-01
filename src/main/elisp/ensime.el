@@ -1824,6 +1824,12 @@ and visible already."
 
 ;; The Incremental Builder
 
+(defun ensime-builder-init ()
+  "Start the incremental builder. This command will trigger
+a full recompile of the entire project!"
+  (interactive)
+  (ensime-rpc-async-builder-init))
+
 (defun ensime-builder-notify-of-update ()
   "Send a request for recompile of current file to the ENSIME server.
    Current file is saved if it has unwritten modifications."
@@ -1877,6 +1883,9 @@ with the current project's dependencies loaded. Returns a property list."
 
 (defun ensime-rpc-async-typecheck-all ()
   (ensime-eval-async `(swank:typecheck-all) #'identity))
+
+(defun ensime-rpc-async-builder-init ()
+  (ensime-eval-async `(swank:builder-init) #'identity))
 
 (defun ensime-rpc-async-builder-notify-of-update (file-names)
   (ensime-eval-async `(swank:builder-update-files ,file-names) #'identity))
