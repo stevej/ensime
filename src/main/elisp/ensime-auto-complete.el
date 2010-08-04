@@ -36,6 +36,7 @@ target of the call. Point should be be over last character of call target."
   "Return candidate list."
   (let ((members 
 	 (ensime-ac-with-buffer-copy 
+	  (save-excursion (insert " "))
 	  (ensime-ac-delete-text-back-to-call-target)
 	  (ensime-save-buffer-no-hooks)
 	  (ensime-rpc-members-for-type-at-point prefix))))
