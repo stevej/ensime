@@ -1949,7 +1949,7 @@ If is-obj is non-nil, use an alternative color for the link."
       (ensime-type-inspector-show 
        (ensime-rpc-inspect-type-by-id ,type-id)
        ))
-   (if (ensime-type-is-object-p type)
+   (if is-obj
        font-lock-constant-face
      font-lock-type-face)
    ))
@@ -2059,6 +2059,7 @@ If is-obj is non-nil, use an alternative color for the link."
    owner type."
   (let* ((interfaces (plist-get info :interfaces))
 	 (type (plist-get info :type))
+	 (companion-id (plist-get info :companion-id))
 	 (buffer-name ensime-inspector-buffer-name)
 	 (ensime-indent-level 0))
     (ensime-with-inspector-buffer 
@@ -2076,6 +2077,11 @@ If is-obj is non-nil, use an alternative color for the link."
 	 (ensime-inspector-insert-linked-type type t t)
 	 (insert "\n")
 
+	 ;; Insert a link to the companion object or class, if extant
+	 (when-let (id companion-id)
+	   (ensime-inspector-insert-link-to-type-id 
+	    "(companion)" id 
+	    (not (ensime-type-is-object-p type))))
 
 	 ;; Display each member, arranged by owner type
 	 (dolist (interface interfaces)
