@@ -132,6 +132,13 @@
   :prefix "ensime-"
   :group 'ensime)
 
+(defun ensime-is-source-file-p (&optional filename)
+  "Return t if the given filename (or the currently visited file if no
+argument is supplied) is a .scala or .java file."
+  (let ((file (or filename buffer-file-name)))
+    (when file
+      (integerp (string-match "\\(?:\\.scala$\\|\\.java$\\)" file)))))
+
 (defun ensime-scala-mode-hook ()
   "Conveniance hook function that just starts ensime-mode."
   (ensime-mode 1))
@@ -339,7 +346,7 @@
   "Read config file for settings. Then start an inferior 
    ENSIME server and connect to its Swank server."
   (interactive)
-  (when (not ensime-mode) 
+  (when (and (ensime-is-source-file-p) (not ensime-mode))
     (ensime-mode 1))
   (let* ((config (ensime-config-find-and-load))
 	 (cmd (or (plist-get config :server-cmd) 

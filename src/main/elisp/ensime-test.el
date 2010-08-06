@@ -361,6 +361,12 @@
     )
    
 
+   (ensime-test 
+    "Test is source file predicate..."
+    (ensime-assert (ensime-is-source-file-p "dude.scala"))
+    (ensime-assert (ensime-is-source-file-p "dude.java"))
+    (ensime-assert (not (ensime-is-source-file-p "dude.java"))))
+
    (ensime-async-test 
     "Load and compile 'hello world'."
     (let* ((proj (ensime-create-tmp-project
