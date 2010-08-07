@@ -357,18 +357,9 @@ argument is supplied) is a .scala or .java file."
 	 (buffer "*inferior-ensime-server*")
 	 (args (list (ensime-swank-port-file))))
 
-
-    (if (not (file-executable-p (concat 
-				 (file-name-as-directory 
-				  (expand-file-name dir)) 
-				 cmd)))
-
-	(message "Oops! The command '%s' in your config file does not seem to have execute permissions." cmd)
-
-      (progn
-	(ensime-delete-swank-port-file 'quiet)
-	(let ((proc (ensime-maybe-start-server cmd args env dir buffer)))
-	  (ensime-inferior-connect config proc))))))
+    (ensime-delete-swank-port-file 'quiet)
+    (let ((proc (ensime-maybe-start-server cmd args env dir buffer)))
+      (ensime-inferior-connect config proc))))
 
 
 (defun ensime-reload-config ()

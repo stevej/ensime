@@ -223,7 +223,8 @@
 
 (defun ensime-config-find-and-load ()
   "Query the user for the path to a config file, then load it."
-  (let* ((default (ensime-config-find-file buffer-file-name))
+  (let* ((default (if buffer-file-name
+		      ensime-config-find-file buffer-file-name))
 	 (file (if ensime-prefer-noninteractive default
 		 (read-file-name 
 		  "ENSIME Project file: "
