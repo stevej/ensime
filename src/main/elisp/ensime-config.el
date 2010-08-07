@@ -224,7 +224,7 @@
 (defun ensime-config-find-and-load ()
   "Query the user for the path to a config file, then load it."
   (let* ((default (if buffer-file-name
-		      ensime-config-find-file buffer-file-name))
+		      (ensime-config-find-file buffer-file-name)))
 	 (file (if ensime-prefer-noninteractive default
 		 (read-file-name 
 		  "ENSIME Project file: "
@@ -233,7 +233,13 @@
 		  nil
 		  (if default (file-name-nondirectory default))
 		  ))))
-    (ensime-config-load file)))
+
+    (if (or (not (file-exists-p file))
+	    (file-directory-p file))
+	(error (format "Invalid ENSIME Project file: %s" file))
+      (ensime-config-load file))
+
+    ))
 
 
 (defun ensime-config-load (file-name)
