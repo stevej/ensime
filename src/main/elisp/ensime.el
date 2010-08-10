@@ -731,25 +731,16 @@ The default condition handler for timer functions (see
        ,@body)))
 
 
-(defun ensime-re-search-containing-point (regex limit-start limit-end &optional group-number pos)
-  "A helper for finding regex matches for which the current point is contained in a specified group."
-  (let ((group-number (or group-number 0))
-	(pos (or pos (point))))
-    (save-excursion
-      (goto-char limit-end)
-      (catch 'return-now
-	(while (> (point) limit-start)
-	  (let* ((search-result (re-search-backward regex limit-start 1))
-		 (contains-result (and search-result
-				       (<= (match-beginning group-number) pos)
-				       (> (match-end group-number) pos))))
-
-	    (cond ((and search-result (not contains-result))
-		   (goto-char (- (match-end 0) 1)))
-
-		  ((and search-result contains-result)
-		   (throw 'return-now t)))
-	    ))))))
+(defmacro ensime-assert-buffer-saved-interactive (&rest body)
+  "Offer to save buffer if buffer is modified. Execute body only if
+buffer is saved."
+  `(if (buffer-modified-p)
+       (if (y-or-n-p "Buffer must be saved to continue. Save now? ")
+	   (progn
+	     (ensime-save-buffer-no-hooks)
+	     ,@body))
+     (progn
+       ,@body)))
 
 
 (defun ensime-kill-txt-props (str)
@@ -1917,6 +1908,9 @@ with the current project's dependencies loaded. Returns a property list."
 (defun ensime-rpc-refactor-exec (proc-id refactor-type params continue)
   (ensime-eval-async `(swank:exec-refactor ,proc-id , refactor-type ,params) continue))
 
+(defun ensime-rpc-refactor-cancel (proc-id)
+  (ensime-eval-async `(swank:cancel-refactor ,proc-id) #'identity))
+
 
 
 ;; Type Inspector UI
@@ -2243,13 +2237,14 @@ inspect the package of the current source file."
 (defvar ensime-popup-inspector-map
   (let ((map (make-sparse-keymap)))
     (define-key map [?\t] 'forward-button)
+    (define-key map [mouse-1] 'push-button)
+    (define-key map (kbd "q") 'ensime-popup-buffer-quit-function)
     (define-key map (kbd "M-n") 'forward-button)
     (define-key map (kbd "M-p") 'backward-button)
     (define-key map (kbd ".") 'ensime-inspector-forward-page)
     (define-key map (kbd ",") 'ensime-inspector-backward-page)
     map)
-  "Type and package inspector specific key bindings 
-   (in addition to those defined by popup-buffer-mode)")
+  "Type and package inspector key bindings.")
 
 
 (defmacro* ensime-with-inspector-buffer ((name object &optional select)
@@ -2460,7 +2455,7 @@ It should be used for \"background\" messages such as argument lists."
 
 ;;;;; Temporary popup buffers
 
-(defvar ensime-popup-buffer-mode-map
+(defvar ensime-popup-buffer-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "q") 'ensime-popup-buffer-quit-function)
     (define-key map [mouse-1] 'push-button)
@@ -2471,7 +2466,7 @@ It should be used for \"background\" messages such as argument lists."
   "Mode for displaying read only stuff"
   nil
   nil
-  ensime-popup-buffer-mode-map)
+  (make-sparse-keymap))
 
 (add-to-list 'minor-mode-alist
 	     '(ensime-popup-buffer-mode (:eval (ensime-modeline-string))))
@@ -2507,9 +2502,10 @@ the buffer.  If t, the current connection is taken.
   `(let* ((vars% (list ,(if (eq connection t) '(ensime-connection) connection)))
 	  (standard-output (ensime-make-popup-buffer ,name vars%)))
      (with-current-buffer standard-output
-       (prog1 (progn ,@body)
+       (prog1 
+	   (progn 
+	     ,@body)
 	 (assert (eq (current-buffer) standard-output))
-	 (ensime-init-popup-buffer vars%)
 	 (setq buffer-read-only t)
 	 (set-window-point (ensime-display-popup-buffer ,(or select 'nil))
 			   (point))))))
@@ -2524,6 +2520,7 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
     (erase-buffer)
     (set-syntax-table lisp-mode-syntax-table)
     (ensime-init-popup-buffer buffer-vars)
+    (use-local-map ensime-popup-buffer-map)
     (current-buffer)))
 
 (defun ensime-init-popup-buffer (buffer-vars)
