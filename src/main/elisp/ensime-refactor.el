@@ -62,6 +62,7 @@
   (ensime-assert-buffer-saved-interactive
    (let ((filename buffer-file-name))
      (incf ensime-refactor-id-counter)
+     (message "Please wait...")
      (ensime-rpc-refactor-prep 
       ensime-refactor-id-counter
       'organizeImports
