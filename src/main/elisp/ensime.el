@@ -43,7 +43,6 @@
 (require 'pp)
 (require 'hideshow)
 (require 'font-lock)
-(require 'ido)
 (require 'auto-complete)
 (require 'ensime-config)
 (require 'ensime-auto-complete)
@@ -1211,8 +1210,10 @@ the active connection is ambiguous."
 	       `(,(format "%s#%s" root num) . ,p)))
 	   ensime-net-processes))
 	 (keys (mapcar (lambda (opt) (car opt)) options))
-	 (key (ido-completing-read "Which project to use? " keys
-				   nil t nil)))
+	 (key (completing-read (concat "Which project to use? (" 
+				     (mapconcat #'identity keys ", ")
+				     "): ")
+			       keys nil t nil)))
     (cdr (assoc key options))))
 
 
@@ -1902,11 +1903,8 @@ with the current project's dependencies loaded. Returns a property list."
 (defun ensime-rpc-refactor-prep (proc-id refactor-type params continue)
   (ensime-eval-async `(swank:prep-refactor ,proc-id , refactor-type ,params) continue))
 
-(defun ensime-rpc-refactor-perform (proc-id refactor-type params continue)
-  (ensime-eval-async `(swank:perform-refactor ,proc-id , refactor-type ,params) continue))
-
-(defun ensime-rpc-refactor-exec (proc-id refactor-type params continue)
-  (ensime-eval-async `(swank:exec-refactor ,proc-id , refactor-type ,params) continue))
+(defun ensime-rpc-refactor-exec (proc-id refactor-type continue)
+  (ensime-eval-async `(swank:exec-refactor ,proc-id , refactor-type) continue))
 
 (defun ensime-rpc-refactor-cancel (proc-id)
   (ensime-eval-async `(swank:cancel-refactor ,proc-id) #'identity))

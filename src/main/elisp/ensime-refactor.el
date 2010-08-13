@@ -54,52 +54,51 @@
    'font-lock-constant-face)
   (insert "\n----------------------------------------\n\n"))
 
+
 (defun ensime-refactor-notify-failure (result)
   (message "Refactoring failed: %s" (plist-get result :reason)))
 
+
 (defun ensime-refactor-organize-imports ()
+  "Do a syntactic organization of the imports in the current buffer."
   (interactive)
+  (ensime-refactor-prep 'organizeImports `(file ,buffer-file-name)))
+
+(defun ensime-refactor-rename ()
+  "Rename a symbol, project-wide."
+  (interactive)
+  (let ((name (read-string "Enter the new name: ")))
+    (ensime-refactor-prep 'rename `(file ,buffer-file-name point ,(point) newName ,name))))
+
+
+(defun ensime-refactor-prep (refactor-type params)
   (ensime-assert-buffer-saved-interactive
-   (let ((filename buffer-file-name))
-     (incf ensime-refactor-id-counter)
-     (message "Please wait...")
-     (ensime-rpc-refactor-prep 
-      ensime-refactor-id-counter
-      'organizeImports
-      `(file ,filename)
-      'ensime-refactor-organize-imports-step-2
-      ))))
+   (incf ensime-refactor-id-counter)
+   (message "Please wait...")
+   (ensime-rpc-refactor-prep 
+    ensime-refactor-id-counter
+    refactor-type
+    params
+    'ensime-refactor-prep-handler
+    )))
 
-(defun ensime-refactor-organize-imports-step-2 (result)
-  (let ((status (plist-get result :status))
-	(id (plist-get result :procedure-id)))
-    (if (equal status 'success)
-	(ensime-rpc-refactor-perform 
-	 id 'organizeImports '()
-	 'ensime-refactor-organize-imports-step-3)
-      (ensime-refactor-notify-failure result)
-      )))
-
-(defun ensime-refactor-organize-imports-step-3 (result)
-  (let ((status (plist-get result :status))
+(defun ensime-refactor-prep-handler (result)
+  (let ((refactor-type (plist-get result :refactor-type))
+	(status (plist-get result :status))
 	(id (plist-get result :procedure-id))
 	(changes (plist-get result :changes)))
     (if (equal status 'success)
 	(let ((cont `(lambda () (ensime-rpc-refactor-exec
-				 ,id 'organizeImports
-				 '() 'ensime-refactor-handle-result)))
+				 ,id ',refactor-type
+				 'ensime-refactor-handle-result)))
 	      (cancel `(lambda () (ensime-rpc-refactor-cancel ,id))))
 
 	  (ensime-refactor-with-info-buffer
 	   (t)
 	   (set (make-local-variable 'cancel-refactor) cancel)
 	   (set (make-local-variable 'continue-refactor) cont)
-	   (ensime-refactor-insert-prompt "See revised file below.")
-	   (dolist (ch changes)
-	     (insert (plist-get ch :file))
-	     (insert "\n\n--------------------------\n")
-	     (insert (plist-get ch :text))
-	     (insert "\n\n"))
+	   (ensime-refactor-populate-confirmation-buffer 
+	    refactor-type changes)
 	   (goto-char (point-min))
 	   ))
       
@@ -115,6 +114,17 @@
 	  (revert-buffer t t)
 	  (ensime-typecheck-current-file))
 	))))
+
+
+(defun ensime-refactor-populate-confirmation-buffer (refactor-type changes)
+  (ensime-refactor-insert-prompt "See revised file below.")
+  (dolist (ch changes)
+    (insert (plist-get ch :file))
+    (insert "\n\n--------------------------\n")
+    (insert (plist-get ch :text))
+    (insert "\n\n")))
+
+
 
 
 

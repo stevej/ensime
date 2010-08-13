@@ -30,7 +30,7 @@
   "Interactively generate a new .ensime configuration file."
   (interactive)
   (catch 'done
-    (let* ((root (ido-read-directory-name "Find project root: "))
+    (let* ((root (read-directory-name "Find project root: "))
 	   (conf-file (concat root "/" ensime-config-file-name)))
 
       ;; Check if config already exists for this project...
@@ -50,14 +50,17 @@
 			     "continue with this "
 			     "assumption?") guessed-proj-type))
 	    (ensime-config-build root guessed-proj-type)
-	  (let ((proj-type (ido-completing-read 
-			    "What type of project is this? " 
-			    '("custom" "custom-with-ivy" "maven" "sbt"))))
+	  (let* ((options '("custom" "custom-with-ivy" "maven" "sbt"))
+		 (proj-type (completing-read 
+			     (concat "What type of project is this? (" 
+				     (mapconcat #'identity options ", ")
+				     "): ")
+			     options)))
 	    (ensime-config-build root (make-symbol proj-type))))))))
 
 
 (defun ensime-config-find-ensime-root (root)
-  (ido-read-directory-name 
+  (read-directory-name 
    "Where did you unpack the ENSIME distribution?: " root))
 
 (defun ensime-config-read-proj-package ()
@@ -67,17 +70,17 @@
 
 
 (defun ensime-config-read-source-dirs (root)
-  `(,(ido-read-directory-name 
+  `(,(read-directory-name 
       "Where is the project's source located? " root)))
 
 
 (defun ensime-config-read-dependency-jar-dirs (root)
-  `(,(ido-read-directory-name 
+  `(,(read-directory-name 
       "Where are the project's dependency jars located? " root)))
 
 
 (defun ensime-config-read-target-dir (root)
-  (ido-read-directory-name 
+  (read-directory-name 
    "Where are classes written by the compiler? " root))
 
 (defmacro ensime-set-key (conf key val)
