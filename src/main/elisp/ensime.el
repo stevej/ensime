@@ -1900,8 +1900,8 @@ with the current project's dependencies loaded. Returns a property list."
       (ensime-eval 
        `(swank:call-completion ,id))))
 
-(defun ensime-rpc-refactor-prep (proc-id refactor-type params continue)
-  (ensime-eval-async `(swank:prep-refactor ,proc-id , refactor-type ,params) continue))
+(defun ensime-rpc-refactor-perform (proc-id refactor-type params continue)
+  (ensime-eval-async `(swank:perform-refactor ,proc-id , refactor-type ,params) continue))
 
 (defun ensime-rpc-refactor-exec (proc-id refactor-type continue)
   (ensime-eval-async `(swank:exec-refactor ,proc-id , refactor-type) continue))

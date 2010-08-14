@@ -23,7 +23,7 @@
 (defvar ensime-refactor-id-counter 0
   "Each refactoring is given a unique id.")
 
-(defvar ensime-refactor-info-buffer-name "*Ensime Refactoring Procedure*")
+(defvar ensime-refactor-info-buffer-name "*Ensime Refactoring*")
 
 (defvar ensime-refactor-info-map
   (let ((map (make-sparse-keymap)))
@@ -48,12 +48,6 @@
     ,@body
     ))
 
-(defun ensime-refactor-insert-prompt (text)
-  (ensime-insert-with-face 
-   (concat text " (c to confirm, q to cancel)") 
-   'font-lock-constant-face)
-  (insert "\n----------------------------------------\n\n"))
-
 
 (defun ensime-refactor-notify-failure (result)
   (message "Refactoring failed: %s" (plist-get result :reason)))
@@ -62,27 +56,43 @@
 (defun ensime-refactor-organize-imports ()
   "Do a syntactic organization of the imports in the current buffer."
   (interactive)
-  (ensime-refactor-prep 'organizeImports `(file ,buffer-file-name)))
+  (ensime-refactor-perform 
+   'organizeImports 
+   `(file ,buffer-file-name start ,(point-min) end ,(point-max))))
+
 
 (defun ensime-refactor-rename ()
   "Rename a symbol, project-wide."
   (interactive)
-  (let ((name (read-string "Enter the new name: ")))
-    (ensime-refactor-prep 'rename `(file ,buffer-file-name point ,(point) newName ,name))))
+  (let ((start nil)
+	(end nil))
+    (save-excursion
+      (search-backward-regexp "\\W" (point-at-bol))
+      (setq start (+ (point) 1)))
+    (save-excursion
+      (search-forward-regexp "\\W" (point-at-eol))
+      (setq end (- (point) 1)))
+
+    (let* ((old-name (buffer-substring-no-properties start end))
+	   (name (read-string (format "Rename '%s' to: " old-name))))
+
+      (ensime-refactor-perform 
+       'rename 
+       `(file ,buffer-file-name start ,start end ,end newName ,name)))))
 
 
-(defun ensime-refactor-prep (refactor-type params)
+(defun ensime-refactor-perform (refactor-type params)
   (ensime-assert-buffer-saved-interactive
    (incf ensime-refactor-id-counter)
    (message "Please wait...")
-   (ensime-rpc-refactor-prep 
+   (ensime-rpc-refactor-perform 
     ensime-refactor-id-counter
     refactor-type
     params
-    'ensime-refactor-prep-handler
+    'ensime-refactor-perform-handler
     )))
 
-(defun ensime-refactor-prep-handler (result)
+(defun ensime-refactor-perform-handler (result)
   (let ((refactor-type (plist-get result :refactor-type))
 	(status (plist-get result :status))
 	(id (plist-get result :procedure-id))
@@ -117,15 +127,49 @@
 
 
 (defun ensime-refactor-populate-confirmation-buffer (refactor-type changes)
-  (ensime-refactor-insert-prompt "See revised file below.")
-  (dolist (ch changes)
-    (insert (plist-get ch :file))
-    (insert "\n\n--------------------------\n")
-    (insert (plist-get ch :text))
-    (insert "\n\n")))
+  (let ((header 
+	 "Please review the proposed changes."))
+
+    (ensime-insert-with-face 
+     (concat header " (c to confirm, q to cancel)")
+     'font-lock-constant-face)
+
+    (ensime-insert-with-face "\n----------------------------------------\n\n"
+			     'font-lock-comment-face)
+    (dolist (ch changes)
+      (let* ((file (plist-get ch :file))
+	     (text (plist-get ch :text))
+	     (from (plist-get ch :from))
+	     (to (plist-get ch :to))
+	     (len (- to from)))
+
+	(ensime-insert-with-face file 'font-lock-comment-face)
+	(insert "\n")
+	(insert "....\n")
+	(let* ((p (point))
+	       (result (ensime-refactor-file-text-range
+			file (- from 200) (+ to 200)))
+	       (expanded-text (plist-get result :text))
+	       (real-start (plist-get result :real-start))
+	       (real-end (plist-get result :real-end)))
+	  (insert expanded-text)
+	  (goto-char (+ p (- from real-start)))
+	  (delete-char (min len (- (point-max) (point))))
+	  (ensime-insert-with-face text 'font-lock-keyword-face))
+	(goto-char (point-max))
+	(insert "\n....")
+	(insert "\n\n")))))
+
+
+  (defun ensime-refactor-file-text-range (file-name start end)
+    "Return the text of the given file from start to end."
+    (with-temp-buffer 
+      (insert-file-contents file-name)
+      (let* ((real-start (max start (point-min)))
+	     (real-end (min end (point-max)))
+	     (text (buffer-substring-no-properties real-start real-end)))
+	`(:text ,text :real-start ,real-start :real-end real-end))))
 
 
 
-
-
-(provide 'ensime-refactor)
+  (provide 'ensime-refactor)
