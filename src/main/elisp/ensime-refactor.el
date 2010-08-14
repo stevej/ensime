@@ -81,6 +81,15 @@
        `(file ,buffer-file-name start ,start end ,end newName ,name)))))
 
 
+(defun ensime-refactor-extract-method ()
+  "Extract a range of code into a method."
+  (interactive)
+    (let* ((name (read-string "Name of method: ")))
+      (ensime-refactor-perform 
+       'extractMethod 
+       `(file ,buffer-file-name start ,(mark) end ,(point) methodName ,name))))
+
+
 (defun ensime-refactor-perform (refactor-type params)
   (ensime-assert-buffer-saved-interactive
    (incf ensime-refactor-id-counter)
@@ -148,7 +157,7 @@
 	(insert "....\n")
 	(let* ((p (point))
 	       (result (ensime-refactor-file-text-range
-			file (- from 200) (+ to 200)))
+			file (- from 150) (+ to 150)))
 	       (expanded-text (plist-get result :text))
 	       (real-start (plist-get result :real-start))
 	       (real-end (plist-get result :real-end)))
