@@ -67,10 +67,10 @@
   (let ((start nil)
 	(end nil))
     (save-excursion
-      (search-backward-regexp "\\W" (point-at-bol))
+      (search-backward-regexp "\\W" nil t)
       (setq start (+ (point) 1)))
     (save-excursion
-      (search-forward-regexp "\\W" (point-at-eol))
+      (search-forward-regexp "\\W" nil t)
       (setq end (- (point) 1)))
 
     (let* ((old-name (buffer-substring-no-properties start end))
