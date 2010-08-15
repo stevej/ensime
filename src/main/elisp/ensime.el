@@ -1529,7 +1529,7 @@ This idiom is preferred over `lexical-let'."
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
 	  ((:compiler-ready status)
-	   (message "Compiler ready. %s" (ensime-random-words-of-encouragement))
+	   (message "ENSIME ready. %s" (ensime-random-words-of-encouragement))
 	   (ensime-event-sig :compiler-ready status))
 	  ((:full-typecheck-result result)
 	   (ensime-typecheck-finished result)
