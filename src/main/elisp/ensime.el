@@ -831,6 +831,13 @@ values in the provided proplist."
 	(setq result (cons ea result)))))
     (reverse result)))
 
+(defun ensime-line-col-to-point (file line col)
+  "Convert line,column coordinates to a char offset."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-line line)
+    (forward-char col)
+    (point)))
 
 (defvar ensime-net-processes nil
   "List of processes (sockets) connected to Lisps.")
@@ -1211,8 +1218,8 @@ the active connection is ambiguous."
 	   ensime-net-processes))
 	 (keys (mapcar (lambda (opt) (car opt)) options))
 	 (key (completing-read (concat "Which project to use? (" 
-				     (mapconcat #'identity keys ", ")
-				     "): ")
+				       (mapconcat #'identity keys ", ")
+				       "): ")
 			       keys nil t nil)))
     (cdr (assoc key options))))
 
@@ -1859,11 +1866,11 @@ with the current project's dependencies loaded. Returns a property list."
 (defun ensime-rpc-async-typecheck-all ()
   (ensime-eval-async `(swank:typecheck-all) #'identity))
 
-(defun ensime-rpc-async-builder-init ()
-  (ensime-eval-async `(swank:builder-init) #'identity))
+(defun ensime-rpc-async-builder-init (continue)
+  (ensime-eval-async `(swank:builder-init) continue))
 
-(defun ensime-rpc-async-builder-update (file-names)
-  (ensime-eval-async `(swank:builder-update-files ,file-names) #'identity))
+(defun ensime-rpc-async-builder-update (file-names continue)
+  (ensime-eval-async `(swank:builder-update-files ,file-names) continue))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
   (ensime-eval 
@@ -1921,6 +1928,11 @@ with the current project's dependencies loaded. Returns a property list."
 (defun ensime-inspector-buffer-p (buffer)
   "Is this an ensime inspector buffer?"
   (eq (get-buffer ensime-inspector-buffer-name) buffer))
+
+(defun ensime-popup-buffer-p (buffer)
+  "Is this an ensime popup buffer?"
+  (with-current-buffer buffer
+    ensime-is-popup-buffer))
 
 (defun ensime-inspector-insert-linked-package-path (path &optional face)
   "For each component of the package path, insert a link to inspect
@@ -2482,8 +2494,9 @@ OLD-BUFFER is nil if POPUP-WINDOW was newly created.
 
 See `view-return-to-alist' for a similar idea.")
 
-;; keep compiler quiet
-(defvar ensime-buffer-package)
+(make-variable-buffer-local
+ (defvar ensime-is-popup-buffer nil 
+   "So we can query later whether this is a popup buffer."))
 
 ;; Interface
 (defmacro* ensime-with-popup-buffer ((name &optional connection select)
@@ -2519,6 +2532,7 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
     (set-syntax-table lisp-mode-syntax-table)
     (ensime-init-popup-buffer buffer-vars)
     (use-local-map ensime-popup-buffer-map)
+    (setq ensime-is-popup-buffer t)
     (current-buffer)))
 
 (defun ensime-init-popup-buffer (buffer-vars)
@@ -2533,7 +2547,7 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
   (let ((selected-window (selected-window))
 	(old-windows))
     (walk-windows (lambda (w) 
-		    (if (not (ensime-inspector-buffer-p (window-buffer w)))
+		    (if (not (ensime-popup-buffer-p (window-buffer w)))
 			(push (cons w (window-buffer w)) old-windows)))
 		  nil t)
     (let ((new-window (display-buffer (current-buffer))))

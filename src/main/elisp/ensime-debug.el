@@ -27,7 +27,7 @@ with data loaded from server."
   :type 'string
   :group 'ensime-db)
 
-(defcustom ensime-db-buffer-name "*ensime-db*"
+(defcustom ensime-db-buffer-name "*ENSIME-db*"
   "Buffer name for debug process"
   :type 'string :group 'ensime-db)
 

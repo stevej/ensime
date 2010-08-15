@@ -23,7 +23,7 @@
 (defvar ensime-refactor-id-counter 0
   "Each refactoring is given a unique id.")
 
-(defvar ensime-refactor-info-buffer-name "*Ensime Refactoring*")
+(defvar ensime-refactor-info-buffer-name "*ENSIME-Refactoring*")
 
 (defvar ensime-refactor-info-map
   (let ((map (make-sparse-keymap)))
@@ -36,12 +36,11 @@
 				(ensime-popup-buffer-quit-function)
 				))
     map)
-  "Type and package inspector specific key bindings 
-   (in addition to those defined by popup-buffer-mode)")
+  "Key bindings for the refactor confirmation popup.")
 
 
 (defmacro* ensime-refactor-with-info-buffer ((&optional select) &body body)
-  "Extend the standard popup buffer with inspector-specific bindings."
+  "Extend the standard popup buffer with refactor-specific bindings."
   `(ensime-with-popup-buffer
     (,ensime-refactor-info-buffer-name t ,select)
     (use-local-map ensime-refactor-info-map)
@@ -143,8 +142,10 @@
      (concat header " (c to confirm, q to cancel)")
      'font-lock-constant-face)
 
-    (ensime-insert-with-face "\n----------------------------------------\n\n"
-			     'font-lock-comment-face)
+    (ensime-insert-with-face 
+     "\n----------------------------------------\n\n"
+     'font-lock-comment-face)
+
     (dolist (ch changes)
       (let* ((file (plist-get ch :file))
 	     (text (plist-get ch :text))
