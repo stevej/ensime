@@ -175,8 +175,7 @@ argument is supplied) is a .scala or .java file."
     (define-key map (kbd "C-c C-a") 'ensime-sbt-switch)
     (define-key map (kbd "C-c C-z") 'ensime-inf-switch)
 
-    (define-key map (kbd "C-c C-d") 'ensime-db-start)
-
+    (define-key map (kbd "C-c d d") 'ensime-db-start)
     (define-key map (kbd "C-c d b") 'ensime-db-set-break)
     (define-key map (kbd "C-c d u") 'ensime-db-clear-break)
     (define-key map (kbd "C-c d s") 'ensime-db-step)
@@ -185,6 +184,9 @@ argument is supplied) is a .scala or .java file."
     (define-key map (kbd "C-c d c") 'ensime-db-continue)
     (define-key map (kbd "C-c d q") 'ensime-db-quit)
     (define-key map (kbd "C-c d l") 'ensime-db-list-locals)
+
+    (define-key map (kbd "C-c b b") 'ensime-builder-build)
+    (define-key map (kbd "C-c b r") 'ensime-builder-rebuild)
 
     (define-key map [C-down-mouse-1] 'ignore)
     (define-key map [C-up-mouse-1] 'ignore)
