@@ -58,7 +58,7 @@
     "\n----------------------------------------\n\n"
     'font-lock-comment-face)
    (if (null notes)
-       (insert "No errors or warnings reported.")
+       (insert "Finished with 0 errors, 0 warnings.")
      (save-excursion
        (dolist (note notes)
 	 (destructuring-bind 

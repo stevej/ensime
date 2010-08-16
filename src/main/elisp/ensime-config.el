@@ -26,6 +26,9 @@
 
 (add-to-list 'auto-mode-alist '("\\.ensime$" . emacs-lisp-mode))
 
+(defun ensime-config-fix-path (f)
+  (expand-file-name f))
+
 (defun ensime-config-gen ()
   "Interactively generate a new .ensime configuration file."
   (interactive)
@@ -60,28 +63,30 @@
 
 
 (defun ensime-config-find-ensime-root (root)
-  (read-directory-name 
-   "Where did you unpack the ENSIME distribution?: " root))
+  (ensime-config-fix-path 
+   (read-directory-name 
+    "Where did you unpack the ENSIME distribution?: " root)))
 
 (defun ensime-config-read-proj-package ()
   (read-string 
    "What is the name of your projects main package? e.g. com.myproject: "
    ))
 
-
 (defun ensime-config-read-source-dirs (root)
-  `(,(read-directory-name 
-      "Where is the project's source located? " root)))
+  (list (ensime-config-fix-path 
+	 (read-directory-name 
+	  "Where is the project's source located? " root))))
 
 
 (defun ensime-config-read-dependency-jar-dirs (root)
-  `(,(read-directory-name 
-      "Where are the project's dependency jars located? " root)))
-
+  (list (ensime-config-fix-path 
+	 (read-directory-name 
+	  "Where are the project's dependency jars located? " root))))
 
 (defun ensime-config-read-target-dir (root)
-  (read-directory-name 
-   "Where are classes written by the compiler? " root))
+  (ensime-config-fix-path
+   (read-directory-name 
+    "Where are classes written by the compiler? " root)))
 
 (defmacro ensime-set-key (conf key val)
   `(setq ,conf (plist-put ,conf ,key ,val)))
@@ -121,11 +126,29 @@
 		      (read-string 
 		       "What config should be used at runtime? (space separated): " "runtime")))
 
+    (when (yes-or-no-p 
+	   "Is your ivy.xml located somewhere other than the root of your project? ")
+      (ensime-set-key conf :ivy-file
+		      (ensime-config-fix-path
+		       (read-file-name "Locate your ivy.xml file: " root "ivy.xml"))))
+
     (ensime-set-key conf :sources
 		    (ensime-config-read-source-dirs root))
 
-    (ensime-set-key conf :dependency-jars
-		    (ensime-config-read-dependency-jar-dirs root))
+    (when (yes-or-no-p 
+	   "Is there an unmanaged directory of jars you'd like to include in your dependencies? ")
+      (ensime-set-key conf :dependency-jars
+		      (list (ensime-config-fix-path 
+			     (read-directory-name 
+			      "Where are the dependency jars located? " root)))))
+
+    (when (yes-or-no-p 
+	   "Are the core Scala jars located somewhere else? ")
+      (ensime-set-key conf :dependency-jars
+		      (append (plist-get conf :dependency-jars)
+			      (list (ensime-config-fix-path 
+				     (read-directory-name 
+				      "Where are the Scala jars located? " root))))))
 
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))
@@ -143,16 +166,6 @@
 		    (ensime-config-read-proj-package))
 
     (ensime-set-key conf :use-sbt t)
-
-    (when (yes-or-no-p 
-	   "Does your project use custom ivy configurations? ")
-      (ensime-set-key conf :sbt-compile-conf
-		      (read-string 
-		       "What config should be used to compile? (space separated): " "compile"))
-      (ensime-set-key conf :sbt-runtime-conf
-		      (read-string 
-		       "What config should be used at runtime? (space separated): " "runtime")))
-
 
     conf
     ))
@@ -172,8 +185,17 @@
     (ensime-set-key conf :dependency-jars
 		    (ensime-config-read-dependency-jar-dirs root))
 
+    (when (yes-or-no-p 
+	   "Are the core Scala jars located somewhere else? ")
+      (ensime-set-key conf :dependency-jars
+		      (append (plist-get conf :dependency-jars)
+			      (list (ensime-config-fix-path 
+				     (read-directory-name 
+				      "Where are the Scala jars located? " root))))))
+
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))
+
 
     conf
     ))
@@ -204,7 +226,10 @@
   (file-exists-p (concat root "/pom.xml")))
 
 (defun ensime-config-is-ivy-test (root)
-  (file-exists-p (concat root "/ivy.xml")))
+  (or
+   (file-exists-p (concat root "/ivy.xml"))
+   (file-exists-p (concat root "/ivy/ivy.xml"))
+   (file-exists-p (concat root "/build/ivy.xml"))))
 
 (defun ensime-config-is-sbt-test (root)
   (and 
