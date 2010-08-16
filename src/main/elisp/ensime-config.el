@@ -208,12 +208,29 @@
 	 (conf (funcall builder-func root))
 	 (conf-file (concat root "/" ensime-config-file-name)))
     (with-temp-file conf-file
-      (insert (format "%S" conf)))
+      (ensime-config-insert-config conf))
     (message (concat "Your project config "
-		     "has been written to %s, "
-		     "run M-x ensime in a source "
-		     "buffer to launch ENSIME.") conf-file)
+		     "has been written to %s. "
+		     "Use 'M-x ensime' to launch "
+		     "ENSIME.") conf-file)
     ))
+
+(defun ensime-config-insert-config (conf)
+  (insert (concat ";; This config was generated using "
+		  "ensime-config-gen. Feel free to customize "
+		  "its contents manually. \n\n"))
+  (insert "(\n\n")
+  (let ((c conf))
+    (while c
+      (let ((a (pop c))
+	    (b (pop c)))
+	(insert (format "%S" a))
+	(insert " ")
+	(insert (format "%S" b))
+	(insert "\n\n")
+	)))
+  (insert ")\n"))
+
 
 (defun ensime-config-guess-type (root)
   "Return a best guess of what type of project is located at root."
