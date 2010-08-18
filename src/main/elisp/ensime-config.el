@@ -26,14 +26,15 @@
 
 (add-to-list 'auto-mode-alist '("\\.ensime$" . emacs-lisp-mode))
 
-(defun ensime-config-fix-path (f)
-  (expand-file-name f))
+(defun ensime-config-fix-path (f root)
+  (ensime-relativise-path f root))
 
 (defun ensime-config-gen ()
   "Interactively generate a new .ensime configuration file."
   (interactive)
   (catch 'done
-    (let* ((root (read-directory-name "Find project root: "))
+    (let* ((root (expand-file-name 
+		  (read-directory-name "Find project root: ")))
 	   (conf-file (concat root "/" ensime-config-file-name)))
 
       ;; Check if config already exists for this project...
@@ -63,7 +64,7 @@
 
 
 (defun ensime-config-find-ensime-root (root)
-  (ensime-config-fix-path 
+  (expand-file-name 
    (read-directory-name 
     "Where did you unpack the ENSIME distribution?: " root)))
 
@@ -75,18 +76,18 @@
 (defun ensime-config-read-source-dirs (root)
   (list (ensime-config-fix-path 
 	 (read-directory-name 
-	  "Where is the project's source located? " root))))
+	  "Where is the project's source located? " root) root)))
 
 
 (defun ensime-config-read-dependency-jar-dirs (root)
   (list (ensime-config-fix-path 
 	 (read-directory-name 
-	  "Where are the project's dependency jars located? " root))))
+	  "Where are the project's dependency jars located? " root) root)))
 
 (defun ensime-config-read-target-dir (root)
   (ensime-config-fix-path
    (read-directory-name 
-    "Where are classes written by the compiler? " root)))
+    "Where are classes written by the compiler? " root) root))
 
 (defmacro ensime-set-key (conf key val)
   `(setq ,conf (plist-put ,conf ,key ,val)))
@@ -130,7 +131,7 @@
 	   "Is your ivy.xml located somewhere other than the root of your project? ")
       (ensime-set-key conf :ivy-file
 		      (ensime-config-fix-path
-		       (read-file-name "Locate your ivy.xml file: " root "ivy.xml"))))
+		       (read-file-name "Locate your ivy.xml file: " root "ivy.xml") root)))
 
     (ensime-set-key conf :sources
 		    (ensime-config-read-source-dirs root))
@@ -140,7 +141,7 @@
       (ensime-set-key conf :dependency-jars
 		      (list (ensime-config-fix-path 
 			     (read-directory-name 
-			      "Where are the dependency jars located? " root)))))
+			      "Where are the dependency jars located? " root) root))))
 
     (when (yes-or-no-p 
 	   "Are the core Scala jars located somewhere else? ")
@@ -148,7 +149,7 @@
 		      (append (plist-get conf :dependency-jars)
 			      (list (ensime-config-fix-path 
 				     (read-directory-name 
-				      "Where are the Scala jars located? " root))))))
+				      "Where are the Scala jars located? " root) root)))))
 
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))
@@ -191,7 +192,7 @@
 		      (append (plist-get conf :dependency-jars)
 			      (list (ensime-config-fix-path 
 				     (read-directory-name 
-				      "Where are the Scala jars located? " root))))))
+				      "Where are the Scala jars located? " root) root)))))
 
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))

@@ -367,6 +367,18 @@
     (ensime-assert (ensime-is-source-file-p "dude.java"))
     (ensime-assert (not (ensime-is-source-file-p "dude.javap"))))
 
+
+   (ensime-test 
+    "Test relativization of paths..."
+    (ensime-assert-equal 
+     "./rabbits.txt" (ensime-relativise-path "/home/aemon/rabbits.txt" "/home/aemon/"))
+    (ensime-assert-equal 
+     "./a/b/d.txt" (ensime-relativise-path "/home/aemon/a/b/d.txt" "/home/aemon/" ))
+    (ensime-assert-equal 
+     "./a/b/d.txt" (ensime-relativise-path  "c:/home/aemon/a/b/d.txt" "c:/home/aemon/"))
+    (ensime-assert-equal 
+     "c:/home/blamon/a/b/d.txt" (ensime-relativise-path  "c:/home/blamon/a/b/d.txt" "c:/home/aemon/")))
+
    (ensime-async-test 
     "Load and compile 'hello world'."
     (let* ((proj (ensime-create-tmp-project

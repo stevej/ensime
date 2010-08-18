@@ -841,6 +841,17 @@ values in the provided proplist."
     (forward-char col)
     (point)))
 
+(defun ensime-relativise-path (path root)
+  "Given a directory named root, and a path f, return f's path
+relative to root. If f is not contained by root, return the 
+absolute path to f."
+  (let* ((full-root (directory-file-name (expand-file-name root)))
+	 (full-path (expand-file-name path))
+	 (index (string-match (concat "^" full-root) full-path)))
+    (if (equal index 0)
+	(concat "." (substring full-path (length full-root)))
+      path)))
+
 (defvar ensime-net-processes nil
   "List of processes (sockets) connected to Lisps.")
 
