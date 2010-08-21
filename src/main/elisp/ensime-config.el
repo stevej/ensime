@@ -280,12 +280,18 @@
 		  (if default (file-name-nondirectory default))
 		  ))))
 
-    (if (or (not (file-exists-p file))
-	    (file-directory-p file))
-	(error (format "Invalid ENSIME Project file: %s" file))
-      (ensime-config-load file))
+    ;; Should be ok to just give the project directory..
+    (let ((file (if (and (file-directory-p file)
+			 (file-exists-p (concat file "/" ensime-config-file-name)))
+		    (concat file "/" ensime-config-file-name)
+		  file)))
 
-    ))
+      (if (or (not (file-exists-p file))
+	      (file-directory-p file))
+	  (error (format "Invalid ENSIME Project file: %s" file))
+	(ensime-config-load file))
+
+      )))
 
 
 (defun ensime-config-load (file-name)
