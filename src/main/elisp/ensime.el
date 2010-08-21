@@ -2056,13 +2056,17 @@ If is-obj is non-nil, use an alternative color for the link."
 		  (ensime-make-scaladoc-url owner-type m)
 		  (ensime-make-javadoc-url owner-type m)
 		  )))
-    (if (equal 'method (ensime-declared-as m))
+
+    (if (or (equal 'method (ensime-declared-as m))
+	    (equal 'field (ensime-declared-as m)))
 	(progn
 	  (ensime-insert-link 
 	   (format "%s" member-name) url (ensime-pos-offset pos) 
 	   font-lock-function-name-face)
 	  (tab-to-tab-stop)
 	  (ensime-inspector-insert-linked-type type nil nil))
+
+      ;; otherwise, assume it's a nested type
       (progn
 	(ensime-insert-with-face 
 	 (ensime-declared-as-str m)
@@ -2416,7 +2420,6 @@ It should be used for \"background\" messages such as argument lists."
     (interface "interface")
     (class "class")
     (object "object")
-    (abstractclass "abstract class")
     (otherwise "type")
     ))
 
