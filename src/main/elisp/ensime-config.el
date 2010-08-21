@@ -78,11 +78,9 @@
 	 (read-directory-name 
 	  "Where is the project's source located? " root) root)))
 
-
-(defun ensime-config-read-dependency-jar-dirs (root)
+(defun ensime-config-read-jar-dir (prompt root)
   (list (ensime-config-fix-path 
-	 (read-directory-name 
-	  "Where are the project's dependency jars located? " root) root)))
+	 (read-directory-name prompt root) root)))
 
 (defun ensime-config-read-target-dir (root)
   (ensime-config-fix-path
@@ -138,18 +136,18 @@
 
     (when (yes-or-no-p 
 	   "Is there an unmanaged directory of jars you'd like to include in your dependencies? ")
-      (ensime-set-key conf :dependency-jars
+      (ensime-set-key conf :compile-jars
 		      (list (ensime-config-fix-path 
 			     (read-directory-name 
-			      "Where are the dependency jars located? " root) root))))
+			      "Where are the jars located? " root) root))))
 
     (when (yes-or-no-p 
-	   "Are the core Scala jars located somewhere else? ")
-      (ensime-set-key conf :dependency-jars
-		      (append (plist-get conf :dependency-jars)
+	   "Is the Scala standard library located somewhere else? ")
+      (ensime-set-key conf :compile-jars
+		      (append (plist-get conf :compile-jars)
 			      (list (ensime-config-fix-path 
 				     (read-directory-name 
-				      "Where are the Scala jars located? " root) root)))))
+				      "Where are is the Scala library located? " root) root)))))
 
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))
@@ -183,16 +181,18 @@
     (ensime-set-key conf :sources
 		    (ensime-config-read-source-dirs root))
 
-    (ensime-set-key conf :dependency-jars
-		    (ensime-config-read-dependency-jar-dirs root))
+    (ensime-set-key conf :compile-jars
+		    (ensime-config-read-jar-dir 
+		     "Where are the project's dependency jars located? "
+		     root))
 
     (when (yes-or-no-p 
-	   "Are the core Scala jars located somewhere else? ")
-      (ensime-set-key conf :dependency-jars
-		      (append (plist-get conf :dependency-jars)
+	   "Is the Scala standard library located somewhere else? ")
+      (ensime-set-key conf :compile-jars
+		      (append (plist-get conf :compile-jars)
 			      (list (ensime-config-fix-path 
 				     (read-directory-name 
-				      "Where are the Scala jars located? " root) root)))))
+				      "Where are is the Scala library located? " root) root)))))
 
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))
