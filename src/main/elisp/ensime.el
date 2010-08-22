@@ -565,18 +565,10 @@ The default condition handler for timer functions (see
 	(t (error "Not connecting"))))
 
 
-
-;;;; Framework'ey bits
-;;;
-;;; This section contains some standard ENSIME idioms: basic macros,
-;;; ways of showing messages to the user, etc. All the code in this
-;;; file should use these functions when applicable.
-;;;
-;;;;; Syntactic sugar
-
+;; Remote doc lookups
 
 (defcustom ensime-scaladoc-stdlib-url-base 
-  "http://www.scala-lang.org/archives/downloads/distrib/files/nightly/docs/library/"
+  "http://www.scala-lang.org/api/current/"
   "URL base for constructing scaladoc stdlib links."
   :type 'string
   :group 'ensime)
@@ -593,31 +585,60 @@ The default condition handler for timer functions (see
   :type 'string
   :group 'ensime)
 
+(defvar ensime-doc-lookup-map 
+  '(
+    ("^java\\." . ensime-make-java-doc-url)
+    ("^scala\\.tools\\.nsc\\." . ensime-make-scala-compiler-doc-url)
+    ("^scala\\." . ensime-make-scala-doc-url)
+    ("^android\\." . ensime-make-android-doc-url)
+    )
+  "A map from regular expression strings to functions.
+When ENSIME requests the documentation for a type or member, 
+the qualified name of the type will be matched against each
+regex in this map. The corresponding function will be applied
+to the type and or member objects and will return a url string.")
 
-(defun ensime-make-scaladoc-url (type &optional member)
+(defun ensime-make-doc-url (type &optional member)
+  "Given a type and an optional member object, yields an http url for
+browsing the documentation for those objects."
+  (catch 'return
+    (dolist (ea ensime-doc-lookup-map)
+      (let ((re (car ea))
+	    (func (cdr ea)))
+	(when (integerp (string-match re (ensime-type-full-name type)))
+	  (throw 'return (funcall func type member)))))))
+
+(defun ensime-make-android-doc-url (type &optional member)
   "Given a scala type, and optionally a type member, construct the 
    corresponding scaladoc url."
-  (let* ((full-type-name (ensime-type-full-name type))
-	 (is-std-lib (not (null (string-match "^scala\\." full-type-name))))
-	 (is-compiler-lib (not (null (string-match "^scala\\.tools\\.nsc\\." full-type-name))))
-	 (url-base (cond (is-compiler-lib ensime-scaladoc-compiler-url-base)
-			 (is-std-lib ensime-scaladoc-stdlib-url-base)
-			 (t nil))))
-    (if (or is-std-lib is-compiler-lib)
-	(let* ((s (replace-regexp-in-string "\\." "/" full-type-name)))
-	  (concat url-base 
-		  s
-		  ".html"
-		  (if member
-		      (let* ((name (ensime-member-name member))
-			     (type (ensime-member-type member))
-			     (param-types (ensime-type-param-types type)))
-			(concat "#" full-type-name "#" name))))
-	  ))))
+  (ensime-make-java-doc-url-helper 
+   "http://developer.android.com/reference/" type member))
+
+(defun ensime-make-scala-doc-url (type &optional member)
+  (ensime-make-scala-doc-url-helper ensime-scaladoc-stdlib-url-base type member))
+
+(defun ensime-make-scala-compiler-doc-url (type &optional member)
+  (ensime-make-scala-doc-url-helper ensime-scaladoc-compiler-url-base type member))
+
+(defun ensime-make-scala-doc-url-helper (url-base type &optional member)
+  "Given a scala type, and optionally a type member, construct the 
+   corresponding scaladoc url."
+  (let* ((full-type-name (ensime-type-full-name type)))
+    (let* ((s (replace-regexp-in-string "\\." "/" full-type-name)))
+      (concat url-base 
+	      s
+	      ".html"
+	      (if member
+		  (let* ((name (ensime-member-name member))
+			 (type (ensime-member-type member))
+			 (param-types (ensime-type-param-types type)))
+		    (concat "#" full-type-name "#" name))))
+      )))
 
 
 (defvar ensime-javadoc-type-replacements 
-  '(("^scala.Int$" . "int")
+  '(
+    ("^scala.Int$" . "int")
     ("^scala.Double$" . "double")
     ("^scala.Short$" . "short")
     ("^scala.Byte$" . "byte")
@@ -630,34 +651,60 @@ The default condition handler for timer functions (see
    use this mapping to replace scala types with java types.")
 
 (defun ensime-javadoc-replace-types (str)
-  "Replace scala primitive type names with jave names."
+  "Replace scala primitive type names with jave primitive names."
   (dolist (rep ensime-javadoc-type-replacements)
     (setq str (replace-regexp-in-string 
 	       (car rep) (cdr rep) str)))
   str)
 
-(defun ensime-make-javadoc-url (type &optional member)
+(defun ensime-javadoc-type-name (type)
+  "Return a the java-friendly name for this type."
+  (let ((type-args (ensime-type-type-args type)))
+    (if (and (equal (ensime-type-name type) "Array")
+	     type-args)
+	(let ((element-tpe (car type-args)))
+	  (concat (ensime-javadoc-replace-types 
+		   (ensime-type-full-name element-tpe)) "[]"))
+      (ensime-javadoc-replace-types (ensime-type-full-name type)))))
+
+(defun ensime-make-java-doc-url (type &optional member)
+  (ensime-make-java-doc-url-helper ensime-javadoc-stdlib-url-base type member))
+
+(defun ensime-make-java-doc-url-helper (base-url type &optional member)
   "Given a java type, and optionally a java type member, construct the
    corresponding javadoc url."
   (let* ((full-type-name (ensime-type-full-name type))
-	 (is-std-lib (not (null (string-match "^java\\." full-type-name)))))
-    (if is-std-lib
-	(concat ensime-javadoc-stdlib-url-base 
-		(replace-regexp-in-string "\\." "/" full-type-name)
-		".html"
-		(if member
-		    (let* ((name (ensime-member-name member))
-			   (type (ensime-member-type member))
-			   (param-types (ensime-type-param-types type)))
-		      (concat
-		       "#" name
-		       "("  
-		       (mapconcat 
-			(lambda (tpe)
-			  (ensime-javadoc-replace-types 
-			   (ensime-type-full-name tpe))) param-types ", ")
-		       ")"))))
-      )))
+	 (without-dollar (replace-regexp-in-string "\\$" "" full-type-name))
+	 (with-slashes (replace-regexp-in-string "\\." "/" without-dollar)))
+    (concat base-url
+	    with-slashes
+	    ".html"
+	    (if member
+		(let* ((memb-name (ensime-member-name member))
+
+		       ;; If member is a constructor...
+		       (name (if (equal memb-name "this") 
+				 (ensime-type-name type) memb-name))
+
+		       (type (ensime-member-type member))
+		       (param-types (ensime-type-param-types type)))
+		  (concat
+		   "#" name
+		   "("  
+		   (mapconcat 
+		    (lambda (tpe)
+		      (ensime-javadoc-type-name tpe)) param-types ", ")
+		   ")"))))
+    ))
+
+
+;;;; Framework'ey bits
+;;;
+;;; This section contains some standard ENSIME idioms: basic macros,
+;;; ways of showing messages to the user, etc. All the code in this
+;;; file should use these functions when applicable.
+;;;
+;;;;; Syntactic sugar
 
 
 (defun ensime-make-code-link (start end file-path offset &optional face)
@@ -1764,10 +1811,7 @@ any buffer visiting the given file."
   (let* ((info (ensime-rpc-symbol-at-point))
 	 (pos (ensime-symbol-decl-pos info))
 	 (offset (ensime-pos-offset pos))
-	 (type (ensime-symbol-type info))
-	 (file-name (ensime-pos-file pos))
-	 (scaladoc (ensime-make-scaladoc-url type))
-	 (javadoc (ensime-make-javadoc-url type)))
+	 (type (ensime-symbol-type info)))
     (cond
      ((ensime-pos-valid-local-p pos)
       (progn
@@ -2023,8 +2067,7 @@ If is-obj is non-nil, use an alternative color for the link."
       (when with-doc-link
 	(let* ((pos (plist-get type :pos))
 	       (url (or (ensime-pos-file pos)
-			(ensime-make-scaladoc-url type)
-			(ensime-make-javadoc-url type)
+			(ensime-make-doc-url type)
 			)))
 	  (ensime-insert-link " doc" url (ensime-pos-offset pos))))
 
@@ -2053,8 +2096,7 @@ If is-obj is non-nil, use an alternative color for the link."
 	 (pos (ensime-member-pos m))
 	 (member-name (ensime-member-name m))
 	 (url (or (ensime-pos-file pos)
-		  (ensime-make-scaladoc-url owner-type m)
-		  (ensime-make-javadoc-url owner-type m)
+		  (ensime-make-doc-url owner-type m)
 		  )))
 
     (if (or (equal 'method (ensime-declared-as m))
