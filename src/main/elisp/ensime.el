@@ -1205,10 +1205,11 @@ This is automatically synchronized from Lisp.")
 (ensime-def-connection-var ensime-machine-instance nil
   "The name of the (remote) machine running the Lisp process.")
 
-(ensime-def-connection-var ensime-compiler-notes nil
-  "Warnings, Errors, and other notes produced by the compiler. We 
-   keep track of these so that we can create highlight overlays 
-   for newly opened buffers.")
+(ensime-def-connection-var ensime-java-compiler-notes nil
+  "Warnings, Errors, and other notes produced by the java analyzer.")
+
+(ensime-def-connection-var ensime-scala-compiler-notes nil
+  "Warnings, Errors, and other notes produced by the scala analyzer.")
 
 (ensime-def-connection-var ensime-builder-changed-files nil
   "Files that have changed since the last rebuild.")
@@ -1591,12 +1592,10 @@ This idiom is preferred over `lexical-let'."
 	  ((:compiler-ready status)
 	   (message "ENSIME ready. %s" (ensime-random-words-of-encouragement))
 	   (ensime-event-sig :compiler-ready status))
-	  ((:full-typecheck-result result)
+	  ((:typecheck-result result)
 	   (ensime-typecheck-finished result)
-	   (ensime-event-sig :full-typecheck-finished result))
-	  ((:quick-typecheck-result result)
-	   (ensime-typecheck-finished result)
-	   (ensime-event-sig :quick-typecheck-finished result))
+	   (when (plist-get result :is-full)
+	     (ensime-event-sig :full-typecheck-finished result)))
 	  ((:channel-send id msg)
 	   (ensime-channel-send (or (ensime-find-channel id)
 				    (error "Invalid channel id: %S %S" id msg))
@@ -1675,9 +1674,21 @@ This idiom is preferred over `lexical-let'."
   "The overlay structures created to highlight notes.")
 
 (defun ensime-typecheck-finished (result)
-  (setf (ensime-compiler-notes (ensime-connection))
-	(plist-get result :notes))
-  (ensime-refresh-note-overlays))
+  (let ((lang (plist-get result :lang))
+	(is-full (plist-get result :is-full))
+	(notes (plist-get result :notes)))
+    (cond 
+     ((equal lang :scala)
+      (setf (ensime-scala-compiler-notes (ensime-connection))
+	    notes))
+     ((equal lang :java)
+      (setf (ensime-java-compiler-notes (ensime-connection))
+	    notes))
+     (t))
+
+    (ensime-refresh-note-overlays)
+
+    ))
 
 
 (defun ensime-make-overlay-at (file line b e msg face)
@@ -1698,8 +1709,9 @@ any buffer visiting the given file."
 
 (defun ensime-refresh-note-overlays ()
   (let ((notes (if (ensime-connected-p)
-		   (ensime-compiler-notes (ensime-current-connection))
-		 '()
+		   (append
+		    (ensime-scala-compiler-notes (ensime-current-connection))
+		    (ensime-java-compiler-notes (ensime-current-connection)))
 		 )))
     (ensime-clear-note-overlays)
     (dolist (note notes)

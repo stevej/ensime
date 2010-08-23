@@ -393,7 +393,6 @@
 
     ((:full-typecheck-finished val)
      (let ((proj (ensime-test-var-get :proj)))
-       (ensime-assert-equal val '(:notes ()))
        (ensime-cleanup-tmp-project proj)
        (ensime-kill-all-ensime-servers)
        ))
@@ -415,7 +414,6 @@
 
     ((:full-typecheck-finished val)
      (let ((proj (ensime-test-var-get :proj)))
-       (ensime-assert-equal val '(:notes ()))
        (let ((info (ensime-rpc-inspect-package-by-path
 		    "com.helloworld")))
 	 (ensime-assert (not (null info)))
@@ -478,7 +476,6 @@
     ((:full-typecheck-finished val)
      (let* ((proj (ensime-test-var-get :proj))
 	    (src-files (plist-get proj :src-files)))
-       (ensime-assert-equal val '(:notes ()))
        ;; Set cursor to symbol in method body..
        (find-file (car src-files))
        (goto-char 163)
