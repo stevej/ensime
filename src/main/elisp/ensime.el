@@ -1586,6 +1586,8 @@ This idiom is preferred over `lexical-let'."
 			(force-mode-line-update t))
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
+	  ((:command-abort value)
+	   (message "RPC Command aborted. %s" value))
 	  ((:compiler-ready status)
 	   (message "ENSIME ready. %s" (ensime-random-words-of-encouragement))
 	   (ensime-event-sig :compiler-ready status))
