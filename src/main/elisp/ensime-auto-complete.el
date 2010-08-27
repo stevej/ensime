@@ -45,7 +45,7 @@ target of the call. Point should be be over last character of call target."
 	  ;; Add a trailing '.' so object accesses parse correctly
 	  (save-excursion 
 	    (forward-char)
-	    (insert "."))
+	    (insert ".;"))
 
 	  (ensime-save-buffer-no-hooks)
 	  (ensime-rpc-members-for-type-at-point prefix))))
