@@ -27,7 +27,12 @@
 (add-to-list 'auto-mode-alist '("\\.ensime$" . emacs-lisp-mode))
 
 (defun ensime-config-fix-path (f root)
-  (ensime-relativise-path f root))
+  ;; (ensime-config-fix-path "/home/aemon/rabbits.txt" "/home/aemon/")
+  ;; (ensime-config-fix-path "~/rabbits.txt" "/home/aemon/dogs")
+  (let ((rel (ensime-relativise-path f root)))
+    (if (integerp (string-match "^~" rel))
+	(expand-file-name rel)
+      rel)))
 
 (defun ensime-config-gen ()
   "Interactively generate a new .ensime configuration file."

@@ -369,7 +369,7 @@ argument is supplied) is a .scala or .java file."
   (interactive)
   (ensime-assert-connected
    (let* ((config (ensime-config-find-and-load)))
-     (ensime-set-config (ensime-current-connection) config)
+     (ensime-set-config conn config)
      (ensime-eval-async `(swank:init-project ,config) #'identity))))
 
 
@@ -460,7 +460,17 @@ defined."
 If not, message the user."
   `(if (ensime-connected-p)
        (progn ,@body)
-     (message "This command is requires a connection to an ENSIME server.")))
+     (message "This command requires a connection to an ENSIME server.")))
+
+(defmacro ensime-with-conn-interactive (conn-sym &rest body)
+  "Surround body forms with a check to see if we're connected.
+If not, message the user."
+  `(let* ((,conn-sym (or (ensime-current-connection)
+			 (ensime-prompt-for-connection))))
+     (if conn
+	 (progn ,@body)
+       (message 
+	"This command requires a connection to an ENSIME server."))))
 
 (defun ensime-swank-port-file ()
   "Filename where the SWANK server writes its TCP port number."
@@ -764,7 +774,7 @@ browsing the documentation for those objects."
     (set-text-properties start (point) `(face ,face))))
 
 (defvar ensime-qualified-type-regexp 
-  "^\\(?:object \\)?\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(?:\\([^\\.]+\\)\\$\\)?\\([^\\.\$]+\\)$"
+  "^\\(?:object \\)?\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(?:\\([^\\.]+\\)\\$\\)?\\([^\\.]+\\$?\\)$"
   "Match strings of form pack.pack1.pack2.Types$Type or pack.pack1.pack2.Type")
 
 (defmacro* ensime-partition-qualified-type-name (type-name (path outer-type-name name) &rest body)
@@ -1277,12 +1287,14 @@ the active connection is ambiguous."
 		    (num (ensime-connection-number p)))
 	       `(,(format "%s#%s" root num) . ,p)))
 	   ensime-net-processes))
-	 (keys (mapcar (lambda (opt) (car opt)) options))
-	 (key (completing-read (concat "Which project to use? (" 
-				       (mapconcat #'identity keys ", ")
-				       "): ")
-			       keys nil t nil)))
-    (cdr (assoc key options))))
+	 (keys (mapcar (lambda (opt) (car opt)) options)))
+    (let ((key (when keys
+		 (completing-read 
+		  (concat "Which project to use? (" 
+			  (mapconcat #'identity keys ", ")
+			  "): ")
+		  keys nil t (car keys)))))
+      (cdr (assoc key options)))))
 
 
 ;; FIXME: should be called auto-start

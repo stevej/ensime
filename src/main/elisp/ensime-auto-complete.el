@@ -31,13 +31,22 @@ target of the call. Point should be be over last character of call target."
       (delete-region (1+ (point)) p)
       text)))
 
-
 (defun ensime-ac-member-candidates (prefix)
   "Return candidate list."
   (let ((members 
 	 (ensime-ac-with-buffer-copy 
+
+	  ;; Make some space so trailing characters don't interfere.
 	  (save-excursion (insert " "))
+	  
+	  ;; Delete the member prefix - not necessary
 	  (ensime-ac-delete-text-back-to-call-target)
+
+	  ;; Add a trailing '.' so object accesses parse correctly
+	  (save-excursion 
+	    (forward-char)
+	    (insert "."))
+
 	  (ensime-save-buffer-no-hooks)
 	  (ensime-rpc-members-for-type-at-point prefix))))
     (mapcar (lambda (m)

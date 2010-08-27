@@ -424,40 +424,40 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
   "Run a Scala interpreter in an Emacs buffer"
   (interactive)
 
-  (let* ((conn (or (ensime-current-connection)
-		   (ensime-prompt-for-connection)))
-	 (root-path (or (ensime-configured-project-root) "."))
+  (ensime-with-conn-interactive 
+   conn
+   (let ((root-path (or (ensime-configured-project-root) "."))
 	 (cmd-line (ensime-db-get-cmd-line)))
 
-    (save-selected-window
-      (switch-to-buffer-other-window 
-       (get-buffer-create ensime-db-buffer-name))
+     (save-selected-window
+       (switch-to-buffer-other-window 
+	(get-buffer-create ensime-db-buffer-name))
 
-      (comint-mode)
+       (comint-mode)
 
-      (set (make-local-variable 'comint-prompt-regexp) "^> \\|^[^ ]+\\[[0-9]+\\] ")
-      (set (make-local-variable 'comint-process-echoes) nil)
-      (set (make-local-variable 'comint-scroll-to-bottom-on-output) t)
-      (set (make-local-variable 'comint-prompt-read-only) t)
-      (set (make-local-variable 'comint-output-filter-functions)
-	   '(ensime-db-output-filter comint-postoutput-scroll-to-bottom))
+       (set (make-local-variable 'comint-prompt-regexp) "^> \\|^[^ ]+\\[[0-9]+\\] ")
+       (set (make-local-variable 'comint-process-echoes) nil)
+       (set (make-local-variable 'comint-scroll-to-bottom-on-output) t)
+       (set (make-local-variable 'comint-prompt-read-only) t)
+       (set (make-local-variable 'comint-output-filter-functions)
+	    '(ensime-db-output-filter comint-postoutput-scroll-to-bottom))
 
-      (setq ensime-db-output-acc "")
-      (setq ensime-buffer-connection conn)
+       (setq ensime-db-output-acc "")
+       (setq ensime-buffer-connection conn)
 
-      (add-hook 'kill-buffer-hook 'ensime-db-clear-breakpoint-overlays nil t)
-      (add-hook 'kill-buffer-hook 'ensime-db-clear-marker-overlays nil t)
-      (ensime-db-clear-breakpoint-overlays)
-      (ensime-db-clear-marker-overlays)
+       (add-hook 'kill-buffer-hook 'ensime-db-clear-breakpoint-overlays nil t)
+       (add-hook 'kill-buffer-hook 'ensime-db-clear-marker-overlays nil t)
+       (ensime-db-clear-breakpoint-overlays)
+       (ensime-db-clear-marker-overlays)
 
-      (cd root-path)
-      (comint-exec (current-buffer) 
-		   "ensime-debug-cmd" 
-		   (car cmd-line)
-		   nil (cdr cmd-line))
+       (cd root-path)
+       (comint-exec (current-buffer) 
+		    "ensime-debug-cmd" 
+		    (car cmd-line)
+		    nil (cdr cmd-line))
 
-      (let ((proc (get-buffer-process (current-buffer))))
-	(ensime-set-query-on-exit-flag proc)))))
+       (let ((proc (get-buffer-process (current-buffer))))
+	 (ensime-set-query-on-exit-flag proc))))))
 
 
 
