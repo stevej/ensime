@@ -459,6 +459,50 @@
 
 
    (ensime-async-test 
+    "Test formatting source."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "format_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "class HelloWorld{"
+				 "def foo:Int=1"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+       (save-buffer)
+       (ensime-format-source)))
+
+    ((:return-value val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+       (let ((src (buffer-substring-no-properties 
+		   (point-min) (point-max))))
+	 (ensime-assert-equal src (ensime-test-concat-lines 
+				   "class HelloWorld {"
+				   "  def foo: Int = 1"
+				   "}"
+				   )))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       )))
+
+
+   (ensime-async-test 
     "Load and compile 'hello world'."
     (let* ((proj (ensime-create-tmp-project
 		  ensime-tmp-project-hello-world))

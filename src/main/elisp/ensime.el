@@ -1613,10 +1613,12 @@ This idiom is preferred over `lexical-let'."
 	     ))
 	  ((:return value id)
 	   (let ((rec (assq id (ensime-rex-continuations))))
+	     
 	     (cond (rec (setf (ensime-rex-continuations)
 			      (remove rec (ensime-rex-continuations)))
 			(funcall (cdr rec) value)
-			(force-mode-line-update t))
+			(force-mode-line-update t)
+			(ensime-event-sig :return-value value))
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
 	  ((:compiler-ready status)
