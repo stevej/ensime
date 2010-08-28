@@ -899,6 +899,10 @@ values in the provided proplist."
     (forward-char col)
     (point)))
 
+(defun ensime-current-line ()
+  "Return the vertical position of point..."
+  (1+ (count-lines 1 (point))))
+
 (defun ensime-relativise-path (path root)
   "Given a directory named root, and a path f, return f's path
 relative to root. If f is not contained by root, return the 
@@ -912,7 +916,7 @@ absolute path to f."
 
 
 (defun ensime-revert-visited-files (files &optional typecheck)
-  (let ((line (current-line)))
+  (let ((line (ensime-current-line)))
     (save-excursion
       (dolist (f files)
 	(when-let (buf (find-buffer-visiting f))
