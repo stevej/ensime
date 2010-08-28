@@ -130,6 +130,8 @@ changes will be forgotten."
 			      ))
 		) names))))
 
+(defun ensime-ac-candidate-name (c)
+  (get-text-property 0 'symbol-name c))
 
 (defun ensime-ac-get-doc (item)
   "Return doc for given item."
@@ -165,7 +167,7 @@ params and param types as text-properties of the completed name. This info will
 be used later to give contextual help when entering arguments."
 
   (let* ((candidate candidate) ;;Grab from dynamic environment..
-	 (name (get-text-property 0 'symbol-name candidate))
+	 (name (ensime-ac-candidate-name candidate))
 	 (type-id (get-text-property 0 'scala-type-id candidate)))
     (delete-backward-char (length candidate))
     (let ((name-start-point (point)))

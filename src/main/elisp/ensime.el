@@ -174,6 +174,7 @@ argument is supplied) is a .scala or .java file."
     (define-key map (kbd "C-x 5") 'ensime-edit-definition-other-frame)
     (define-key map (kbd "C-c C-a") 'ensime-sbt-switch)
     (define-key map (kbd "C-c C-z") 'ensime-inf-switch)
+    (define-key map (kbd "C-c f") 'ensime-format-source)
 
     (define-key map (kbd "C-c d d") 'ensime-db-start)
     (define-key map (kbd "C-c d b") 'ensime-db-set-break)
@@ -369,7 +370,7 @@ argument is supplied) is a .scala or .java file."
   (interactive)
   (ensime-assert-connected
    (let* ((config (ensime-config-find-and-load)))
-     (ensime-set-config conn config)
+     (ensime-set-config (ensime-current-connection) config)
      (ensime-eval-async `(swank:init-project ,config) #'identity))))
 
 
@@ -908,6 +909,21 @@ absolute path to f."
     (if (equal index 0)
 	(concat "." (substring full-path (length full-root)))
       path)))
+
+
+(defun ensime-revert-visited-files (files &optional typecheck)
+  (let ((line (current-line)))
+    (save-excursion
+      (dolist (f files)
+	(when-let (buf (find-buffer-visiting f))
+	  (with-current-buffer buf
+	    (let ((before-revert-hook nil)
+		  (after-revert-hook nil))
+	      (revert-buffer t t)
+	      (ensime-typecheck-current-file))
+	    ))))
+    (goto-line line)
+    ))
 
 (defvar ensime-net-processes nil
   "List of processes (sockets) connected to Lisps.")
@@ -1491,7 +1507,7 @@ versions cannot deal with that."
 		   tag sexp))
 	  (throw tag (list #'identity value)))
 	 ((:abort reason)
-	  (throw tag (list #'error (format "Synchronous Lisp Evaluation aborted: %s" reason)))))
+	  (throw tag (list #'error (format "Synchronous RPC Aborted: %s" reason)))))
        (let ((debug-on-quit t)
 	     (inhibit-quit nil)
 	     (conn (ensime-connection)))
@@ -1510,7 +1526,7 @@ versions cannot deal with that."
        (set-buffer buffer)
        (funcall cont result)))
     ((:abort reason)
-     (message "Evaluation aborted: %s" reason)))
+     (message "Asynchronous RPC Aborted: %s" reason)))
   ;; Guard against arbitrary return values which once upon a time
   ;; showed up in the minibuffer spuriously (due to a bug in
   ;; ensime-autodoc.)  If this ever happens again, returning the
@@ -1599,8 +1615,6 @@ This idiom is preferred over `lexical-let'."
 			(force-mode-line-update t))
 		   (t
 		    (error "Unexpected reply: %S %S" id value)))))
-	  ((:command-abort value)
-	   (message "RPC Command aborted. %s" value))
 	  ((:compiler-ready status)
 	   (message "ENSIME ready. %s" (ensime-random-words-of-encouragement))
 	   (ensime-event-sig :compiler-ready status))
@@ -1639,10 +1653,7 @@ This idiom is preferred over `lexical-let'."
 						    condition packet))
 				     (goto-char (point-min)))
 	   (error "Invalid protocol message"))
-	  ((:invalid-rpc id message)
-	   (setf (ensime-rex-continuations)
-		 (remove* id (ensime-rex-continuations) :key #'car))
-	   (error "Invalid rpc: %s" message))))))
+	  ))))
 
 (defun ensime-send (sexp)
   "Send SEXP directly over the wire on the current connection."
@@ -1905,7 +1916,19 @@ and visible already."
   (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
   (ensime-rpc-async-typecheck-all))
 
+;; Source Formatting 
 
+(defun ensime-format-source ()
+  "Format the source in the current buffer using the Scalariform
+formatting library."
+  (interactive)
+  (ensime-assert-buffer-saved-interactive
+   (message "Formatting...")
+   (ensime-rpc-async-format-files
+    (list buffer-file-name)
+    `(lambda (result) 
+       (ensime-revert-visited-files (list ,buffer-file-name) t)
+       ))))
 
 ;; RPC Helpers
 
@@ -1954,6 +1977,9 @@ with the current project's dependencies loaded. Returns a property list."
 
 (defun ensime-rpc-async-builder-update (file-names continue)
   (ensime-eval-async `(swank:builder-update-files ,file-names) continue))
+
+(defun ensime-rpc-async-format-files (file-names continue)
+  (ensime-eval-async `(swank:format-source ,file-names) continue))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
   (ensime-eval 

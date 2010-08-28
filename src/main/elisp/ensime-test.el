@@ -97,18 +97,18 @@
 (defvar ensime-tmp-project-hello-world
   `((:name 
      "hello_world.scala"
-     :contents ,(concat 
-		 "package com.helloworld\n"
-		 "class HelloWorld{\n"
-		 "}\n"
-		 "object HelloWorld {\n"
-		 "def main(args: Array[String]) = {\n"
-		 "Console.println(\"Hello, world!\")\n"
-		 "}\n"
-		 "def foo(a:Int, b:Int):Int = {\n"
+     :contents ,(ensime-test-concat-lines
+		 "package com.helloworld"
+		 "class HelloWorld{"
+		 "}"
+		 "object HelloWorld {"
+		 "def main(args: Array[String]) = {"
+		 "Console.println(\"Hello, world!\")"
+		 "}"
+		 "def foo(a:Int, b:Int):Int = {"
 		 "a + b"
-		 "}\n"
-		 "}\n"
+		 "}"
+		 "}"
 		 )
      )))
 
@@ -303,6 +303,18 @@
     (setq ensime-test-queue nil))
   (switch-to-buffer ensime-testing-buffer))
 
+(defun ensime-test-concat-lines (&rest lines)
+  (mapconcat #'identity lines "\n"))
+
+(defun ensime-test-eat-mark (mark)
+  (goto-char (point-min))
+  (when (search-forward-regexp (concat "/\\*" mark "\\*/") nil t)
+    (kill-backward-chars (+ 4 (length mark)))))
+
+;;;;;;;;;;;;;;;;;;
+;; ENSIME Tests ;;
+;;;;;;;;;;;;;;;;;;
+
 
 (defun ensime-run-tests ()
   "Run all regression tests for ensime-mode."
@@ -378,6 +390,72 @@
      "./a/b/d.txt" (ensime-relativise-path  "c:/home/aemon/a/b/d.txt" "c:/home/aemon/"))
     (ensime-assert-equal 
      "c:/home/blamon/a/b/d.txt" (ensime-relativise-path  "c:/home/blamon/a/b/d.txt" "c:/home/aemon/")))
+
+
+   (ensime-async-test 
+    "Test completing members."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "package com.helloworld"
+
+				 "class HelloWorld{"
+				 "  def foo(a:Int, b:Int):Int = {"
+				 "    HelloWorld./*1*/"
+				 "  }"
+				 "  def bar(a:Int, b:Int):Int = {"
+				 "    val v = HelloWorld./*2*/"
+				 "    foo(1,v)"
+				 "  }"
+				 "}"
+
+				 "object HelloWorld {"
+				 "  def blarg = 5"
+				 "  def add(a:Int, b:Int) = {"
+				 "    System.out.pri/*3*/"
+				 "    a + b"
+				 "  }"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+
+       ;; object method completion
+       (ensime-test-eat-mark "1")
+       (let* ((candidates (ensime-ac-member-candidates ""))
+	      (names (mapcar #'ensime-ac-candidate-name candidates)))
+	 (ensime-assert (member "add" names)))
+
+       ;; Try completion when a method begins without target 
+       ;; on next line.
+       (ensime-test-eat-mark "2")
+       (let* ((candidates (ensime-ac-member-candidates ""))
+	      (names (mapcar #'ensime-ac-candidate-name candidates)))
+	 (ensime-assert (member "blarg" names)))
+
+       ;; Instance completion with prefix
+       (ensime-test-eat-mark "3")
+       (let* ((candidates (ensime-ac-member-candidates "pri"))
+	      (names (mapcar #'ensime-ac-candidate-name candidates)))
+	 (ensime-assert (member "println" names)))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
 
    (ensime-async-test 
     "Load and compile 'hello world'."

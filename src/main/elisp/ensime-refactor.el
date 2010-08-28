@@ -165,13 +165,7 @@ symbol, return nil."
 
 (defun ensime-refactor-handle-result (result)
   (let ((touched (plist-get result :touched-files)))
-    (dolist (f touched)
-      (when-let (buf (find-buffer-visiting f))
-	(with-current-buffer buf
-	  (revert-buffer t t)
-	  (ensime-typecheck-current-file))
-	))))
-
+    (ensime-revert-visited-files touched t)))
 
 (defun ensime-refactor-populate-confirmation-buffer (refactor-type changes)
   (let ((header 
