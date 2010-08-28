@@ -48,6 +48,10 @@
 (put 'ensime-test-interrupted 'error-message "Test Interrupted")
 
 
+(defun ensime-test-concat-lines (&rest lines)
+  (mapconcat #'identity lines "\n"))
+
+
 (defun ensime-create-file (file-name contents)
   "Create file named file-name. Write contents to the file. Return file's name."
   (with-temp-file file-name
@@ -302,9 +306,6 @@
     (setq ensime-async-handler-stack nil)
     (setq ensime-test-queue nil))
   (switch-to-buffer ensime-testing-buffer))
-
-(defun ensime-test-concat-lines (&rest lines)
-  (mapconcat #'identity lines "\n"))
 
 (defun ensime-test-eat-mark (mark)
   (goto-char (point-min))
