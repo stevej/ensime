@@ -1479,7 +1479,7 @@ versions cannot deal with that."
 				   (symbol (list var var))
 				   (cons var)))
        (ensime-dispatch-event 
-	(list :emacs-rex ,sexp
+	(list :swank-rpc ,sexp
 	      (lambda (,result)
 		(destructure-case ,result
 		  ,@continuations)))))))
@@ -1606,9 +1606,9 @@ This idiom is preferred over `lexical-let'."
   (let ((ensime-dispatching-connection (or process (ensime-connection))))
     (or (run-hook-with-args-until-success 'ensime-event-hooks event)
 	(destructure-case event
-	  ((:emacs-rex form continuation)
+	  ((:swank-rpc form continuation)
 	   (let ((id (incf (ensime-continuation-counter))))
-	     (ensime-send `(:emacs-rex ,form ,id))
+	     (ensime-send `(:swank-rpc ,form ,id))
 	     (push (cons id continuation) (ensime-rex-continuations))
 	     ))
 	  ((:return value id)
