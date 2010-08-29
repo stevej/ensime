@@ -435,27 +435,77 @@
 
        ;; object method completion
        (ensime-test-eat-mark "1")
-       (let* ((candidates (ensime-ac-member-candidates ""))
-	      (names (mapcar #'ensime-ac-candidate-name candidates)))
-	 (ensime-assert (member "add" names)))
+       (let* ((candidates (ensime-ac-member-candidates "")))
+	 (ensime-assert (member "add" candidates)))
 
        ;; Try completion when a method begins without target 
        ;; on next line.
        (ensime-test-eat-mark "2")
-       (let* ((candidates (ensime-ac-member-candidates ""))
-	      (names (mapcar #'ensime-ac-candidate-name candidates)))
-	 (ensime-assert (member "blarg" names)))
+       (let* ((candidates (ensime-ac-member-candidates "")))
+	 (ensime-assert (member "blarg" candidates)))
 
        ;; Instance completion with prefix
        (ensime-test-eat-mark "3")
-       (let* ((candidates (ensime-ac-member-candidates "pri"))
-	      (names (mapcar #'ensime-ac-candidate-name candidates)))
-	 (ensime-assert (member "println" names)))
+       (let* ((candidates (ensime-ac-member-candidates "pri")))
+	 (ensime-assert (member "println" candidates)))
 
        (ensime-cleanup-tmp-project proj)
        (ensime-kill-all-ensime-servers)
        ))
     )
+
+   (ensime-async-test 
+    "Test completing symbols."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "package com.helloworld"
+				 "import java.io.File"
+
+				 "class HelloWorld{"
+
+				 "  def main {"
+				 "    val f = new Fi/*1*/"
+				 "  }"
+
+				 "  def blarg:Int = 5"
+
+				 "  def add(a:Int):Int = {"
+				 "    a + bl/*2*/"
+				 "  }"
+
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+
+       ;; constructor completion
+       (ensime-test-eat-mark "1")
+       (let* ((candidates (ensime-ac-name-candidates "Fi")))
+	 (ensime-assert (member "File" candidates)))
+
+       ;; local method name completion.
+       (ensime-test-eat-mark "2")
+       (let* ((candidates (ensime-ac-name-candidates "bl")))
+	 (ensime-assert (member "blarg" candidates)))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
 
 
    (ensime-async-test 
