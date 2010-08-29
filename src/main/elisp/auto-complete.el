@@ -315,6 +315,8 @@ If there is no common part, this will be nil.")
   "Common part string of whole candidates.
 If there is no common part, this will be nil.")
 
+(defvar ac-display-common-part nil)
+
 (defvar ac-prefix-overlay nil
   "Overlay for prefix string.")
 
@@ -757,13 +759,13 @@ You can not use it in source definition like (prefix . `NAME')."
         (overlay-put overlay 'after-string nil)))))
 
 (defun ac-inline-update ()
-  (if (and ac-completing ac-prefix (stringp ac-common-part))
-      (let ((common-part-length (length ac-common-part))
+  (if (and ac-completing ac-prefix (stringp ac-display-common-part))
+      (let ((common-part-length (length ac-display-common-part))
             (prefix-length (length ac-prefix)))
         (if (> common-part-length prefix-length)
             (progn
               (ac-inline-hide)
-              (ac-inline-show (point) (substring ac-common-part prefix-length)))
+              (ac-inline-show (point) (substring ac-display-common-part prefix-length)))
           (ac-inline-delete)))
     (ac-inline-delete)))
 
@@ -930,7 +932,7 @@ You can not use it in source definition like (prefix . `NAME')."
                     (if cons (setcdr cons nil))
                     (setq ac-common-part (try-completion ac-prefix result))
                     (setq ac-whole-common-part (try-completion ac-prefix candidates))
-                    (setq ac-display-common-part (mapcar 'ensime-ac-candidate-name result))
+                    (setq ac-display-common-part (try-completion ac-prefix (mapcar 'ensime-ac-candidate-name result)))
                     (if cons (setcdr cons cdr))
                     result)
                 (setq candidates (ac-comphist-sort ac-comphist candidates prefix-len))
