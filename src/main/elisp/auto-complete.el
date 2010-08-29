@@ -221,6 +221,12 @@ If you specify `nil', never be started automatically."
   :type '(repeat string)
   :group 'auto-complete)
 
+(defcustom ac-delete-dups nil
+  "Non-nil means that duplicate candidates will be automatically
+removed."
+  :type '(repeat string)
+  :group 'auto-complete)
+
 (defcustom ac-ignore-case 'smart
   "Non-nil means auto-complete ignores case.
 If this value is `smart', auto-complete ignores case only when
@@ -919,7 +925,8 @@ You can not use it in source definition like (prefix . `NAME')."
         append (ac-candidates-1 source) into candidates
         finally return
         (progn
-          ;;(delete-dups candidates)
+          (when ac-delete-dups
+	    (delete-dups candidates))
           (if (and ac-use-comphist ac-comphist)
               (if ac-show-menu
                   (let* ((pair (ac-comphist-sort ac-comphist candidates prefix-len ac-comphist-threshold))
