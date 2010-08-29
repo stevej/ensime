@@ -169,9 +169,8 @@ be used later to give contextual help when entering arguments."
   (let* ((candidate candidate) ;;Grab from dynamic environment..
 	 (name (ensime-ac-candidate-name candidate))
 	 (type-id (get-text-property 0 'scala-type-id candidate)))
-    (delete-backward-char (length candidate))
-    (let ((name-start-point (point)))
-      (insert name)
+
+    (let ((name-start-point (- (point) (length name))))
 
       ;; If this member is callable, use the type-id to lookup call completion 
       ;; information to show parameter hints.
