@@ -54,14 +54,15 @@ target of the call. Point should be be over last character of call target."
 		     (type-id (plist-get m :type-id))
 		     (is-callable (plist-get m :is-callable))
 		     (name (plist-get m :name))
-		     (candidate (concat name " : " type-sig)))
+		     (candidate name))
 		;; Save the type for later display
 		(propertize candidate
 			    'symbol-name name
-			    'scala-type-sig type-sig 
-			    'scala-type-id type-id
+			    'type-sig type-sig 
+			    'type-id type-id
 			    'is-callable is-callable
-			    ))) 
+			    'summary (ensime-ac-trunc-summary type-sig)
+			    )))
 	    members)
     ))
 
@@ -120,22 +121,32 @@ changes will be forgotten."
 		       (type-id (plist-get m :type-id))
 		       (is-callable (plist-get m :is-callable))
 		       (name (plist-get m :name))
-		       (candidate (concat name " : " type-sig)))
+		       (candidate name))
 		  ;; Save the type for later display
 		  (propertize candidate
 			      'symbol-name name
-			      'scala-type-sig type-sig 
-			      'scala-type-id type-id
+			      'type-sig type-sig 
+			      'type-id type-id
 			      'is-callable is-callable
+			      'summary (ensime-ac-trunc-summary type-sig)
 			      ))
 		) names))))
+
+(defun ensime-ac-trunc-summary (str)
+  (let ((len (length str)))
+    (if (> len 40)
+	(concat (substring str 0 40) "...")
+      str)))
 
 (defun ensime-ac-candidate-name (c)
   (get-text-property 0 'symbol-name c))
 
+(defun ensime-ac-candidate-type-sig (c)
+  (get-text-property 0 'type-sig c))
+
 (defun ensime-ac-get-doc (item)
   "Return doc for given item."
-  (get-text-property 0 'scala-type-sig item))
+  (get-text-property 0 'type-sig item))
 
 (defun ensime-ac-member-prefix ()
   "Starting at current point. Find the point of completion for a member access. 
@@ -167,8 +178,8 @@ params and param types as text-properties of the completed name. This info will
 be used later to give contextual help when entering arguments."
 
   (let* ((candidate candidate) ;;Grab from dynamic environment..
-	 (name (ensime-ac-candidate-name candidate))
-	 (type-id (get-text-property 0 'scala-type-id candidate)))
+	 (name candidate)
+	 (type-id (get-text-property 0 'type-id candidate)))
 
     (let ((name-start-point (- (point) (length name))))
 
@@ -297,7 +308,7 @@ be used later to give contextual help when entering arguments."
   (setq ac-use-fuzzy nil)
 
   (make-local-variable 'ac-use-quick-help)
-  (setq ac-use-quick-help nil)
+  (setq ac-use-quick-help t)
 
   (make-local-variable 'ac-trigger-key)
   (ac-set-trigger-key "TAB")
