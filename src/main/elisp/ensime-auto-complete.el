@@ -159,8 +159,11 @@ changes will be forgotten."
 
 (defun ensime-ac-name-prefix ()
   "Starting at current point - find the point of completion for a symbol.
-Return nil if we are not currently looking at a symbol."
-  (if (looking-back "[=(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
+Return nil if we are not currently looking at a symbol. Essentially, check 
+the cursor is positioned after a word that follows some amount of whitespace,
+which in turn follows non-expression character. 'non-expression' meaning some
+character that could not terminate an expression. = or { for example."
+  (if (looking-back "[\\:=>(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
       (let ((point (- (point) (length (match-string 1)))))
 	(goto-char point)
 	point
