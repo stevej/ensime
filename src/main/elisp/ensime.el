@@ -2565,11 +2565,15 @@ It should be used for \"background\" messages such as argument lists."
 ;; Portability
 
 (defun ensime-computed-point ()
-  "In buffers with windows-encoded line-endings, 
+  "Subtract 1 to account for 0 indexed positions
+   in Scala compiler.
+
+   In buffers with windows-encoded line-endings, 
    add with the appropriate number of CRs. This is
    necessary whenever we export a position out of emacs,
-   to a system that just counts chars."
-  (+ (point) 
+   to a system that just counts chars.
+   "
+  (+ (point) -1
      (if (eq 1 (coding-system-eol-type buffer-file-coding-system)) 
 	 (- (line-number-at-pos) 1)
        0)
