@@ -417,6 +417,10 @@
 				 "    System.out.pri/*3*/"
 				 "    a + b"
 				 "  }"
+				 "  def test() {"
+				 "    val dude = \"hello\""
+				 "    System.out.println(dude./*4*/)"
+				 "  }"
 				 "}"
 				 )
 		     ))))
@@ -448,6 +452,11 @@
        (ensime-test-eat-mark "3")
        (let* ((candidates (ensime-ac-member-candidates "pri")))
 	 (ensime-assert (member "println" candidates)))
+
+       ;; Complete member of argument
+       (ensime-test-eat-mark "4")
+       (let* ((candidates (ensime-ac-member-candidates "s")))
+	 (ensime-assert (member "substring" candidates)))
 
        (ensime-cleanup-tmp-project proj)
        (ensime-kill-all-ensime-servers)
