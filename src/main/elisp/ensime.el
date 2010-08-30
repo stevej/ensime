@@ -161,6 +161,13 @@ argument is supplied) is a .scala or .java file."
 	(before-save-hook nil))
     (save-buffer)))
 
+(defun ensime-write-buffer (&optional filename)
+  "Write the contents of buffer to its file."
+  (let ((file (or filename buffer-file-name))
+	(write-region-annotate-functions nil)
+	(write-region-post-annotation-function nil))
+    (write-region (point-min) (point-max) file nil t)))
+
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c t") 'ensime-inspect-type)

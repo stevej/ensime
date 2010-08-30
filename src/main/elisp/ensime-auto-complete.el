@@ -47,7 +47,7 @@ target of the call. Point should be be over last character of call target."
 	    (forward-char)
 	    (insert ".()"))
 
-	  (ensime-save-buffer-no-hooks)
+	  (ensime-write-buffer)
 	  (ensime-rpc-members-for-type-at-point prefix))))
     (mapcar (lambda (m)
 	      (let* ((type-sig (plist-get m :type-sig))
@@ -87,8 +87,7 @@ changes will be forgotten."
 			)))))
        ;; Make sure we overwrite any changes
        ;; saved from temp buffer.
-       (clear-visited-file-modtime)
-       (ensime-save-buffer-no-hooks)
+       (ensime-write-buffer)
        val
        )))
 
@@ -112,7 +111,7 @@ changes will be forgotten."
 	      ;; method context will be extended to include
 	      ;; the completion point.
 	      (insert " ()")) ()
-	    (ensime-save-buffer-no-hooks)
+	    (ensime-write-buffer)
 	    (ensime-rpc-name-completions-at-point
 	     prefix is-constructor))))
 
@@ -163,7 +162,7 @@ Return nil if we are not currently looking at a symbol. Essentially, check
 the cursor is positioned after a word that follows some amount of whitespace,
 which in turn follows non-expression character. 'non-expression' meaning some
 character that could not terminate an expression. = or { for example."
-  (if (looking-back "[\\:=>(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
+  (if (looking-back "[\\:=>(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w*\\)" (ensime-pt-at-end-of-prev-line))
       (let ((point (- (point) (length (match-string 1)))))
 	(goto-char point)
 	point
