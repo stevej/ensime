@@ -421,6 +421,10 @@
 				 "    val dude = \"hello\""
 				 "    System.out.println(dude./*4*/)"
 				 "  }"
+				 "  def test2() = {"
+				 "    val dude = \"hello\""
+				 "    dude.substring(2,2).hea/*5*/"
+				 "  }"
 				 "}"
 				 )
 		     ))))
@@ -457,6 +461,11 @@
        (ensime-test-eat-mark "4")
        (let* ((candidates (ensime-ac-member-candidates "s")))
 	 (ensime-assert (member "substring" candidates)))
+
+       ;; Chaining of calls
+       (ensime-test-eat-mark "5")
+       (let* ((candidates (ensime-ac-member-candidates "hea")))
+	 (ensime-assert (member "headOption" candidates)))
 
        (ensime-cleanup-tmp-project proj)
        (ensime-kill-all-ensime-servers)
