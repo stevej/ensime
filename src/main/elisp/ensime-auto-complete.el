@@ -310,6 +310,9 @@ be used later to give contextual help when entering arguments."
   (make-local-variable 'ac-use-quick-help)
   (setq ac-use-quick-help t)
 
+  (make-local-variable 'ac-delete-dups)
+  (setq ac-use-quick-help nil)
+
   (make-local-variable 'ac-trigger-key)
   (ac-set-trigger-key "TAB")
 
