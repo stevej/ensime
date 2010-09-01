@@ -87,6 +87,7 @@ changes will be forgotten."
 			)))))
        ;; Make sure we overwrite any changes
        ;; saved from temp buffer.
+       (clear-visited-file-modtime)
        (ensime-write-buffer)
        val
        )))
