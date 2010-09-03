@@ -166,7 +166,7 @@ argument is supplied) is a .scala or .java file."
   (let ((file (or filename buffer-file-name))
 	(write-region-annotate-functions nil)
 	(write-region-post-annotation-function nil))
-    (write-region (point-min) (point-max) file nil t)))
+    (write-region (point-min) (point-max) file nil 'nomessage)))
 
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
@@ -372,8 +372,9 @@ argument is supplied) is a .scala or .java file."
       (ensime-inferior-connect config proc))))
 
 
-(defun ensime-reload-config ()
-  "Re-read the config file, and tell the server to re-up the compiler."
+(defun ensime-reload ()
+  "Re-initialize the project with the current state of the config file.
+Analyzer will be restarted. All source will be recompiled."
   (interactive)
   (ensime-assert-connected
    (let* ((config (ensime-config-find-and-load)))
