@@ -2002,6 +2002,10 @@ with the current project's dependencies loaded. Returns a property list."
   (ensime-eval 
    `(swank:type-completion ,buffer-file-name ,(ensime-computed-point) ,(or prefix ""))))
 
+(defun ensime-rpc-package-member-completions (path &optional prefix)
+  (ensime-eval 
+   `(swank:package-member-completion ,path ,(or prefix ""))))
+
 (defun ensime-rpc-get-type-by-id (id)
   (if (and (integerp id) (> id -1))
       (ensime-eval 

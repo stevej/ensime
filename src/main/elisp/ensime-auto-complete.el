@@ -26,7 +26,7 @@
 target of the call. Point should be be over last character of call target."
   (let ((p (point)))
     (re-search-backward "[^\\. ][\\. ]" (point-at-bol) t)
-    (let ((text (buffer-substring (1+ (point)) p))
+    (let ((text (buffer-substring-no-properties (1+ (point)) p))
 	  (deactivate-mark nil))
       (delete-region (1+ (point)) p)
       text)))
@@ -112,9 +112,9 @@ changes will be forgotten."
 	      ;; method context will be extended to include
 	      ;; the completion point.
 	      (insert " ()")) ()
-	    (ensime-write-buffer)
-	    (ensime-rpc-name-completions-at-point
-	     prefix is-constructor))))
+	      (ensime-write-buffer)
+	      (ensime-rpc-name-completions-at-point
+	       prefix is-constructor))))
 
       (mapcar (lambda (m)
 		(let* ((type-sig (plist-get m :type-sig))
@@ -132,6 +132,38 @@ changes will be forgotten."
 			      ))
 		) names))))
 
+
+(defun ensime-ac-package-member-candidates (prefix)
+  "Return candidate list."
+  (when (looking-back ensime-ac-package-prefix-re 
+		      (ensime-pt-at-end-of-prev-line))
+    (let* ((full-match (match-string 0))
+	   (path (ensime-kill-txt-props (match-string 1)))
+
+	   (names (ensime-ac-with-buffer-copy 
+		   (backward-delete-char (length full-match))
+		   (insert "object ensimesynthetic${")
+
+		   (if (eq (length path) 0)
+
+		       (progn
+			 (save-excursion
+			   (insert "  }"))
+			 (ensime-write-buffer)
+			 (ensime-rpc-name-completions-at-point prefix))
+
+		     (progn
+		       (insert path)
+		       (save-excursion
+			 (insert "  }"))
+		       (backward-char 2)
+		       (ensime-write-buffer)
+		       (ensime-rpc-members-for-type-at-point prefix))))))
+
+	   (mapcar (lambda (m) (plist-get m :name)) 
+		   names))))
+
+
 (defun ensime-ac-trunc-summary (str)
   (let ((len (length str)))
     (if (> len 40)
@@ -148,14 +180,15 @@ changes will be forgotten."
   "Return doc for given item."
   (get-text-property 0 'type-sig item))
 
+(defun ensime-pt-at-end-of-prev-line ()
+  (save-excursion (forward-line -1)(point-at-eol)))
+
+
 (defun ensime-ac-member-prefix ()
   "Starting at current point. Find the point of completion for a member access. 
    Return nil if we are not currently looking at a member access."
   (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" (point-at-bol) t)))
     (if point (1+ point))))
-
-(defun ensime-pt-at-end-of-prev-line ()
-  (save-excursion (forward-line -1)(point-at-eol)))
 
 (defun ensime-ac-name-prefix ()
   "Starting at current point - find the point of completion for a symbol.
@@ -163,11 +196,25 @@ Return nil if we are not currently looking at a symbol. Essentially, check
 the cursor is positioned after a word that follows some amount of whitespace,
 which in turn follows non-expression character. 'non-expression' meaning some
 character that could not terminate an expression. = or { for example."
-  (if (looking-back "[\\:=>(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w*\\)" (ensime-pt-at-end-of-prev-line))
+  (let ((left-bound (ensime-pt-at-end-of-prev-line)))
+    (when (or (looking-back "\\(?:\\W\\|\\s-\\)\\(?:case\\|new\\)\\s-+\\(\\w*\\)" left-bound)
+	      (looking-back "[!\\:=>(\\[\\,\\;\\}\\{\n]\\s-*\\(\\w*\\)" left-bound))
       (let ((point (- (point) (length (match-string 1)))))
 	(goto-char point)
 	point
-	)))
+	))))
+
+(defvar ensime-ac-package-prefix-re 
+  "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9]+\\.\\)*\\)\\([A-z0-9]*\\)")
+(defun ensime-ac-package-prefix ()
+  "Starting at current point. Find the point of completion for a member access. 
+   Return nil if we are not currently looking at a member access."
+  (let ((left-bound (ensime-pt-at-end-of-prev-line)))
+    (when (looking-back ensime-ac-package-prefix-re left-bound)
+      (let ((point (- (point) (length (match-string 2)))))
+	(goto-char point)
+	point))))
+
 
 (defun ensime-ac-complete-action ()
   "Defines action to perform when user selects a completion candidate.
@@ -290,12 +337,21 @@ be used later to give contextual help when entering arguments."
     (cache . t)
     ))
 
+(ac-define-source ensime-package-members
+  '((candidates . (ensime-ac-package-member-candidates ac-prefix))
+    (prefix . ensime-ac-package-prefix)
+    (requires . 0)
+    (symbol . "s")
+    (cache . t)
+    ))
+
 (defun ensime-ac-enable ()
   (make-local-variable 'ac-sources)
 
   ;; Note, we try to complete names before members.
   ;; This simplifies the regexes.
-  (setq ac-sources '(ac-source-ensime-scope-names
+  (setq ac-sources '(ac-source-ensime-package-members
+		     ac-source-ensime-scope-names
 		     ac-source-ensime-members ))
 
   (make-local-variable 'ac-use-comphist)
