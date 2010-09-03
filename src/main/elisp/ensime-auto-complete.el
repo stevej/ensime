@@ -49,6 +49,7 @@ target of the call. Point should be be over last character of call target."
 
 	  (ensime-write-buffer)
 	  (ensime-rpc-members-for-type-at-point prefix))))
+
     (mapcar (lambda (m)
 	      (let* ((type-sig (plist-get m :type-sig))
 		     (type-id (plist-get m :type-id))
@@ -71,7 +72,7 @@ target of the call. Point should be be over last character of call target."
   "Create a duplicate of the current buffer, copying all contents. 
 Bind ensime-buffer-connection and buffer-file-name to the given values.
 Execute forms in body in the context of this new buffer. The idea is that
-We can abuse this buffer, even saving it's contents to disk, and all the 
+We can abuse this buffer, even saving its contents to disk, and all the 
 changes will be forgotten."
   `(let ((buf (current-buffer))
 	 (file-name buffer-file-name)
@@ -86,9 +87,8 @@ changes will be forgotten."
 			,@body
 			)))))
        ;; Make sure we overwrite any changes
-       ;; saved from temp buffer.
-       (clear-visited-file-modtime)
-       (ensime-write-buffer)
+       ;; written from temp buffer.
+       (ensime-write-buffer nil t)
        val
        )))
 

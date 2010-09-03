@@ -161,12 +161,18 @@ argument is supplied) is a .scala or .java file."
 	(before-save-hook nil))
     (save-buffer)))
 
-(defun ensime-write-buffer (&optional filename)
-  "Write the contents of buffer to its file."
+(defun ensime-write-buffer (&optional filename clear-mod)
+  "Write the contents of buffer to its buffer-file-name.
+Do not show 'Writing..' message."
   (let ((file (or filename buffer-file-name))
 	(write-region-annotate-functions nil)
 	(write-region-post-annotation-function nil))
-    (write-region (point-min) (point-max) file nil 'nomessage)))
+    (when clear-mod
+      (clear-visited-file-modtime)
+      (set-buffer-modified-p nil))
+    (write-region (point-min) (point-max) file nil 'nomessage)
+    ))
+
 
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
@@ -1920,14 +1926,14 @@ and visible already."
   "Send a request for re-typecheck of current file to the ENSIME server.
    Current file is saved if it has unwritten modifications."
   (interactive)
-  (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
+  (if (buffer-modified-p) (ensime-write-buffer nil t))
   (ensime-rpc-async-typecheck-file buffer-file-name))
 
 (defun ensime-typecheck-all ()
   "Send a request for re-typecheck of whole project to the ENSIME server.
    Current file is saved if it has unwritten modifications."
   (interactive)
-  (if (buffer-modified-p) (ensime-save-buffer-no-hooks))
+  (if (buffer-modified-p) (ensime-write-buffer nil t))
   (ensime-rpc-async-typecheck-all))
 
 ;; Source Formatting 
