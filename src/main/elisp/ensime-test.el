@@ -525,6 +525,46 @@
     )
 
 
+ (ensime-async-test 
+    "Test completing imports."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "package com.helloworld"
+				 "import java.ut/*1*/"
+				 "class HelloWorld{"
+				   "import sc/*2*/"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       (find-file (car src-files))
+
+       ;; complete java package member
+       (ensime-test-eat-mark "1")
+       (let* ((candidates (ensime-ac-package-decl-candidates "ut")))
+	 (ensime-assert (member "util" candidates)))
+
+       ;; complete scala package
+       (ensime-test-eat-mark "2")
+       (let* ((candidates (ensime-ac-package-decl-candidates "sc")))
+	 (ensime-assert (member "scala" candidates)))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
 
    (ensime-async-test 
     "Test formatting source."

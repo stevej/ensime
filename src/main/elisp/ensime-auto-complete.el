@@ -133,9 +133,9 @@ changes will be forgotten."
 		) names))))
 
 
-(defun ensime-ac-package-member-candidates (prefix)
+(defun ensime-ac-package-decl-candidates (prefix)
   "Return candidate list."
-  (when (looking-back ensime-ac-package-prefix-re 
+  (when (looking-back ensime-ac-package-decl-prefix-re 
 		      (ensime-pt-at-end-of-prev-line))
     (let* ((full-match (match-string 0))
 	   (path (ensime-kill-txt-props (match-string 1)))
@@ -204,13 +204,13 @@ character that could not terminate an expression. = or { for example."
 	point
 	))))
 
-(defvar ensime-ac-package-prefix-re 
+(defvar ensime-ac-package-decl-prefix-re 
   "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9]+\\.\\)*\\)\\([A-z0-9]*\\)")
-(defun ensime-ac-package-prefix ()
+(defun ensime-ac-package-decl-prefix ()
   "Starting at current point. Find the point of completion for a member access. 
    Return nil if we are not currently looking at a member access."
   (let ((left-bound (ensime-pt-at-end-of-prev-line)))
-    (when (looking-back ensime-ac-package-prefix-re left-bound)
+    (when (looking-back ensime-ac-package-decl-prefix-re left-bound)
       (let ((point (- (point) (length (match-string 2)))))
 	(goto-char point)
 	point))))
@@ -337,9 +337,9 @@ be used later to give contextual help when entering arguments."
     (cache . t)
     ))
 
-(ac-define-source ensime-package-members
-  '((candidates . (ensime-ac-package-member-candidates ac-prefix))
-    (prefix . ensime-ac-package-prefix)
+(ac-define-source ensime-package-decl-members
+  '((candidates . (ensime-ac-package-decl-member-candidates ac-prefix))
+    (prefix . ensime-ac-package-decl-prefix)
     (requires . 0)
     (symbol . "s")
     (cache . t)
@@ -350,7 +350,7 @@ be used later to give contextual help when entering arguments."
 
   ;; Note, we try to complete names before members.
   ;; This simplifies the regexes.
-  (setq ac-sources '(ac-source-ensime-package-members
+  (setq ac-sources '(ac-source-ensime-package-decl-members
 		     ac-source-ensime-scope-names
 		     ac-source-ensime-members ))
 
