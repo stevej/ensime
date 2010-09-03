@@ -160,8 +160,8 @@ changes will be forgotten."
 		       (ensime-write-buffer)
 		       (ensime-rpc-members-for-type-at-point prefix))))))
 
-	   (mapcar (lambda (m) (plist-get m :name)) 
-		   names))))
+      (mapcar (lambda (m) (plist-get m :name)) 
+	      names))))
 
 
 (defun ensime-ac-trunc-summary (str)
@@ -190,15 +190,23 @@ changes will be forgotten."
   (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" (point-at-bol) t)))
     (if point (1+ point))))
 
+
+(defvar ensime-ac-name-following-keyword-re
+  (concat
+   "\\(?:\\W\\|\\s-\\)\\(?:else\\|case\\|new\\)"
+   "\\s-+\\(\\w*\\)"))
+
+(defvar ensime-ac-name-following-syntax-re
+  (concat
+   "[!:=>(\\[,;}{\n+\\-*/\\^&~%]"
+   "\\s-*\\(\\w*\\)"))
+
 (defun ensime-ac-name-prefix ()
   "Starting at current point - find the point of completion for a symbol.
-Return nil if we are not currently looking at a symbol. Essentially, check 
-the cursor is positioned after a word that follows some amount of whitespace,
-which in turn follows non-expression character. 'non-expression' meaning some
-character that could not terminate an expression. = or { for example."
+Return nil if we're looking at a context where symbol completion is inappropriate."
   (let ((left-bound (ensime-pt-at-end-of-prev-line)))
-    (when (or (looking-back "\\(?:\\W\\|\\s-\\)\\(?:case\\|new\\)\\s-+\\(\\w*\\)" left-bound)
-	      (looking-back "[!\\:=>(\\[\\,\\;\\}\\{\n]\\s-*\\(\\w*\\)" left-bound))
+    (when (or (looking-back  ensime-ac-name-following-keyword-re left-bound)
+	      (looking-back ensime-ac-name-following-syntax-re left-bound))
       (let ((point (- (point) (length (match-string 1)))))
 	(goto-char point)
 	point
@@ -338,7 +346,7 @@ be used later to give contextual help when entering arguments."
     ))
 
 (ac-define-source ensime-package-decl-members
-  '((candidates . (ensime-ac-package-decl-member-candidates ac-prefix))
+  '((candidates . (ensime-ac-package-decl-candidates ac-prefix))
     (prefix . ensime-ac-package-decl-prefix)
     (requires . 0)
     (symbol . "s")
