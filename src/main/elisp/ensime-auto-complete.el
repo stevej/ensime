@@ -160,8 +160,9 @@ changes will be forgotten."
 		       (ensime-write-buffer)
 		       (ensime-rpc-members-for-type-at-point prefix))))))
 
-      (mapcar (lambda (m) (plist-get m :name)) 
-	      names))))
+      (delete-dups
+       (mapcar (lambda (m) (plist-get m :name)) 
+	       names)))))
 
 
 (defun ensime-ac-trunc-summary (str)
