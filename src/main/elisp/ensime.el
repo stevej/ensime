@@ -177,7 +177,7 @@ Do not show 'Writing..' message."
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c t") 'ensime-inspect-type)
-    (define-key map (kbd "C-c p") 'ensime-inspect-package)
+    (define-key map (kbd "C-c p") 'ensime-inspect-package-at-point)
     (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
     (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
     (define-key map (kbd "C-c a") 'ensime-typecheck-all)
@@ -789,19 +789,34 @@ browsing the documentation for those objects."
     (set-text-properties start (point) `(face ,face))))
 
 (defvar ensime-qualified-type-regexp 
-  "^\\(?:object \\)?\\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)\\.\\(?:\\([^\\.]+\\)\\$\\)?\\([^\\.]+\\$?\\)$"
+  "^\\(?:object \\)?\\(\\(?:[a-z0-9_]+\\.\\)*\\)\\(?:\\([^\\.]+\\)\\$\\)?\\([^\\.]+\\$?\\)$"
   "Match strings of form pack.pack1.pack2.Types$Type or pack.pack1.pack2.Type")
-
-(defmacro* ensime-partition-qualified-type-name (type-name (path outer-type-name name) &rest body)
+(defmacro* ensime-with-name-parts (str (path outer-type-name name) &rest body)
   "Evaluate BODY with path bound to the dot-separated path of this type-name, and
    name bound to the final type name."
-  `(let ((matchedp (integerp (string-match 
-			      ensime-qualified-type-regexp 
-			      ,type-name))))
-     (let ((,path (if matchedp (match-string 1 ,type-name) nil))
-	   (,outer-type-name (if matchedp (match-string 2 ,type-name) nil))
-	   (,name (if matchedp (match-string 3 ,type-name) ,type-name)))
-       ,@body)))
+  (let ((tmp (gensym)))
+    `(let ((matchedp (integerp (string-match 
+				ensime-qualified-type-regexp 
+				,str))))
+       (let* ((,tmp (if matchedp (match-string 1 ,str) nil))
+	      (,path (if (> (length ,tmp) 0) (substring ,tmp 0 (- (length ,tmp) 1)) ,tmp))
+	      (,outer-type-name (if matchedp (match-string 2 ,str) nil))
+	      (,name (if matchedp (match-string 3 ,str) ,str)))
+	 ,@body))))
+
+(defvar ensime-qualified-path-and-name-regexp 
+  "^\\(\\(?:[a-z0-9_]+\\.\\)*\\)\\([^\\.]*\\)$")
+(defmacro* ensime-with-path-and-name (str (path name) &rest body)
+  "Evaluate body with path bound to all sections up to the last, concatenated, and name bound
+to the last section."
+  (let ((tmp (gensym)))
+    `(let ((matchedp (integerp (string-match 
+				ensime-qualified-path-and-name-regexp
+				,str))))
+       (let* ((,tmp (if matchedp (match-string 1 ,str) nil))
+	      (,path (if (> (length ,tmp) 0) (substring ,tmp 0 (- (length ,tmp) 1)) ,tmp))
+	      (,name (if matchedp (match-string 2 ,str) nil)))
+	 ,@body))))
 
 
 (defmacro ensime-assert-buffer-saved-interactive (&rest body)
@@ -2111,7 +2126,7 @@ If is-obj is non-nil, use an alternative color for the link."
       (insert (make-string ensime-indent-level ?\s))
 
       (if qualified
-	  (ensime-partition-qualified-type-name 
+	  (ensime-with-name-parts 
 	   (ensime-type-full-name type) 
 	   (path outer-type-name name)
 	   (when path
@@ -2255,18 +2270,55 @@ If is-obj is non-nil, use an alternative color for the link."
 
 
 
-;; Package Inspector
+;; Inspector
 
-(defun ensime-inspect-package-by-path (&optional path)
-  "Display a list of all the members of the package with user provided path."
+(defun ensime-path-completions (path predicate flag)
+  "Return a list of valid completions of the given qualified path.
+See: http://www.delorie.com/gnu/docs/elisp-manual-21/elisp_280.html for the
+interface we are implementing."
+  ;; Note: when this function is invoked from completing-read, current
+  ;; buffer will be mini-buffer. We need to setup connection manually.
+  ;; See ensime-completing-read-path...
+  (ensime-with-path-and-name
+   path (pack name)
+   (let* ((members (ensime-rpc-package-member-completions pack name))
+	  (candidates (mapcar (lambda (ea) 
+				(let ((name (plist-get ea :name)))
+				  (if (and pack (> (length pack) 0)) 
+				      (concat pack "." name) name)))
+			      members)))
+     (cond 
+      ((null flag) (try-completion path candidates predicate))
+      ((eq flag t) (all-completions path candidates predicate))
+      ((eq 'lambda flag) (member candidates path))
+      (t nil)
+      ))))
+
+(defun ensime-completing-read-path (prompt)
+  ;; Note: First thing we do is bind buffer connection so 
+  ;; completion function will have access.
+  (let ((ensime-dispatching-connection 
+	 (ensime-current-connection)))
+    (completing-read prompt #'ensime-path-completions
+		     nil nil (ensime-package-path-at-point))))
+
+(defun ensime-inspect-by-path (&optional path)
+  "Open the Inspector on the type or package denoted by path. If path is nil,
+read a fully qualified path from the minibuffer."
   (interactive)
-  (let ((p (or path (read-string "Package path: "))))
-    (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))))
+  (let* ((case-fold-search nil))
+    (let ((p (or path (ensime-completing-read-path "Qualified type or package name: "))))
+      (ensime-with-path-and-name 
+       p (pack name)
+       (if (integerp (string-match "^[a-z_0-9]+$" name))
+	   (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))
+	 (ensime-type-inspector-show (ensime-rpc-inspect-type-by-path p)))))))
+
 
 (defun ensime-package-path-at-point ()
   "Return the package path at point, or nil if point is not in a package path."
   (let* ((case-fold-search nil)
-	 (re "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9]+\\.\\)+[a-z0-9]+\\)"))
+	 (re "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9_]+\\.\\)+[a-z0-9_]+\\)"))
     (save-excursion
       (catch 'return
 	(let ((init-point (point))
@@ -2279,30 +2331,34 @@ If is-obj is non-nil, use an alternative color for the link."
 		       (ensime-kill-txt-props 
 			(match-string 1))))))))))
 
-(defun ensime-inspect-package ()
+
+(defun ensime-package-containing-point ()
+  "Return the package point is in."
+  (save-excursion
+    (when (search-backward-regexp
+	   "^package \\(\\(?:[a-z0-9_]+\\.\\)*[a-z0-9_]+\\)"
+	   (point-min) t)
+      (let ((path (match-string 1)))
+	(ensime-kill-txt-props path)))))
+
+
+(defun ensime-inspect-package-at-point ()
   "If cursor is over a package path, inspect that path. Otherwise, 
 inspect the package of the current source file."
   (interactive)
-  (let ((pack (ensime-package-path-at-point)))
+  (let ((pack (or (ensime-package-path-at-point) 
+		  (ensime-package-containing-point))))
     (if pack
-	(ensime-package-inspector-show (ensime-rpc-inspect-package-by-path pack))
-      (save-excursion
-	(if (search-backward-regexp 
-	     "package \\(\\(?:[a-z0-9]+\\.\\)*[a-z0-9]+\\)"
-	     (point-min) t)
-	    (let ((path (match-string 1)))
-	      (ensime-kill-txt-props path)
-	      (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))
-	  (message "No package declaration found."))))))
+	(ensime-inspect-by-path pack)
+      (message "No package declaration found."))))
+
 
 (defun ensime-inspect-project-package ()
   "Inspect the package declared as the project package in the config file."
   (interactive)
   (let* ((config (ensime-config))
-	 (path (or (plist-get config :project-package)
-		   (read-string "Missing :project-package in config. Enter package path: "))))
-    (if (and path (> (length path) 0))
-	(ensime-package-inspector-show (ensime-rpc-inspect-package-by-path path)))))
+	 (given (plist-get config :project-package)))
+    (ensime-inspect-by-path given)))
 
 (defun ensime-inspector-insert-package (pack)
   "Helper to insert a hyper-linked package name."

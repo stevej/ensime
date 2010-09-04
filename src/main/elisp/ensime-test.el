@@ -316,13 +316,9 @@
 ;; ENSIME Tests ;;
 ;;;;;;;;;;;;;;;;;;
 
-
-(defun ensime-run-tests ()
-  "Run all regression tests for ensime-mode."
+(defun ensime-run-fast-tests ()
   (interactive)
-
   (ensime-test-suite
-
 
 
    (ensime-test 
@@ -353,23 +349,82 @@
 
    (ensime-test 
     "Test name partitioning..."
-    (ensime-partition-qualified-type-name 
-     "scala.tools.nsc.symtab.Types$Type" (path outer-type-name name)
-     (ensime-assert-equal path "scala.tools.nsc.symtab")
-     (ensime-assert-equal outer-type-name "Types")
-     (ensime-assert-equal name "Type"))
 
-    (ensime-partition-qualified-type-name 
-     "scala.tools.nsc.symtab.Types" (path outer-type-name name)
-     (ensime-assert-equal path "scala.tools.nsc.symtab")
-     (ensime-assert-equal outer-type-name nil)
-     (ensime-assert-equal name "Types"))
+    (ensime-with-name-parts 
+     "java.util.List" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "java.util" nil "List")))
 
-    (ensime-partition-qualified-type-name 
-     "scala.tools.nsc.symtab.Types$Dude$AbsType" (path outer-type-name name)
-     (ensime-assert-equal path "scala.tools.nsc.symtab")
-     (ensime-assert-equal outer-type-name "Types$Dude")
-     (ensime-assert-equal name "AbsType"))
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types$Type" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" "Types" "Type")))
+
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" nil "Types")))
+
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types$Dude$AbsType" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" "Types$Dude" "AbsType")))
+
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types$$Type$" (p o n)
+     (message "%s %s %s" p o n))
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" "Types$" "Type$")))
+
+    (ensime-with-name-parts 
+     "Types$$Type$" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "" "Types$" "Type$")))
+
+    )
+
+   (ensime-test 
+    "Test course name partitioning..."
+
+    (ensime-with-path-and-name 
+     "java.util.List" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "java.util" "List")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types$Type" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types$Type")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types$Dude$AbsType" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types$Dude$AbsType")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types$$Type$" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types$$Type$")))
+
+    (ensime-with-path-and-name 
+     "Types$$Type$" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "" "Types$$Type$")))
+
+    (ensime-with-path-and-name 
+     "java.uti" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "java" "uti")))
+
+    (ensime-with-path-and-name 
+     "uti" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "" "uti")))
 
     )
    
@@ -379,7 +434,6 @@
     (ensime-assert (ensime-is-source-file-p "dude.scala"))
     (ensime-assert (ensime-is-source-file-p "dude.java"))
     (ensime-assert (not (ensime-is-source-file-p "dude.javap"))))
-
 
    (ensime-test 
     "Test relativization of paths..."
@@ -391,6 +445,13 @@
      "./a/b/d.txt" (ensime-relativise-path  "c:/home/aemon/a/b/d.txt" "c:/home/aemon/"))
     (ensime-assert-equal 
      "c:/home/blamon/a/b/d.txt" (ensime-relativise-path  "c:/home/blamon/a/b/d.txt" "c:/home/aemon/")))
+
+   ))
+
+
+(defun ensime-run-slow-tests ()
+  (interactive)
+  (ensime-test-suite
 
 
    (ensime-async-test 
@@ -525,7 +586,7 @@
     )
 
 
- (ensime-async-test 
+   (ensime-async-test 
     "Test completing imports."
     (let* ((proj (ensime-create-tmp-project
 		  `((:name 
@@ -534,7 +595,7 @@
 				 "package com.helloworld"
 				 "import java.ut/*1*/"
 				 "class HelloWorld{"
-				   "import sc/*2*/"
+				 "import sc/*2*/"
 				 "}"
 				 )
 		     ))))
@@ -772,8 +833,16 @@
        ))
     )
 
-
-
    ))
+
+(defun ensime-run-tests ()
+  "Run all regression tests for ensime-mode."
+  (interactive)
+  (ensime-run-fast-tests)
+  (ensime-run-slow-tests))
+
+
+
+
 
 (provide 'ensime-test)
