@@ -372,7 +372,6 @@
 
     (ensime-with-name-parts 
      "scala.tools.nsc.symtab.Types$$Type$" (p o n)
-     (message "%s %s %s" p o n))
      (ensime-assert-equal (list p o n) 
 			  (list "scala.tools.nsc.symtab" "Types$" "Type$")))
 

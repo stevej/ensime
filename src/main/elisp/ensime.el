@@ -2033,6 +2033,10 @@ with the current project's dependencies loaded. Returns a property list."
       (ensime-eval 
        `(swank:type-by-id ,id))))
 
+(defun ensime-rpc-get-type-by-name (name)
+  (ensime-eval 
+   `(swank:type-by-name ,name)))
+
 (defun ensime-rpc-get-type-at-point ()
   (ensime-eval 
    `(swank:type-at-point ,buffer-file-name ,(ensime-computed-point))))
@@ -2312,7 +2316,12 @@ read a fully qualified path from the minibuffer."
        p (pack name)
        (if (integerp (string-match "^[a-z_0-9]+$" name))
 	   (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))
-	 (ensime-type-inspector-show (ensime-rpc-inspect-type-by-path p)))))))
+	 (let ((type (ensime-rpc-get-type-by-name p)))
+	   (if type
+	       (let ((info (ensime-rpc-inspect-type-by-id (ensime-type-id type))))
+		 (ensime-type-inspector-show info))
+	     (message "Could not locate type named '%s'." p))
+	   ))))))
 
 
 (defun ensime-package-path-at-point ()

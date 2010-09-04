@@ -381,6 +381,9 @@ be used later to give contextual help when entering arguments."
   (make-local-variable 'ac-delete-dups)
   (setq ac-delete-dups nil)
 
+  (make-local-variable 'ac-ignore-case)
+  (setq ac-ignore-case t)
+
   (make-local-variable 'ac-trigger-key)
   (ac-set-trigger-key "TAB")
 
