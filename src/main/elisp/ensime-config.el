@@ -34,12 +34,12 @@
 	(expand-file-name rel)
       rel)))
 
-(defun ensime-config-gen ()
+(defun ensime-config-gen (&optional default-root)
   "Interactively generate a new .ensime configuration file."
   (interactive)
   (catch 'done
     (let* ((root (expand-file-name 
-		  (read-directory-name "Find project root: ")))
+		  (read-directory-name "Find project root: " default-root)))
 	   (conf-file (concat root "/" ensime-config-file-name)))
 
       ;; Check if config already exists for this project...
@@ -293,7 +293,9 @@
 
       (if (or (not (file-exists-p file))
 	      (file-directory-p file))
-	  (error (format "Invalid ENSIME Project file: %s" file))
+	  (if (y-or-n-p "Could not find an ENSIME project file. Would you like to generate one? ")
+	      (ensime-config-gen (file-name-directory file))
+	    (message "Please see the ENSIME manual for instructions on how to write or generate a config file."))
 	(ensime-config-load file))
 
       )))
