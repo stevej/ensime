@@ -2320,6 +2320,10 @@ interface we are implementing."
     (completing-read prompt #'ensime-path-completions
 		     nil nil (ensime-package-path-at-point))))
 
+(defun ensime-inspect-package-by-path (path)
+  (ensime-package-inspector-show 
+   (ensime-rpc-inspect-package-by-path path)))
+
 (defun ensime-inspect-by-path (&optional path)
   "Open the Inspector on the type or package denoted by path. If path is nil,
 read a fully qualified path from the minibuffer."
@@ -2329,7 +2333,7 @@ read a fully qualified path from the minibuffer."
       (ensime-with-path-and-name 
        p (pack name)
        (if (integerp (string-match "^[a-z_0-9]+$" name))
-	   (ensime-package-inspector-show (ensime-rpc-inspect-package-by-path p))
+	   (ensime-inspect-package-by-path p)
 	 (let ((type (ensime-rpc-get-type-by-name p)))
 	   (if type
 	       (let ((info (ensime-rpc-inspect-type-by-id (ensime-type-id type))))
