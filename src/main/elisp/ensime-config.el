@@ -272,17 +272,17 @@
 	  (if (not (equal dir (directory-file-name dir)))
 	      (ensime-config-find-file (directory-file-name dir)))))))
 
-(defun ensime-config-find-and-load ()
+(defun ensime-config-find-and-load (&optional default-dir)
   "Query the user for the path to a config file, then load it."
-  (let* ((default (if buffer-file-name
-		      (ensime-config-find-file buffer-file-name)))
-	 (file (if ensime-prefer-noninteractive default
+  (let* ((hint (or default-dir buffer-file-name))
+	 (guess (if hint (ensime-config-find-file hint)))
+	 (file (if ensime-prefer-noninteractive guess
 		 (read-file-name 
 		  "ENSIME Project file: "
-		  (if default (file-name-directory default))
-		  default
+		  (if guess (file-name-directory guess))
+		  guess
 		  nil
-		  (if default (file-name-nondirectory default))
+		  (if guess (file-name-nondirectory guess))
 		  ))))
 
     ;; Should be ok to just give the project directory..

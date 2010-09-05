@@ -124,6 +124,8 @@
 (defvar ensime-prefer-noninteractive nil 
   "State variable used for regression testing.")
 
+(defvar ensime-server-buffer-name "*inferior-ensime-server*") 
+
 
 ;;;;; ensime-mode
 
@@ -370,12 +372,12 @@ Do not show 'Writing..' message."
 	 (env (plist-get config :server-env))
 	 (dir (or (plist-get config :server-root)
 		  ensime-default-server-root))
-	 (buffer "*inferior-ensime-server*")
+	 (buffer ensime-server-buffer-name)
 	 (args (list (ensime-swank-port-file))))
 
     (ensime-delete-swank-port-file 'quiet)
-    (let ((proc (ensime-maybe-start-server cmd args env dir buffer)))
-      (ensime-inferior-connect config proc))))
+    (let ((server-proc (ensime-maybe-start-server cmd args env dir buffer)))
+      (ensime-inferior-connect config server-proc))))
 
 
 (defun ensime-reload ()
@@ -383,7 +385,9 @@ Do not show 'Writing..' message."
 Analyzer will be restarted. All source will be recompiled."
   (interactive)
   (ensime-assert-connected
-   (let* ((config (ensime-config-find-and-load)))
+   (let* ((conn (ensime-current-connection))
+	  (current-conf (ensime-config conn))
+	  (config (ensime-config-find-and-load (plist-get current-conf :root-dir))))
      (ensime-set-config (ensime-current-connection) config)
      (ensime-eval-async `(swank:init-project ,config) #'identity))))
 
@@ -394,7 +398,7 @@ Analyzer will be restarted. All source will be recompiled."
 	 (ensime-start-server program program-args env directory buffer))
 	((ensime-reinitialize-inferior-server-p program program-args env buffer)
 	 (when-let (conn (find (get-buffer-process buffer) ensime-net-processes 
-			       :key #'ensime-inferior-process))
+			       :key #'ensime-server-process))
 	   (ensime-net-close conn))
 	 (get-buffer-process buffer))
 	(t (ensime-start-server program program-args env directory
@@ -409,7 +413,7 @@ Analyzer will be restarted. All source will be recompiled."
 	 (not (y-or-n-p "Create an additional *inferior-server*? ")))))
 
 
-(defvar ensime-inferior-process-start-hook nil
+(defvar ensime-server-process-start-hook nil
   "Hook called whenever a new process gets started.")
 
 (defun ensime-start-server (program program-args env directory buffer)
@@ -423,10 +427,11 @@ Analyzer will be restarted. All source will be recompiled."
 	  (process-connection-type nil))
       (set (make-local-variable 'comint-process-echoes) nil)
       (set (make-local-variable 'comint-use-prompt-regexp) nil)
-      (comint-exec (current-buffer) "inferior-ensime-server" program nil program-args))
+      (comint-exec (current-buffer) ensime-server-buffer-name 
+		   program nil program-args))
     (let ((proc (get-buffer-process (current-buffer))))
       (ensime-set-query-on-exit-flag proc)
-      (run-hooks 'ensime-inferior-process-start-hook)
+      (run-hooks 'ensime-server-process-start-hook)
       proc)))
 
 (defvar ensime-inferior-server-args nil
@@ -439,9 +444,9 @@ See `ensime-start'.")
   (with-current-buffer (process-buffer process)
     ensime-inferior-server-args))
 
-(defun ensime-inferior-connect (config process)
+(defun ensime-inferior-connect (config server-proc)
   "Start a Swank server in the inferior Server and connect."
-  (ensime-read-port-and-connect config process nil))
+  (ensime-read-port-and-connect config server-proc nil))
 
 
 (defun ensime-file-in-directory-p (file-name dir-name)
@@ -522,12 +527,12 @@ If not, message the user."
        (message (message "Unable to delete swank port file %S"
 			 (ensime-swank-port-file)))))))
 
-(defun ensime-read-port-and-connect (config inferior-process retries)
+(defun ensime-read-port-and-connect (config server-proc retries)
   (ensime-cancel-connect-retry-timer)
-  (ensime-attempt-connection config inferior-process retries 1))
+  (ensime-attempt-connection config server-proc retries 1))
 
 
-(defun ensime-attempt-connection (config process retries attempt)
+(defun ensime-attempt-connection (config server-proc retries attempt)
   ;; A small one-state machine to attempt a connection with
   ;; timer-based retries.
   (let ((host (or (plist-get config :server-host) ensime-default-server-host))
@@ -538,18 +543,27 @@ If not, message the user."
 		(> (nth 7 (file-attributes port-file)) 0)) ; file size
 	   (ensime-cancel-connect-retry-timer)
 	   (let ((port (ensime-read-swank-port))
-		 (args (ensime-inferior-server-args process)))
+		 (args (ensime-inferior-server-args server-proc)))
 	     (ensime-delete-swank-port-file 'message)
 	     (let ((c (ensime-connect config host port)))
 	       (ensime-set-config c config)
-	       (ensime-set-inferior-process c process)
+	       (ensime-set-server-process c server-proc)
+	       
+	       ;; As a conveniance, we associate the client connection with
+	       ;; the server buffer.
+	       ;; This assumes that there's only one client connection
+	       ;; per server. So far this is a safe assumption.
+	       (when-let (server-buf (process-buffer server-proc))
+		 (with-current-buffer server-buf
+		   (setq ensime-buffer-connection c)))
+
 	       )))
 	  ((and retries (zerop retries))
 	   (ensime-cancel-connect-retry-timer)
 	   (message "Gave up connecting to Swank after %d attempts." attempt))
-	  ((eq (process-status process) 'exit)
+	  ((eq (process-status server-proc) 'exit)
 	   (ensime-cancel-connect-retry-timer)
-	   (message "Failed to connect to Swank: inferior process exited."))
+	   (message "Failed to connect to Swank: server process exited."))
 	  (t
 	   (when (and (file-exists-p port-file) 
 		      (zerop (nth 7 (file-attributes port-file))))
@@ -561,7 +575,7 @@ If not, message the user."
 		   (run-with-timer
 		    0.3 0.3
 		    #'ensime-timer-call #'ensime-attempt-connection 
-		    config process (and retries (1- retries)) 
+		    config server-proc (and retries (1- retries)) 
 		    (1+ attempt))))))))
 
 (defvar ensime-connect-retry-timer nil
@@ -1252,7 +1266,7 @@ This is automatically synchronized from Lisp.")
 (ensime-def-connection-var ensime-connection-name nil
   "The short name for connection.")
 
-(ensime-def-connection-var ensime-inferior-process nil
+(ensime-def-connection-var ensime-server-process nil
   "The inferior process for the connection if any.")
 
 (ensime-def-connection-var ensime-config nil
@@ -1436,7 +1450,7 @@ If PROCESS is not specified, `ensime-connection' is used.
 	      (ensime-connection-name) (ensime-generate-connection-name name)))
       (destructuring-bind (&key instance type version) machine
 	(setf (ensime-machine-instance) instance)))
-    (let ((args (when-let (p (ensime-inferior-process))
+    (let ((args (when-let (p (ensime-server-process))
 		  (ensime-inferior-server-args p))))
       (when-let (name (plist-get args :name))
 	(unless (string= (ensime-server-implementation-name) name)
@@ -1585,16 +1599,16 @@ versions cannot deal with that."
     (cadr (process-contact connection))))
 
 (defun ensime-process (&optional connection)
-  "Return the Lisp process for CONNECTION (default `ensime-connection').
+  "Return the ENSIME server process for CONNECTION (default `ensime-connection').
 Return nil if there's no process object for the connection."
-  (let ((proc (ensime-inferior-process connection)))
+  (let ((proc (ensime-server-process connection)))
     (if (and proc 
 	     (memq (process-status proc) '(run stop)))
 	proc)))
 
 ;; Non-macro version to keep the file byte-compilable. 
-(defun ensime-set-inferior-process (connection process)
-  (setf (ensime-inferior-process connection) process))
+(defun ensime-set-server-process (connection process)
+  (setf (ensime-server-process connection) process))
 
 (defun ensime-set-config (connection config)
   (setf (ensime-config connection) config))
