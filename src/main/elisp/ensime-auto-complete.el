@@ -45,7 +45,9 @@ target of the call. Point should be be over last character of call target."
 	  ;; Add a trailing '.' so object accesses parse correctly
 	  (save-excursion 
 	    (forward-char)
-	    (insert ".()"))
+	    ;; toString is a method of Any object. exit() has bottom
+	    ;; type, so the typechecker should permit this anywhere.
+	    (insert ".toString;{exit()}"))
 
 	  (ensime-write-buffer)
 	  (ensime-rpc-members-for-type-at-point prefix))))
@@ -111,7 +113,7 @@ changes will be forgotten."
 	      ;; if we are at the end of a method body, the
 	      ;; method context will be extended to include
 	      ;; the completion point.
-	      (insert " ()")) ()
+	      (insert " {exit()}")) ()
 	      (ensime-write-buffer)
 	      (ensime-rpc-name-completions-at-point
 	       prefix is-constructor))))
