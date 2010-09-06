@@ -248,29 +248,35 @@ be used later to give contextual help when entering arguments."
 
 	(let* ((call-info (ensime-rpc-get-call-completion type-id))
 	       (param-sections (ensime-type-param-sections call-info)))
-	  (when (and call-info param-sections (car param-sections))
-
-	    ;; Save param info as a text properties of the member name..
-	    (add-text-properties name-start-point 
-				 (+ name-start-point (length name))
-				 (list 'call-info call-info
-				       ))
+	  (when (and call-info param-sections)
 
 	    ;; Insert space or parens depending on the nature of the
 	    ;; call
 	    (save-excursion
-	      (if (and (= 1 (length param-sections))
+	      (if (and (= 1 (length (car param-sections)))
 		       (null (string-match "[A-z]" name)))
 		  ;; Probably an operator..
 		  (insert " ")
 		;; Probably a normal method call
 		(insert "()" )))
 
-	    ;; Setup hook function to show param help later..
-	    (add-hook 'post-command-hook 'ensime-ac-update-param-help nil t)
+	    (if (car param-sections)
+		(progn
+		  ;; Save param info as a text properties of the member name..
+		  (add-text-properties name-start-point 
+				       (+ name-start-point (length name))
+				       (list 'call-info call-info
+					     ))
+		  ;; Setup hook function to show param help later..
+		  (add-hook 'post-command-hook 'ensime-ac-update-param-help nil t)
+		  ;; This command should trigger help hook..
+		  (forward-char))
 
-	    ;; This command should trigger help hook..
-	    (forward-char)
+	      ;; Otherwise, skip to the end
+	      (forward-char 2))
+	    
+
+	    
 	    ))))))
 
 
