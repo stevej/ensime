@@ -248,7 +248,7 @@ be used later to give contextual help when entering arguments."
 
 	(let* ((call-info (ensime-rpc-get-call-completion type-id))
 	       (param-sections (ensime-type-param-sections call-info)))
-	  (when (and call-info param-sections)
+	  (when (and call-info param-sections (car param-sections))
 
 	    ;; Save param info as a text properties of the member name..
 	    (add-text-properties name-start-point 
