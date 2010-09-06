@@ -47,7 +47,7 @@ target of the call. Point should be be over last character of call target."
 	    (forward-char)
 	    ;; toString is a method of Any object. exit() has bottom
 	    ;; type, so the typechecker should permit this anywhere.
-	    (insert ".toString;{exit()};"))
+	    (insert ".abc"))
 
 	  (ensime-write-buffer)
 	  (ensime-rpc-members-for-type-at-point prefix))))
@@ -201,7 +201,7 @@ changes will be forgotten."
 
 (defvar ensime-ac-name-following-syntax-re
   (concat
-   "[!:=>(\\[,;}{\n+\\-*/\\^&~%]"
+   "[!:=>(\\[,;}{\n+*/\\^&~%-]"
    "\\s-*\\(\\w*\\)"))
 
 (defun ensime-ac-name-prefix ()
