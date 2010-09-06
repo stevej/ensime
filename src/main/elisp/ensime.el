@@ -668,9 +668,7 @@ browsing the documentation for those objects."
 	      s
 	      ".html"
 	      (if member
-		  (let* ((name (ensime-member-name member))
-			 (type (ensime-member-type member))
-			 (param-types (ensime-type-param-types type)))
+		  (let* ((name (ensime-member-name member)))
 		    (concat "#" full-type-name "#" name))))
       )))
 
@@ -2185,15 +2183,16 @@ If is-obj is non-nil, use an alternative color for the link."
 (defun ensime-inspector-insert-linked-arrow-type (type  &optional with-doc-link qualified)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type"
-  (let*  ((param-types (ensime-type-param-types type))
-	  (last-param-type (car (last param-types)))
+  (let*  ((param-sections (ensime-type-param-sections type))
 	  (result-type (ensime-type-result-type type)))
-    (insert "(")
-    (dolist (tpe param-types)
-      (ensime-inspector-insert-linked-type tpe nil qualified)
-      (if (not (eq tpe last-param-type))
-	  (insert ", ")))
-    (insert ") => ")
+    (dolist (sect param-sections)
+      (insert "(")
+      (let ((last-pt (car (last sect))))
+	(dolist (tpe sect)
+	  (ensime-inspector-insert-linked-type tpe nil qualified)
+	  (if (not (eq tpe last-pt))
+	      (insert ", "))))
+      (insert ") => "))
     (ensime-inspector-insert-linked-type result-type nil qualified)
     ))
 
@@ -2627,11 +2626,12 @@ It should be used for \"background\" messages such as argument lists."
 (defun ensime-type-is-arrow-p (type)
   (plist-get type :arrow-type))
 
-(defun ensime-type-param-types (type)
-  (plist-get type :param-types))
+(defun ensime-type-param-sections (type)
+  (plist-get type :param-sections))
 
-(defun ensime-type-param-names (type)
-  (plist-get type :param-names))
+(defun ensime-type-param-types (type)
+  "Return types of params in first section."
+  (car (plist-get type :param-sections)))
 
 (defun ensime-type-result-type (type)
   (plist-get type :result-type))

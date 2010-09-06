@@ -45,9 +45,9 @@ target of the call. Point should be be over last character of call target."
 	  ;; Add a trailing '.' so object accesses parse correctly
 	  (save-excursion 
 	    (forward-char)
-	    ;; toString is a method of Any object. exit() has bottom
-	    ;; type, so the typechecker should permit this anywhere.
-	    (insert ".toString"))
+	    ;; .class will satisfy type-checker, whether target is an object, or 
+	    ;; java class
+	    (insert ".class"))
 
 	  (ensime-write-buffer)
 	  (ensime-rpc-members-for-type-at-point prefix))))
@@ -249,21 +249,19 @@ be used later to give contextual help when entering arguments."
       (when (get-text-property 0 'is-callable candidate)
 
 	(let* ((call-info (ensime-rpc-get-call-completion type-id))
-	       (param-types (ensime-type-param-types call-info))
-	       (param-names (ensime-type-param-names call-info)))
-	  (when (and call-info param-names param-types)
+	       (param-sections (ensime-type-param-sections call-info)))
+	  (when (and call-info)
 
 	    ;; Save param info as a text properties of the member name..
 	    (add-text-properties name-start-point 
 				 (+ name-start-point (length name))
-				 (list 'param-types param-types
-				       'param-names param-names
+				 (list 'call-info call-info
 				       ))
 
 	    ;; Insert space or parens depending on the nature of the
 	    ;; call
 	    (save-excursion
-	      (if (and (= 1 (length param-types))
+	      (if (and (= 1 (length param-sections))
 		       (null (string-match "[A-z]" name)))
 		  ;; Probably an operator..
 		  (insert " ")
@@ -292,13 +290,11 @@ be used later to give contextual help when entering arguments."
 	   ((looking-at "\\s)") (decf balance))
 	   ((looking-at "\\s(") (incf balance))
 	   (t
-	    (let ((param-types (get-text-property (point) 'param-types))
-		  (param-names (get-text-property (point) 'param-names)))
-	      (if (and (or (> balance 0)) param-types)
+	    (let ((call-info (get-text-property (point) 'call-info)))
+	      (if (and (or (> balance 0)) call-info)
 		  (throw 'return (list 
 				  :name-end-point (point)
-				  :param-types param-types
-				  :param-names param-names))))))
+				  :call-info call-info))))))
 	  (backward-char 1))))))
 
 
@@ -309,22 +305,30 @@ be used later to give contextual help when entering arguments."
     (if info
 	(let* (;; To be used for tooltip positioning..
 	       (name-end (plist-get info :name-end-point))
-
-	       (param-types (plist-get info :param-types))
-	       (param-names (plist-get info :param-names))
-	       (i -1)
-	       (param-str (mapconcat
-			   (lambda (pt)
-			     (incf i)
-			     (format 
-			      "%s:%s" 
-			      (propertize (nth i param-names) 
-					  'face font-lock-variable-name-face)
-			      (propertize (ensime-type-name-with-args pt)
-					  'face font-lock-type-face)
-			      ))
-			   param-types ", ")))
-	  (message (concat "( " param-str " )")))
+	       (call-info (plist-get info :call-info))
+	       (param-sections (plist-get call-info :param-sections))
+	       (result-type (plist-get call-info :result-type))
+	       (signature (concat (mapconcat
+				   (lambda (sect)
+				     (concat "("
+					     (mapconcat
+					      (lambda (n-and-t)
+						(format 
+						 "%s:%s" 
+						 (propertize (car n-and-t) 
+							     'face font-lock-variable-name-face)
+						 (propertize (ensime-type-name-with-args 
+							      (cadr n-and-t))
+							     'face font-lock-type-face)
+						 ))
+					      sect ", ") ")"))
+				   param-sections " => ")
+				  " => " 
+				  (propertize 
+				   (ensime-type-name-with-args result-type)
+				   'face font-lock-type-face)
+				  )))
+	  (message signature))
       (remove-hook 'post-command-hook 'ensime-ac-update-param-help t))))
 
 
