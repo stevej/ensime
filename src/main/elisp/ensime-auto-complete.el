@@ -45,9 +45,7 @@ target of the call. Point should be be over last character of call target."
 	  ;; Add a trailing '.' so object accesses parse correctly
 	  (save-excursion 
 	    (forward-char)
-	    ;; .class will satisfy type-checker, whether target is an object, or 
-	    ;; java class
-	    (insert ".class"))
+	    (insert ". ()"))
 
 	  (ensime-write-buffer)
 	  (ensime-rpc-members-for-type-at-point prefix))))
@@ -250,7 +248,7 @@ be used later to give contextual help when entering arguments."
 
 	(let* ((call-info (ensime-rpc-get-call-completion type-id))
 	       (param-sections (ensime-type-param-sections call-info)))
-	  (when (and call-info)
+	  (when (and call-info param-sections)
 
 	    ;; Save param info as a text properties of the member name..
 	    (add-text-properties name-start-point 
