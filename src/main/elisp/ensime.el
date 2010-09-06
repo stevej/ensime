@@ -178,7 +178,7 @@ Do not show 'Writing..' message."
 
 (defvar ensime-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c t") 'ensime-inspect-type)
+    (define-key map (kbd "C-c t") 'ensime-inspect-type-at-point)
     (define-key map (kbd "C-c p") 'ensime-inspect-package-at-point)
     (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
     (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
@@ -264,7 +264,7 @@ Do not show 'Writing..' message."
   (let ((pack-path (ensime-package-path-at-point)))
     (if pack-path
 	(ensime-inspect-package-by-path pack-path)
-      (ensime-inspect-type))))
+      (ensime-inspect-type-at-point))))
 
 (defun ensime-mouse-motion (event)
   "Command handler for mouse movement events in `ensime-mode-map'."
@@ -2131,7 +2131,7 @@ If is-obj is non-nil, use an alternative color for the link."
 
 (defun ensime-inspector-insert-linked-type (type &optional with-doc-link qualified)
   "Helper utility to output a link to a type.
-   Should only be invoked by ensime-inspect-type"
+   Should only be invoked by ensime-inspect-type-at-point"
   (if (ensime-type-is-arrow-p type)
       (ensime-inspector-insert-linked-arrow-type type with-doc-link qualified)
 
@@ -2182,7 +2182,7 @@ If is-obj is non-nil, use an alternative color for the link."
 
 (defun ensime-inspector-insert-linked-arrow-type (type  &optional with-doc-link qualified)
   "Helper utility to output a link to a type.
-   Should only be invoked by ensime-inspect-type"
+   Should only be invoked by ensime-inspect-type-at-point"
   (let*  ((param-sections (ensime-type-param-sections type))
 	  (result-type (ensime-type-result-type type)))
     (dolist (sect param-sections)
@@ -2199,7 +2199,7 @@ If is-obj is non-nil, use an alternative color for the link."
 
 (defun ensime-inspector-insert-linked-member (owner-type m)
   "Helper utility to output a link to a type member.
-   Should only be invoked by ensime-inspect-type"
+   Should only be invoked by ensime-inspect-type-at-point"
   (let* ((type (ensime-member-type m))
 	 (pos (ensime-member-pos m))
 	 (member-name (ensime-member-name m))
@@ -2226,11 +2226,18 @@ If is-obj is non-nil, use an alternative color for the link."
 	))
     ))
 
-(defun ensime-inspect-type ()
+(defun ensime-inspect-type-at-point ()
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (interactive)
-  (ensime-type-inspector-show (ensime-rpc-inspect-type-at-point)))
+  (let* ((imported-type-path (ensime-imported-type-path-at-point))
+	 (imported-type (when imported-type-path 
+			  (ensime-rpc-get-type-by-name imported-type-path)))
+	 (inspect-info (if imported-type
+			   (ensime-rpc-inspect-type-by-id 
+			    (ensime-type-id imported-type))
+			 (ensime-rpc-inspect-type-at-point))))
+    (ensime-type-inspector-show inspect-info)))
 
 (defun ensime-type-inspector-show (info)
   "Display a list of all the members of the type under point, sorted by
@@ -2367,6 +2374,21 @@ read a fully qualified path from the minibuffer."
       (let ((path (match-string 1)))
 	(ensime-kill-txt-props path)))))
 
+(defun ensime-imported-type-path-at-point ()
+  "Return the qualified name of the type being imported at point."
+  (when-let (sym (symbol-at-point))
+    (let ((sym-name (ensime-kill-txt-props 
+		     (symbol-name sym))))
+      (when (and (integerp (string-match "^[A-ZA-z_]+$" sym-name))
+		 (save-excursion
+		   (beginning-of-line)
+		   (search-forward-regexp
+		    (concat
+		     "^import \\(\\(?:[a-z0-9_]+\\.\\)*\\)"
+		     "\\(?:[A-Z][A-z0-9_]+\\|{[A-z0-9_, \n]+}\\)$")
+		    (point-at-eol) t)))
+	(let ((path (ensime-kill-txt-props (match-string 1))))
+	  (concat path sym-name))))))
 
 (defun ensime-inspect-package-at-point ()
   "If cursor is over a package path, inspect that path. Otherwise, 
