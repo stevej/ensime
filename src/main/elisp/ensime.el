@@ -2385,7 +2385,7 @@ read a fully qualified path from the minibuffer."
 		   (search-forward-regexp
 		    (concat
 		     "^import \\(\\(?:[a-z0-9_]+\\.\\)*\\)"
-		     "\\(?:[A-Z][A-z0-9_]+\\|{[A-z0-9_, \n]+}\\)$")
+		     "\\(?:[A-Z][A-z0-9_\\.]+\\|{[A-z0-9_\\., \n]+}\\)$")
 		    (point-at-eol) t)))
 	(let ((path (ensime-kill-txt-props (match-string 1))))
 	  (concat path sym-name))))))
