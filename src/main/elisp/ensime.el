@@ -2242,55 +2242,57 @@ If is-obj is non-nil, use an alternative color for the link."
 (defun ensime-type-inspector-show (info)
   "Display a list of all the members of the type under point, sorted by
    owner type."
-  (let* ((interfaces (plist-get info :interfaces))
-	 (type (plist-get info :type))
-	 (companion-id (plist-get info :companion-id))
-	 (buffer-name ensime-inspector-buffer-name)
-	 (ensime-indent-level 0))
-    (ensime-with-inspector-buffer 
-     (buffer-name info t)
+  (if (null info)
+      (message "Cannot inspect nil type.")
+    (let* ((interfaces (plist-get info :interfaces))
+	   (type (plist-get info :type))
+	   (companion-id (plist-get info :companion-id))
+	   (buffer-name ensime-inspector-buffer-name)
+	   (ensime-indent-level 0))
+      (ensime-with-inspector-buffer 
+       (buffer-name info t)
 
-     ;; We want two main columns. The first, 20 chars wide.
-     (let ((tab-stop-list '(20)))
-       (setq wrap-prefix (make-string 21 ?\s))
+       ;; We want two main columns. The first, 20 chars wide.
+       (let ((tab-stop-list '(20)))
+	 (setq wrap-prefix (make-string 21 ?\s))
 
-       ;; Display main type
-       (let* ((full-type-name (plist-get type :name)))
-	 (ensime-insert-with-face (format "%s\n" 
-					  (ensime-declared-as-str type))
-				  font-lock-comment-face)
-	 (ensime-inspector-insert-linked-type type t t)
-	 (insert "\n")
+	 ;; Display main type
+	 (let* ((full-type-name (plist-get type :name)))
+	   (ensime-insert-with-face (format "%s\n" 
+					    (ensime-declared-as-str type))
+				    font-lock-comment-face)
+	   (ensime-inspector-insert-linked-type type t t)
+	   (insert "\n")
 
-	 ;; Insert a link to the companion object or class, if extant
-	 (when-let (id companion-id)
-	   (ensime-inspector-insert-link-to-type-id 
-	    "(companion)" id 
-	    (not (ensime-type-is-object-p type))))
+	   ;; Insert a link to the companion object or class, if extant
+	   (when-let (id companion-id)
+	     (ensime-inspector-insert-link-to-type-id 
+	      "(companion)" id 
+	      (not (ensime-type-is-object-p type))))
 
-	 ;; Display each member, arranged by owner type
-	 (dolist (interface interfaces)
-	   (let* ((owner-type (plist-get interface :type))
-		  (implicit (plist-get interface :via-view))
-		  (members (plist-get owner-type :members)))
+	   ;; Display each member, arranged by owner type
+	   (dolist (interface interfaces)
+	     (let* ((owner-type (plist-get interface :type))
+		    (implicit (plist-get interface :via-view))
+		    (members (plist-get owner-type :members)))
 
-	     (ensime-insert-with-face 
-	      (format "\n\n%s%s\n" 
-		      (ensime-declared-as-str owner-type)
-		      (if implicit (concat " (via implicit, " implicit ")") ""))
-	      font-lock-comment-face)
-	     (ensime-inspector-insert-linked-type owner-type t t)
-	     (insert "\n")
-	     (insert "---------------------------\n")
-	     (dolist (m members)
-	       (ensime-inspector-insert-linked-member owner-type m)
+	       (ensime-insert-with-face 
+		(format "\n\n%s%s\n" 
+			(ensime-declared-as-str owner-type)
+			(if implicit (concat " (via implicit, " implicit ")") ""))
+		font-lock-comment-face)
+	       (ensime-inspector-insert-linked-type owner-type t t)
 	       (insert "\n")
-	       )
-	     ))
+	       (insert "---------------------------\n")
+	       (dolist (m members)
+		 (ensime-inspector-insert-linked-member owner-type m)
+		 (insert "\n")
+		 )
+	       ))
 
-	 (goto-char (point-min))
-	 ))
-     )))
+	   (goto-char (point-min))
+	   ))
+       ))))
 
 
 
@@ -2384,7 +2386,7 @@ read a fully qualified path from the minibuffer."
 		   (beginning-of-line)
 		   (search-forward-regexp
 		    (concat
-		     "^import \\(\\(?:[a-z0-9_]+\\.\\)*\\)"
+		     "^\\s-*import \\(\\(?:[a-z0-9_]+\\.\\)*\\)"
 		     "\\(?:[A-Z][A-z0-9_\\.]+\\|{[A-z0-9_\\., \n]+}\\)$")
 		    (point-at-eol) t)))
 	(let ((path (ensime-kill-txt-props (match-string 1))))
@@ -2431,13 +2433,15 @@ inspect the package of the current source file."
 
 (defun ensime-package-inspector-show (info)
   "Display a list of all the members of the provided package."
-  (let* ((buffer-name ensime-inspector-buffer-name)
-	 (ensime-indent-level 0))
-    (ensime-with-inspector-buffer
-     (buffer-name info t)
-     (ensime-inspector-insert-package info)
-     (goto-char (point-min))
-     )))
+  (if (null info)
+      (message "Cannot inspect nil package.")
+    (let* ((buffer-name ensime-inspector-buffer-name)
+	   (ensime-indent-level 0))
+      (ensime-with-inspector-buffer
+       (buffer-name info t)
+       (ensime-inspector-insert-package info)
+       (goto-char (point-min))
+       ))))
 
 (defvar ensime-inspector-history '()
   "Maintain a history of the info objects viewed in the inspector buffer.")
