@@ -2049,6 +2049,10 @@ with the current project's dependencies loaded. Returns a property list."
   (ensime-eval 
    `(swank:type-by-name ,name)))
 
+(defun ensime-rpc-get-type-by-name-at-point (name)
+  (ensime-eval 
+   `(swank:type-by-name-at-point ,name ,buffer-file-name ,(ensime-computed-point))))
+
 (defun ensime-rpc-get-type-at-point ()
   (ensime-eval 
    `(swank:type-at-point ,buffer-file-name ,(ensime-computed-point))))
@@ -2232,7 +2236,7 @@ If is-obj is non-nil, use an alternative color for the link."
   (interactive)
   (let* ((imported-type-path (ensime-imported-type-path-at-point))
 	 (imported-type (when imported-type-path 
-			  (ensime-rpc-get-type-by-name imported-type-path)))
+			  (ensime-rpc-get-type-by-name-at-point imported-type-path)))
 	 (inspect-info (if imported-type
 			   (ensime-rpc-inspect-type-by-id 
 			    (ensime-type-id imported-type))
