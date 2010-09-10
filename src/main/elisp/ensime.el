@@ -120,6 +120,11 @@
   :type 'string
   :group 'ensime-server)
 
+(defcustom ensime-mode-key-prefix [?\C-c ?\C-v] 
+  "The prefix key for ensime-mode commands." 
+  :group 'ensime-mode 
+  :type 'sexp)
+
 (defvar ensime-protocol-version "0.0.1")
 
 (defvar ensime-prefer-noninteractive nil 
@@ -177,41 +182,52 @@ Do not show 'Writing..' message."
     ))
 
 
-(defvar ensime-mode-map
+
+(defvar ensime-mode-map 
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c t") 'ensime-inspect-type-at-point)
-    (define-key map (kbd "C-c p") 'ensime-inspect-package-at-point)
-    (define-key map (kbd "C-c o") 'ensime-inspect-project-package)
-    (define-key map (kbd "C-c c") 'ensime-typecheck-current-file)
-    (define-key map (kbd "C-c a") 'ensime-typecheck-all)
-    (define-key map (kbd "M-.") 'ensime-edit-definition)
-    (define-key map (kbd "M-,") 'ensime-pop-find-definition-stack)
-    (define-key map (kbd "C-x 4") 'ensime-edit-definition-other-window)
-    (define-key map (kbd "C-x 5") 'ensime-edit-definition-other-frame)
-    (define-key map (kbd "C-c C-a") 'ensime-sbt-switch)
-    (define-key map (kbd "C-c C-z") 'ensime-inf-switch)
-    (define-key map (kbd "C-c f") 'ensime-format-source)
+    (let ((prefix-map (make-sparse-keymap)))
 
-    (define-key map (kbd "C-c d d") 'ensime-db-start)
-    (define-key map (kbd "C-c d b") 'ensime-db-set-break)
-    (define-key map (kbd "C-c d u") 'ensime-db-clear-break)
-    (define-key map (kbd "C-c d s") 'ensime-db-step)
-    (define-key map (kbd "C-c d n") 'ensime-db-next)
-    (define-key map (kbd "C-c d r") 'ensime-db-run)
-    (define-key map (kbd "C-c d c") 'ensime-db-continue)
-    (define-key map (kbd "C-c d q") 'ensime-db-quit)
-    (define-key map (kbd "C-c d l") 'ensime-db-list-locals)
+      (define-key prefix-map (kbd "i") 'ensime-inspect-type-at-point)
+      (define-key prefix-map (kbd "p") 'ensime-inspect-package-at-point)
+      (define-key prefix-map (kbd "o") 'ensime-inspect-project-package)
+      (define-key prefix-map (kbd "c") 'ensime-typecheck-current-file)
+      (define-key prefix-map (kbd "a") 'ensime-typecheck-all)
+      (define-key prefix-map (kbd "s") 'ensime-sbt-switch)
+      (define-key prefix-map (kbd "z") 'ensime-inf-switch)
+      (define-key prefix-map (kbd "f") 'ensime-format-source)
 
-    (define-key map (kbd "C-c b b") 'ensime-builder-build)
-    (define-key map (kbd "C-c b r") 'ensime-builder-rebuild)
+      (define-key prefix-map (kbd "d") 'ensime-db-start)
+      (define-key prefix-map (kbd "b") 'ensime-db-set-break)
+      (define-key prefix-map (kbd "u") 'ensime-db-clear-break)
+      (define-key prefix-map (kbd ">") 'ensime-db-step)
+      (define-key prefix-map (kbd "}") 'ensime-db-next)
+      (define-key prefix-map (kbd "r") 'ensime-db-run)
+      (define-key prefix-map (kbd "c") 'ensime-db-continue)
+      (define-key prefix-map (kbd "q") 'ensime-db-quit)
+      (define-key prefix-map (kbd "l") 'ensime-db-list-locals)
 
-    (define-key map [C-down-mouse-1] 'ignore)
-    (define-key map [C-up-mouse-1] 'ignore)
-    (define-key map [C-mouse-1] 'ignore)
-    (define-key map [double-mouse-1] 'ensime-mouse-1-double-click)
-    (define-key map [C-mouse-1] 'ensime-control-mouse-1-single-click)
+      (define-key prefix-map (kbd "n") 'ensime-refactor-rename)
+      (define-key prefix-map (kbd "g") 'ensime-refactor-organize-imports)
+
+      (define-key prefix-map (kbd "e") 'ensime-builder-build)
+      (define-key prefix-map (kbd "r") 'ensime-builder-rebuild)
+
+      (define-key map ensime-mode-key-prefix prefix-map)
+
+      ;; Prefix-less shortcuts bindings...
+      (define-key map (kbd "C-c .") 'ensime-inspect-type-at-point)
+      (define-key map (kbd "M-.") 'ensime-edit-definition)
+      (define-key map (kbd "M-,") 'ensime-pop-find-definition-stack)
+
+      (define-key map [C-down-mouse-1] 'ignore)
+      (define-key map [C-up-mouse-1] 'ignore)
+      (define-key map [C-mouse-1] 'ignore)
+      (define-key map [double-mouse-1] 'ensime-mouse-1-double-click)
+      (define-key map [C-mouse-1] 'ensime-control-mouse-1-single-click))
+
     map)
-  "Keymap for `ensime-mode'.")
+  "Keymap for ENSIME mode."
+  )
 
 (easy-menu-define ensime-mode-menu ensime-mode-map
   "Menu for ENSIME mode"
