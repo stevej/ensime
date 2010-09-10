@@ -44,6 +44,7 @@
 (require 'hideshow)
 (require 'font-lock)
 (require 'auto-complete)
+(require 'easymenu)
 (require 'ensime-config)
 (require 'ensime-auto-complete)
 (require 'ensime-sbt)
@@ -212,6 +213,46 @@ Do not show 'Writing..' message."
     map)
   "Keymap for `ensime-mode'.")
 
+(easy-menu-define ensime-mode-menu ensime-mode-map
+  "Menu for ENSIME mode"
+  '("ENSIME"
+    ("Build"
+     ["Build project" ensime-builder-build]
+     ["Rebuild project" ensime-builder-rebuild])
+    ("Test")
+    ("Source"
+     ["Format source" ensime-format-source]
+     ["Organize imports" ensime-refactor-organize-imports]
+     ["Inspect type" ensime-inspect-type-at-point]
+     ["Inspect package" ensime-inspect-package-at-point]
+     ["Inspect project package" ensime-inspect-project-package]
+     ["Typecheck file" ensime-typecheck-current-file]
+     ["Typecheck project" ensime-typecheck-all])
+    ("Refactor"
+     ["Rename" ensime-refactor-rename]
+     ["Extract local val" ensime-refactor-extract-local]
+     ["Extract method" ensime-refactor-extract-method]
+     ["Inline local val" ensime-refactor-inline-local])
+    ("Navigation"
+     ["Lookup definition" ensime-edit-definition]
+     ["Lookup definition in other window" ensime-edit-definition-other-window]
+     ["Lookup definition in other frame" ensime-edit-definition-other-frame]
+     ["Definition stack" ensime-pop-find-definition-stack]
+     )
+    ("Debugger"
+     ["Start" ensime-db-start]
+     ["Set break point" ensime-db-set-break]
+     ["Clear breakpoint" ensime-db-clear-break]
+     ["Step" ensime-db-step]
+     ["Next" ensime-db-next]
+     ["Run" ensime-db-run]
+     ["Continue" ensime-db-continue]
+     ["Quit" ensime-db-quit]
+     ["List local variables" ensime-db-list-locals])
+    "---"
+    ["Go to SBT console" ensime-sbt-switch]
+    ["Go to Scala REPL" ensime-inf-switch]
+    ))
 
 (define-minor-mode ensime-mode
   "ENSIME: The ENhanced Scala Interaction Mode for Emacs (minor-mode).
@@ -223,6 +264,7 @@ Do not show 'Writing..' message."
   (if ensime-mode
       (progn
 	(ensime-ac-enable)
+        (easy-menu-add ensime-mode-menu ensime-mode-map)
 	(add-hook 'after-save-hook 'ensime-run-after-save-hooks nil t)
 	(add-hook 'ensime-source-buffer-saved-hook 'ensime-typecheck-current-file)
 	(add-hook 'ensime-source-buffer-saved-hook 'ensime-builder-track-changed-files)
