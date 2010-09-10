@@ -303,10 +303,7 @@ Do not show 'Writing..' message."
    inspect that package. Otherwise, try to inspect the type
    of the thing at point."
   (interactive "e")
-  (let ((pack-path (ensime-package-path-at-point)))
-    (if pack-path
-	(ensime-inspect-package-by-path pack-path)
-      (ensime-inspect-type-at-point))))
+  (ensime-inspect-type-at-point))
 
 (defun ensime-mouse-motion (event)
   "Command handler for mouse movement events in `ensime-mode-map'."
@@ -2276,14 +2273,21 @@ If is-obj is non-nil, use an alternative color for the link."
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (interactive)
-  (let* ((imported-type-path (ensime-imported-type-path-at-point))
-	 (imported-type (when imported-type-path 
-			  (ensime-rpc-get-type-by-name-at-point imported-type-path)))
-	 (inspect-info (if imported-type
-			   (ensime-rpc-inspect-type-by-id 
-			    (ensime-type-id imported-type))
-			 (ensime-rpc-inspect-type-at-point))))
-    (ensime-type-inspector-show inspect-info)))
+  (let ((pack-path (ensime-package-path-at-point)))
+
+    ;; inspect package if package under point
+    (if pack-path (ensime-inspect-package-by-path pack-path)
+
+      (let* ((imported-type-path (ensime-imported-type-path-at-point))
+	     (imported-type (when imported-type-path 
+			      (ensime-rpc-get-type-by-name-at-point imported-type-path)))
+	     (inspect-info (if imported-type
+			       ;; otherwise, if imported type under point
+			       (ensime-rpc-inspect-type-by-id (ensime-type-id imported-type))
+
+			     ;; otherwise do normal type inspection
+			     (ensime-rpc-inspect-type-at-point))))
+	(ensime-type-inspector-show inspect-info)))))
 
 (defun ensime-type-inspector-show (info)
   "Display a list of all the members of the type under point, sorted by
@@ -2399,7 +2403,7 @@ read a fully qualified path from the minibuffer."
 (defun ensime-package-path-at-point ()
   "Return the package path at point, or nil if point is not in a package path."
   (let* ((case-fold-search nil)
-	 (re "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9_]+\\.\\)+[a-z0-9_]+\\)"))
+	 (re "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z][a-z0-9_]+\\.\\)+[a-z][a-z0-9]+\\)"))
     (save-excursion
       (catch 'return
 	(let ((init-point (point))

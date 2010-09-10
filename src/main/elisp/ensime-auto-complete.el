@@ -106,12 +106,13 @@ changes will be forgotten."
     (let ((names 
 	   (ensime-ac-with-buffer-copy 
 	    (backward-delete-char (length prefix))
+	    (insert ";{")
 	    (save-excursion
 	      ;; Insert a dummy value after (point), so that
 	      ;; if we are at the end of a method body, the
 	      ;; method context will be extended to include
 	      ;; the completion point.
-	      (insert " {exit()};")) ()
+	      (insert "  ;exit()};")) ()
 	      (ensime-write-buffer)
 	      (ensime-rpc-name-completions-at-point
 	       prefix is-constructor))))
