@@ -174,10 +174,7 @@ symbol, return nil."
     (ensime-insert-with-face 
      (concat header " (c to confirm, q to cancel)")
      'font-lock-constant-face)
-
-    (ensime-insert-with-face 
-     "\n----------------------------------------\n\n"
-     'font-lock-comment-face)
+    (insert "\n\n\n")
 
     (if (null changes)
 	(insert "Nothing to be done.")
@@ -189,8 +186,9 @@ symbol, return nil."
 	       (len (- to from)))
 
 	  (ensime-insert-with-face file 'font-lock-comment-face)
-	  (insert "\n")
-	  (insert "....\n")
+	  (ensime-insert-with-face 
+	   "\n-------------------------------------------------------------\n" 
+	   'font-lock-comment-face)
 	  (let* ((p (point))
 		 (result (ensime-refactor-file-text-range
 			  file (- from 150) (+ to 150)))
@@ -202,8 +200,7 @@ symbol, return nil."
 	    (delete-char (min len (- (point-max) (point))))
 	    (ensime-insert-with-face text 'font-lock-keyword-face))
 	  (goto-char (point-max))
-	  (insert "\n....")
-	  (insert "\n\n"))))))
+	  (insert "\n\n\n"))))))
 
 
 (defun ensime-refactor-file-text-range (file-name start end)
