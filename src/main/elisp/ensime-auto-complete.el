@@ -195,7 +195,7 @@ changes will be forgotten."
 
 (defvar ensime-ac-name-following-keyword-re
   (concat
-   "\\(?:\\W\\|\\s-\\)\\(?:else\\|case\\|new\\)"
+   "\\(?:\\W\\|\\s-\\)\\(?:else\\|case\\|new\\|with\\|extends\\)"
    "\\s-+\\(\\w*\\)"))
 
 (defvar ensime-ac-name-following-syntax-re
