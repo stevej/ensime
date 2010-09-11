@@ -120,7 +120,7 @@
   :type 'string
   :group 'ensime-server)
 
-(defcustom ensime-mode-key-prefix [?\C-c ?\C-v] 
+(defcustom ensime-mode-key-prefix [?\C-c] 
   "The prefix key for ensime-mode commands." 
   :group 'ensime-mode 
   :type 'sexp)
@@ -187,35 +187,37 @@ Do not show 'Writing..' message."
   (let ((map (make-sparse-keymap)))
     (let ((prefix-map (make-sparse-keymap)))
 
-      (define-key prefix-map (kbd "i") 'ensime-inspect-type-at-point)
-      (define-key prefix-map (kbd "p") 'ensime-inspect-package-at-point)
-      (define-key prefix-map (kbd "o") 'ensime-inspect-project-package)
-      (define-key prefix-map (kbd "c") 'ensime-typecheck-current-file)
-      (define-key prefix-map (kbd "a") 'ensime-typecheck-all)
-      (define-key prefix-map (kbd "s") 'ensime-sbt-switch)
-      (define-key prefix-map (kbd "z") 'ensime-inf-switch)
-      (define-key prefix-map (kbd "f") 'ensime-format-source)
+      (define-key prefix-map (kbd "C-v i") 'ensime-inspect-type-at-point)
+      (define-key prefix-map (kbd "C-v p") 'ensime-inspect-package-at-point)
+      (define-key prefix-map (kbd "C-v o") 'ensime-inspect-project-package)
+      (define-key prefix-map (kbd "C-v c") 'ensime-typecheck-current-file)
+      (define-key prefix-map (kbd "C-v a") 'ensime-typecheck-all)
+      (define-key prefix-map (kbd "C-v s") 'ensime-sbt-switch)
+      (define-key prefix-map (kbd "C-v z") 'ensime-inf-switch)
+      (define-key prefix-map (kbd "C-v f") 'ensime-format-source)
 
-      (define-key prefix-map (kbd "d") 'ensime-db-start)
-      (define-key prefix-map (kbd "b") 'ensime-db-set-break)
-      (define-key prefix-map (kbd "u") 'ensime-db-clear-break)
-      (define-key prefix-map (kbd ">") 'ensime-db-step)
-      (define-key prefix-map (kbd "}") 'ensime-db-next)
-      (define-key prefix-map (kbd "r") 'ensime-db-run)
-      (define-key prefix-map (kbd "c") 'ensime-db-continue)
-      (define-key prefix-map (kbd "q") 'ensime-db-quit)
-      (define-key prefix-map (kbd "l") 'ensime-db-list-locals)
+      (define-key prefix-map (kbd "C-d d") 'ensime-db-start)
+      (define-key prefix-map (kbd "C-d b") 'ensime-db-set-break)
+      (define-key prefix-map (kbd "C-d u") 'ensime-db-clear-break)
+      (define-key prefix-map (kbd "C-d >") 'ensime-db-step)
+      (define-key prefix-map (kbd "C-d }") 'ensime-db-next)
+      (define-key prefix-map (kbd "C-d r") 'ensime-db-run)
+      (define-key prefix-map (kbd "C-d c") 'ensime-db-continue)
+      (define-key prefix-map (kbd "C-d q") 'ensime-db-quit)
+      (define-key prefix-map (kbd "C-d l") 'ensime-db-list-locals)
 
-      (define-key prefix-map (kbd "n") 'ensime-refactor-rename)
-      (define-key prefix-map (kbd "g") 'ensime-refactor-organize-imports)
+      (define-key prefix-map (kbd "C-r r") 'ensime-refactor-rename)
+      (define-key prefix-map (kbd "C-r o") 'ensime-refactor-organize-imports)
+      (define-key prefix-map (kbd "C-r l") 'ensime-refactor-extract-local)
+      (define-key prefix-map (kbd "C-r m") 'ensime-refactor-extract-method)
+      (define-key prefix-map (kbd "C-r i") 'ensime-refactor-inline-local)
 
-      (define-key prefix-map (kbd "e") 'ensime-builder-build)
-      (define-key prefix-map (kbd "r") 'ensime-builder-rebuild)
+      (define-key prefix-map (kbd "C-b e") 'ensime-builder-build)
+      (define-key prefix-map (kbd "C-b r") 'ensime-builder-rebuild)
 
       (define-key map ensime-mode-key-prefix prefix-map)
 
       ;; Prefix-less shortcuts bindings...
-      (define-key map (kbd "C-c .") 'ensime-inspect-type-at-point)
       (define-key map (kbd "M-.") 'ensime-edit-definition)
       (define-key map (kbd "M-,") 'ensime-pop-find-definition-stack)
 
@@ -240,7 +242,7 @@ Do not show 'Writing..' message."
      ["Format source" ensime-format-source]
      ["Organize imports" ensime-refactor-organize-imports]
      ["Inspect type" ensime-inspect-type-at-point]
-     ["Inspect package" ensime-inspect-package-at-point]
+     ["Inspect enclosing package" ensime-inspect-package-at-point]
      ["Inspect project package" ensime-inspect-project-package]
      ["Typecheck file" ensime-typecheck-current-file]
      ["Typecheck project" ensime-typecheck-all])
