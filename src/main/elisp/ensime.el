@@ -397,23 +397,24 @@ Do not show 'Writing..' message."
   (let ((conn (ensime-current-connection)))
     ;; Bail out early in case there's no connection, so we won't
     ;; implicitly invoke `ensime-connection' which may query the user.
-    (if (not conn)
-	(and ensime-mode " ENSIME")
-      (let ((local (eq conn ensime-buffer-connection)))
-	(concat " "
-		(if local "{" "[")
-		(ignore-errors (ensime-connection-name conn))
-		(ensime-modeline-state-string conn)
-		(if local "}" "]"))))))
+    (if (and ensime-mode (not conn))
+	" [ENSIME: No Connection]"
+      (concat " "
+	      "[ENSIME: "
+	      (or (plist-get (ensime-config conn) :project-name)
+		  "Connected")
+	      (when-let (status (ensime-modeline-state-string conn))
+		(concat " (" status ")"))
+	      "]"))))
 
 
 (defun ensime-modeline-state-string (conn)
   "Return a string possibly describing CONN's state."
   (cond ((not (eq (process-status conn) 'open))
-	 (format " %s" (process-status conn)))
+	 (format "%s" (process-status conn)))
 	((let ((pending (length (ensime-rex-continuations conn))))
 	   (cond ((zerop pending) nil)
-		 (t (format " %s" pending)))))))
+		 (t (format "%s" pending)))))))
 
 ;; Startup
 

@@ -78,6 +78,9 @@
    "What is the name of your projects main package? e.g. com.myproject: "
    ))
 
+(defun ensime-config-read-project-name ()
+  (read-string "What is your project's name? "))
+
 (defun ensime-config-read-source-dirs (root)
   (list (ensime-config-fix-path 
 	 (read-directory-name 
@@ -99,6 +102,9 @@
 (defun ensime-config-build-maven (root)
   (let ((conf '()))
 
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
+
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
 
@@ -112,6 +118,9 @@
 
 (defun ensime-config-build-custom-with-ivy (root)
   (let ((conf '()))
+
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
 
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
@@ -163,6 +172,9 @@
 (defun ensime-config-build-sbt (root)
   (let ((conf '()))
 
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
+
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
 
@@ -176,6 +188,9 @@
 
 (defun ensime-config-build-custom (root)
   (let ((conf '()))
+
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
 
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
