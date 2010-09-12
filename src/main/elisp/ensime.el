@@ -212,7 +212,7 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-r m") 'ensime-refactor-extract-method)
       (define-key prefix-map (kbd "C-r i") 'ensime-refactor-inline-local)
 
-      (define-key prefix-map (kbd "C-b e") 'ensime-builder-build)
+      (define-key prefix-map (kbd "C-b b") 'ensime-builder-build)
       (define-key prefix-map (kbd "C-b r") 'ensime-builder-rebuild)
 
       (define-key map ensime-mode-key-prefix prefix-map)
