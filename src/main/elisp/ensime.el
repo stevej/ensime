@@ -199,8 +199,8 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-d d") 'ensime-db-start)
       (define-key prefix-map (kbd "C-d b") 'ensime-db-set-break)
       (define-key prefix-map (kbd "C-d u") 'ensime-db-clear-break)
-      (define-key prefix-map (kbd "C-d >") 'ensime-db-step)
-      (define-key prefix-map (kbd "C-d }") 'ensime-db-next)
+      (define-key prefix-map (kbd "C-d s") 'ensime-db-step)
+      (define-key prefix-map (kbd "C-d n") 'ensime-db-next)
       (define-key prefix-map (kbd "C-d r") 'ensime-db-run)
       (define-key prefix-map (kbd "C-d c") 'ensime-db-continue)
       (define-key prefix-map (kbd "C-d q") 'ensime-db-quit)
@@ -240,13 +240,13 @@ Do not show 'Writing..' message."
     ("Test")
     ("Source"
      ["Format source" ensime-format-source]
-     ["Organize imports" ensime-refactor-organize-imports]
      ["Inspect type" ensime-inspect-type-at-point]
      ["Inspect enclosing package" ensime-inspect-package-at-point]
      ["Inspect project package" ensime-inspect-project-package]
      ["Typecheck file" ensime-typecheck-current-file]
      ["Typecheck project" ensime-typecheck-all])
     ("Refactor"
+     ["Organize imports" ensime-refactor-organize-imports]
      ["Rename" ensime-refactor-rename]
      ["Extract local val" ensime-refactor-extract-local]
      ["Extract method" ensime-refactor-extract-method]
@@ -255,7 +255,7 @@ Do not show 'Writing..' message."
      ["Lookup definition" ensime-edit-definition]
      ["Lookup definition in other window" ensime-edit-definition-other-window]
      ["Lookup definition in other frame" ensime-edit-definition-other-frame]
-     ["Definition stack" ensime-pop-find-definition-stack]
+     ["Pop definition stack" ensime-pop-find-definition-stack]
      )
     ("Debugger"
      ["Start" ensime-db-start]
@@ -1781,8 +1781,7 @@ This idiom is preferred over `lexical-let'."
     "Hack and be merry!"
     "Your hacking starts... NOW!"
     "May the source be with you!"
-    "Take this REPL, brother, and may it serve you well."
-    "Lemonodor-fame is but a hack away!"
+    "Death to null!"
     ,(format "%s, this could be the start of a beautiful program."
 	     (ensime-user-first-name)))
   "Scientifically-proven optimal words of hackerish encouragement.")
