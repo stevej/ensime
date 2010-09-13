@@ -889,6 +889,8 @@ to the last section."
 	      (,name (if matchedp (match-string 2 ,str) nil)))
 	 ,@body))))
 
+(defun ensime-strip-dollar-signs (str)
+  (replace-regexp-in-string "\\$" "" str))
 
 (defmacro ensime-assert-buffer-saved-interactive (&rest body)
   "Offer to save buffer if buffer is modified. Execute body only if
@@ -2389,13 +2391,13 @@ interface we are implementing."
       (t nil)
       ))))
 
-(defun ensime-completing-read-path (prompt)
+(defun ensime-completing-read-path (prompt &optional initial)
   ;; Note: First thing we do is bind buffer connection so 
   ;; completion function will have access.
   (let ((ensime-dispatching-connection 
 	 (ensime-current-connection)))
     (completing-read prompt #'ensime-path-completions
-		     nil nil (ensime-package-path-at-point))))
+		     nil nil (or initial (ensime-package-containing-point)))))
 
 (defun ensime-inspect-package-by-path (path)
   (ensime-package-inspector-show 
