@@ -375,7 +375,7 @@ be used later to give contextual help when entering arguments."
 		     ac-source-ensime-members ))
 
   (make-local-variable 'ac-use-comphist)
-  (setq ac-use-comphist nil)
+  (setq ac-use-comphist t)
 
   (make-local-variable 'ac-auto-start)
   (setq ac-auto-start nil)

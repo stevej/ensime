@@ -123,6 +123,7 @@
 	(root-dir (plist-get proj :root-dir)))
     (dolist (f src-files)
       (find-file f)
+      (set-buffer-modified-p nil)
       (kill-buffer nil))
     ;; a bit of paranoia..
     (if (and root-dir (integerp (string-match "^/tmp/" root-dir)))

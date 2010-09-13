@@ -169,16 +169,17 @@ argument is supplied) is a .scala or .java file."
 	(before-save-hook nil))
     (save-buffer)))
 
-(defun ensime-write-buffer (&optional filename clear-mod)
+(defun ensime-write-buffer (&optional filename clear-modtime set-unmodified)
   "Write the contents of buffer to its buffer-file-name.
 Do not show 'Writing..' message."
   (let ((file (or filename buffer-file-name))
 	(write-region-annotate-functions nil)
 	(write-region-post-annotation-function nil))
-    (when clear-mod
-      (clear-visited-file-modtime)
-      (set-buffer-modified-p nil))
+    (when clear-modtime
+      (clear-visited-file-modtime))
     (write-region (point-min) (point-max) file nil 'nomessage)
+    (when set-unmodified
+      (set-buffer-modified-p nil))
     ))
 
 
