@@ -115,7 +115,8 @@
   :type 'string
   :group 'ensime-server)
 
-(defcustom ensime-default-server-root "/home/aemon/src/misc/ensime/dist"
+(defcustom ensime-default-server-root
+  (file-name-directory (file-name-directory (directory-file-name (file-name-directory (find-library-name "ensime")))))
   "Location of ENSIME server library."
   :type 'string
   :group 'ensime-server)
