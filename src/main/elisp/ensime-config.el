@@ -68,11 +68,6 @@
 	    (ensime-config-build root (make-symbol proj-type))))))))
 
 
-(defun ensime-config-find-ensime-root (root)
-  (expand-file-name 
-   (read-directory-name 
-    "Where did you unpack the ENSIME distribution?: " root)))
-
 (defun ensime-config-read-proj-package ()
   (read-string 
    "What is the name of your projects main package? e.g. com.myproject: "
@@ -105,9 +100,6 @@
     (ensime-set-key conf :project-name 
 		    (ensime-config-read-project-name))
 
-    (ensime-set-key conf :server-root 
-		    (ensime-config-find-ensime-root root))
-
     (ensime-set-key conf :project-package
 		    (ensime-config-read-proj-package))
 
@@ -121,9 +113,6 @@
 
     (ensime-set-key conf :project-name 
 		    (ensime-config-read-project-name))
-
-    (ensime-set-key conf :server-root 
-		    (ensime-config-find-ensime-root root))
 
     (ensime-set-key conf :project-package
 		    (ensime-config-read-proj-package))
@@ -175,9 +164,6 @@
     (ensime-set-key conf :project-name 
 		    (ensime-config-read-project-name))
 
-    (ensime-set-key conf :server-root 
-		    (ensime-config-find-ensime-root root))
-
     (ensime-set-key conf :project-package
 		    (ensime-config-read-proj-package))
 
@@ -191,9 +177,6 @@
 
     (ensime-set-key conf :project-name 
 		    (ensime-config-read-project-name))
-
-    (ensime-set-key conf :server-root 
-		    (ensime-config-find-ensime-root root))
 
     (ensime-set-key conf :project-package
 		    (ensime-config-read-proj-package))
