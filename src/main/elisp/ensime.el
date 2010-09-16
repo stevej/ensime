@@ -7,7 +7,7 @@
 ;;     This file includes code from slime.el of the SLIME project
 ;;     (also licensend under the GNU General Public License.) The
 ;;     following copyrights therefore apply:
-;;     
+;;
 ;;     Copyright (C) 2003  Eric Marsden, Luke Gorrie, Helmut Eller
 ;;     Copyright (C) 2004,2005,2006  Luke Gorrie, Helmut Eller
 ;;     Copyright (C) 2007,2008,2009  Helmut Eller, Tobias C. Rittweiler
@@ -109,7 +109,7 @@
   :type 'integer
   :group 'ensime-server)
 
-(defcustom ensime-default-server-cmd 
+(defcustom ensime-default-server-cmd
   (if (eq system-type 'windows-nt)  "bin/server.bat" "bin/server.sh")
   "Command to launch server process."
   :type 'string
@@ -120,9 +120,9 @@
   :type 'string
   :group 'ensime-server)
 
-(defcustom ensime-mode-key-prefix [?\C-c] 
-  "The prefix key for ensime-mode commands." 
-  :group 'ensime-mode 
+(defcustom ensime-mode-key-prefix [?\C-c]
+  "The prefix key for ensime-mode commands."
+  :group 'ensime-mode
   :type 'sexp)
 
 (defvar ensime-protocol-version "0.0.1")
@@ -607,7 +607,6 @@ If not, message the user."
 	     (let ((c (ensime-connect config host port)))
 	       (ensime-set-config c config)
 	       (ensime-set-server-process c server-proc)
-	       
 	       ;; As a conveniance, we associate the client connection with
 	       ;; the server buffer.
 	       ;; This assumes that there's only one client connection
