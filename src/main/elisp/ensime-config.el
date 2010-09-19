@@ -161,9 +161,6 @@
 (defun ensime-config-build-sbt (root)
   (let ((conf '()))
 
-    (ensime-set-key conf :project-name 
-		    (ensime-config-read-project-name))
-
     (ensime-set-key conf :project-package
 		    (ensime-config-read-proj-package))
 
