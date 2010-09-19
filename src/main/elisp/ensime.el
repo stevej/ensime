@@ -116,7 +116,11 @@
   :group 'ensime-server)
 
 (defcustom ensime-default-server-root
-  (file-name-directory (file-name-directory (directory-file-name (file-name-directory (find-library-name "ensime")))))
+  (file-name-directory 
+   (file-name-directory 
+    (directory-file-name 
+     (file-name-directory 
+      (locate-library "ensime")))))
   "Location of ENSIME server library."
   :type 'string
   :group 'ensime-server)
