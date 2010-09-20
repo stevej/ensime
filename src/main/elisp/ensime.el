@@ -609,8 +609,15 @@ If not, message the user."
 	   (let ((port (ensime-read-swank-port))
 		 (args (ensime-inferior-server-args server-proc)))
 	     (ensime-delete-swank-port-file 'message)
-	     (let ((c (ensime-connect config host port)))
+	     (let ((c (ensime-connect host port)))
+
 	       (ensime-set-config c config)
+
+	       (let ((ensime-dispatching-connection c))
+		 (ensime-eval-async 
+		  '(swank:connection-info)
+		  (ensime-curry #'ensime-handle-connection-info c)))
+
 	       (ensime-set-server-process c server-proc)
 	       ;; As a conveniance, we associate the client connection with
 	       ;; the server buffer.
@@ -1443,10 +1450,23 @@ This doesn't mean it will connect right after Ensime is loaded."
 	   (ensime-connection)))
 	(t nil)))
 
-(defun ensime-setup-connection (config process)
+(defun ensime-setup-connection (process)
   "Make a connection out of PROCESS."
   (let ((ensime-dispatching-connection process))
-    (ensime-init-connection-state config process)
+
+    ;; Initialize connection state in the process-buffer of PROC."
+
+    ;; To make life simpler for the user: if this is the only open
+    ;; connection then reset the connection counter.
+    (when (equal ensime-net-processes (list process))
+      (setq ensime-connection-counter 0))
+
+    (ensime-with-connection-buffer 
+     () (setq ensime-buffer-connection process))
+
+    (setf (ensime-connection-number process) 
+	  (incf ensime-connection-counter))
+
     process))
 
 (defmacro* ensime-with-connection-buffer ((&optional process) &rest body)
@@ -1459,10 +1479,9 @@ If PROCESS is not specified, `ensime-connection' is used.
 			   (error "No connection")))
      ,@body))
 
-(defun ensime-connect (config host port)
+(defun ensime-connect (host port)
   "Connect to a running Swank server. Return the connection."
   (interactive (list 
-		(ensime-config-find-and-load)
 		(read-from-minibuffer "Host: " ensime-default-server-host)
 		(read-from-minibuffer "Port: " (format "%d" ensime-default-port)
 				      nil t)))
@@ -1474,27 +1493,12 @@ If PROCESS is not specified, `ensime-connection' is used.
     (message "Connecting to Swank on port %S.." port)
     (let* ((process (ensime-net-connect host port))
 	   (ensime-dispatching-connection process))
-      (ensime-setup-connection config process))))
+      (ensime-setup-connection process))))
 
 
-(defun ensime-init-connection-state (config proc)
-  "Initialize connection state in the process-buffer of PROC."
-  ;; To make life simpler for the user: if this is the only open
-  ;; connection then reset the connection counter.
-  (when (equal ensime-net-processes (list proc))
-    (setq ensime-connection-counter 0))
-  (ensime-with-connection-buffer 
-   () (setq ensime-buffer-connection proc))
-  (setf (ensime-connection-number proc) (incf ensime-connection-counter))
-  ;; We do the rest of our initialization asynchronously. The current
-  ;; function may be called from a timer, and if we setup the REPL
-  ;; from a timer then it mysteriously uses the wrong keymap for the
-  ;; first command.
-  (ensime-eval-async '(swank:connection-info)
-		     (ensime-curry #'ensime-set-connection-info config proc)))
 
 
-(defun ensime-set-connection-info (config connection info)
+(defun ensime-handle-connection-info (connection info)
   "Initialize CONNECTION with INFO received from Lisp."
   (ensime-event-sig :connected info)
   (let ((ensime-dispatching-connection connection))
@@ -1524,10 +1528,27 @@ If PROCESS is not specified, `ensime-connection' is used.
       (run-hooks 'ensime-connected-hook)
       (when-let (fun (plist-get args ':init-function))
 	(funcall fun)))
+
     (message "Connected.")
+
     ;; Send the project initialization..
-    (ensime-eval-async `(swank:init-project ,config) #'identity)
+    (let ((config (ensime-config connection)))
+      (ensime-eval-async `(swank:init-project ,config)
+			 (ensime-curry #'ensime-handle-project-info 
+				       connection)))
     ))
+
+
+(defun ensime-handle-project-info (conn info)
+  "Handle result of init-project rpc call. Install project information
+computed on server into the local config structure."
+  (let* ((config (ensime-config conn)))
+    (setf config (plist-put config :project-name 
+			    (or 
+			     (plist-get config :project-name)
+			     (plist-get info :project-name))))
+    (ensime-set-config conn config)
+    (force-mode-line-update t)))
 
 
 (defun ensime-check-version (version conn)
