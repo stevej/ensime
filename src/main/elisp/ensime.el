@@ -745,6 +745,7 @@ browsing the documentation for those objects."
 
 (defvar ensime-javadoc-type-replacements 
   '(
+    ("^scala.Any$" . "java.lang.Object")
     ("^scala.Int$" . "int")
     ("^scala.Double$" . "double")
     ("^scala.Short$" . "short")
