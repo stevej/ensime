@@ -1545,8 +1545,8 @@ computed on server into the local config structure."
   (let* ((config (ensime-config conn)))
     (setf config (plist-put config :project-name 
 			    (or 
-			     (plist-get info :project-name)
 			     (plist-get config :project-name)
+			     (plist-get info :project-name)
 			     )))
     (ensime-set-config conn config)
     (force-mode-line-update t)))
