@@ -2116,7 +2116,7 @@ any buffer visiting the given file."
     ;; Sort in textual order
     (sort merged (lambda (a b)
 		   (< (plist-get a :from)
-		      (plist-get a :to))))
+		      (plist-get b :from))))
     ))
 
 
