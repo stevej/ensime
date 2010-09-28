@@ -39,22 +39,13 @@
   "Key bindings for the refactor confirmation popup.")
 
 
-(defmacro* ensime-refactor-with-info-buffer ((&optional select) &body body)
-  "Extend the standard popup buffer with refactor-specific bindings."
-  `(ensime-with-popup-buffer
-    (,ensime-refactor-info-buffer-name t ,select)
-    (use-local-map ensime-refactor-info-map)
-    ,@body
-    ))
-
-
 (defun ensime-refactor-notify-failure (result)
   (message "Refactoring failed: %s" (plist-get result :reason)))
 
 
 (defun ensime-refactor-sym-at-point ()
-  "Return information about the symbol at point. If not looking at a 
-symbol, return nil."
+  "Return information about the symbol at point. If not looking at a
+ symbol, return nil."
   (let ((start nil)
 	(end nil))
 
@@ -66,9 +57,8 @@ symbol, return nil."
       (save-excursion
 	(search-forward-regexp "\\W" nil t)
 	(setq end (- (point) 1)))
-      
-      (list :start start 
-	    :end end 
+      (list :start start
+	    :end end
 	    :name (buffer-substring-no-properties start end)))))
 
 
@@ -77,8 +67,8 @@ symbol, return nil."
 (defun ensime-refactor-organize-imports ()
   "Do a syntactic organization of the imports in the current buffer."
   (interactive)
-  (ensime-refactor-perform 
-   'organizeImports 
+  (ensime-refactor-perform
+   'organizeImports
    `(file ,buffer-file-name start ,(point-min) end ,(point-max))))
 
 
@@ -91,8 +81,8 @@ symbol, return nil."
 	       (end (plist-get sym :end))
 	       (old-name (plist-get sym :name))
 	       (name (read-string (format "Rename '%s' to: " old-name))))
-	  (ensime-refactor-perform 
-	   'rename 
+	  (ensime-refactor-perform
+	   'rename
 	   `(file ,buffer-file-name start ,start end ,end newName ,name)))
       (message "Please place cursor on a symbol."))))
 
@@ -104,8 +94,8 @@ symbol, return nil."
     (if sym
 	(let* ((start (plist-get sym :start))
 	       (end (plist-get sym :end)))
-	  (ensime-refactor-perform 
-	   'inlineLocal 
+	  (ensime-refactor-perform
+	   'inlineLocal
 	   `(file ,buffer-file-name start ,start end ,end)))
       (message "Please place cursor on a local value."))))
 
@@ -114,8 +104,8 @@ symbol, return nil."
   "Extract a range of code into a method."
   (interactive)
   (let* ((name (read-string "Name of method: ")))
-    (ensime-refactor-perform 
-     'extractMethod 
+    (ensime-refactor-perform
+     'extractMethod
      `(file ,buffer-file-name start ,(mark) end ,(point) methodName ,name))))
 
 
@@ -123,8 +113,8 @@ symbol, return nil."
   "Extract a range of code into a val."
   (interactive)
   (let* ((name (read-string "Name of local value: ")))
-    (ensime-refactor-perform 
-     'extractLocal 
+    (ensime-refactor-perform
+     'extractLocal
      `(file ,buffer-file-name start ,(mark) end ,(point) name ,name))))
 
 
@@ -132,7 +122,7 @@ symbol, return nil."
   (ensime-assert-buffer-saved-interactive
    (incf ensime-refactor-id-counter)
    (message "Please wait...")
-   (ensime-rpc-refactor-perform 
+   (ensime-rpc-refactor-perform
     ensime-refactor-id-counter
     refactor-type
     params
@@ -150,15 +140,16 @@ symbol, return nil."
 				 'ensime-refactor-handle-result)))
 	      (cancel `(lambda () (ensime-rpc-refactor-cancel ,id))))
 
-	  (ensime-refactor-with-info-buffer
-	   (t)
+	  (ensime-with-popup-buffer
+	   (ensime-refactor-info-buffer-name t t)
+	   (use-local-map ensime-refactor-info-map)
 	   (set (make-local-variable 'cancel-refactor) cancel)
 	   (set (make-local-variable 'continue-refactor) cont)
-	   (ensime-refactor-populate-confirmation-buffer 
+	   (ensime-refactor-populate-confirmation-buffer
 	    refactor-type changes)
 	   (goto-char (point-min))
 	   ))
-      
+
       (ensime-refactor-notify-failure result)
       )))
 
@@ -168,49 +159,17 @@ symbol, return nil."
     (ensime-revert-visited-files touched t)))
 
 (defun ensime-refactor-populate-confirmation-buffer (refactor-type changes)
-  (let ((header 
+  (let ((header
 	 "Please review the proposed changes."))
 
-    (ensime-insert-with-face 
+    (ensime-insert-with-face
      (concat header " (c to confirm, q to cancel)")
      'font-lock-constant-face)
     (insert "\n\n\n")
 
     (if (null changes)
 	(insert "Nothing to be done.")
-      (dolist (ch changes)
-	(let* ((file (plist-get ch :file))
-	       (text (plist-get ch :text))
-	       (from (plist-get ch :from))
-	       (to (plist-get ch :to))
-	       (len (- to from)))
-
-	  (ensime-insert-with-face file 'font-lock-comment-face)
-	  (ensime-insert-with-face 
-	   "\n-------------------------------------------------------------\n" 
-	   'font-lock-comment-face)
-	  (let* ((p (point))
-		 (result (ensime-refactor-file-text-range
-			  file (- from 150) (+ to 150)))
-		 (expanded-text (plist-get result :text))
-		 (real-start (plist-get result :real-start))
-		 (real-end (plist-get result :real-end)))
-	    (insert expanded-text)
-	    (goto-char (+ p (- from real-start)))
-	    (delete-char (min len (- (point-max) (point))))
-	    (ensime-insert-with-face text 'font-lock-keyword-face))
-	  (goto-char (point-max))
-	  (insert "\n\n\n"))))))
-
-
-(defun ensime-refactor-file-text-range (file-name start end)
-  "Return the text of the given file from start to end."
-  (with-temp-buffer 
-    (insert-file-contents file-name)
-    (let* ((real-start (max start (point-min)))
-	   (real-end (min end (point-max)))
-	   (text (buffer-substring-no-properties real-start real-end)))
-      `(:text ,text :real-start ,real-start :real-end real-end))))
+      (ensime-insert-change-list changes))))
 
 
 
