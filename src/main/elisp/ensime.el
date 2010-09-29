@@ -138,6 +138,7 @@
 
 (defvar ensime-server-buffer-name "*inferior-ensime-server*")
 
+(defvar ensime-popup-in-other-frame nil)
 
 ;;;;; ensime-mode
 
@@ -195,6 +196,8 @@ Do not show 'Writing..' message."
     (let ((prefix-map (make-sparse-keymap)))
 
       (define-key prefix-map (kbd "C-v i") 'ensime-inspect-type-at-point)
+      (define-key prefix-map (kbd "C-v 5 i")
+	'ensime-inspect-type-at-point-other-frame)
       (define-key prefix-map (kbd "C-v p") 'ensime-inspect-package-at-point)
       (define-key prefix-map (kbd "C-v o") 'ensime-inspect-project-package)
       (define-key prefix-map (kbd "C-v c") 'ensime-typecheck-current-file)
@@ -249,6 +252,7 @@ Do not show 'Writing..' message."
     ("Source"
      ["Format source" ensime-format-source]
      ["Inspect type" ensime-inspect-type-at-point]
+     ["Inspect type in another frame" ensime-inspect-type-at-point-other-frame]
      ["Inspect enclosing package" ensime-inspect-package-at-point]
      ["Inspect project package" ensime-inspect-project-package]
      ["Typecheck file" ensime-typecheck-current-file]
@@ -2002,7 +2006,7 @@ any buffer visiting the given file."
 	  (let* ((edits (copy-list edits));; So we can destructively modify
 		 (result (ensime-extract-file-chunk
 			  file (- range-start 150) (+ range-end 150)))
-		 (expanded-text (plist-get result :text))
+		 (chunk-text (plist-get result :text))
 		 (chunk-start (plist-get result :chunk-start))
 		 (chunk-end (plist-get result :chunk-end))
 		 (chunk-start-line (plist-get result :chunk-start-line)))
@@ -2025,7 +2029,7 @@ any buffer visiting the given file."
 	     'font-lock-comment-face)
 
 	    (let ((p (point)))
-	      (insert expanded-text)
+	      (insert chunk-text)
 
 	      ;; Highlight all the edits in the chunk
 
@@ -2055,7 +2059,7 @@ any buffer visiting the given file."
 
     (and (equal (plist-get ch1 :file )
 		(plist-get ch2 :file ))
-	 (< (abs (- mid1 mid2)) 300))))
+	 (< (abs (- mid1 mid2)) 1000))))
 
 
 (defun ensime-merge-changes (changes)
@@ -2475,7 +2479,8 @@ with the current project's dependencies loaded. Returns a property list."
 
       )))
 
-(defun ensime-inspector-insert-linked-arrow-type (type  &optional with-doc-link qualified)
+(defun ensime-inspector-insert-linked-arrow-type 
+  (type  &optional with-doc-link qualified)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type-at-point"
   (let*  ((param-sections (ensime-type-param-sections type))
@@ -2520,6 +2525,13 @@ with the current project's dependencies loaded. Returns a property list."
 	(ensime-inspector-insert-linked-type type nil nil)
 	))
     ))
+
+
+(defun ensime-inspect-type-at-point-other-frame ()
+  "See ensime-inspect-type-at-point, but in other frame."
+  (interactive)
+  (let ((ensime-popup-in-other-frame t))
+    (ensime-inspect-type-at-point)))
 
 (defun ensime-inspect-type-at-point ()
   "Display a list of all the members of the type under point, sorted by
@@ -3101,7 +3113,11 @@ The buffer also uses the minor-mode `ensime-popup-buffer-mode'."
 		    (if (not (ensime-popup-buffer-p (window-buffer w)))
 			(push (cons w (window-buffer w)) old-windows)))
 		  nil t)
-    (let ((new-window (display-buffer (current-buffer))))
+    (let ((new-window
+	   (cond
+	    (ensime-popup-in-other-frame
+	     (display-buffer-other-frame (current-buffer)))
+	    (t (display-buffer (current-buffer))))))
       (unless ensime-popup-restore-data
 	(set (make-local-variable 'ensime-popup-restore-data)
 	     (list new-window
