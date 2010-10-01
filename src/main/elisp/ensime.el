@@ -1838,9 +1838,12 @@ This idiom is preferred over `lexical-let'."
   `("Let the hacking commence!"
     "Hacks and glory await!"
     "Hack and be merry!"
-    "Your hacking starts... NOW!"
     "May the source be with you!"
     "Death to null!"
+    "Find closure!"
+    "May the _ be with you."
+    "M-x be_cool"
+    "CanBuildFrom[List[Dream], Reality, List[Reality]]"
     ,(format "%s, this could be the start of a beautiful program."
              (ensime-user-first-name)))
   "Scientifically-proven optimal words of hackerish encouragement.")
