@@ -220,7 +220,7 @@
 (defun ensime-config-insert-config (conf)
   (insert (concat ";; This config was generated using "
                   "ensime-config-gen. Feel free to customize "
-                  "its contents manually. \n\n"))
+                  "its contents manually.\n\n"))
   (insert "(\n\n")
   (let ((c conf))
     (while c
