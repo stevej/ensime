@@ -43,13 +43,8 @@
 (require 'comint)
 
 (defgroup ensime-sbt nil
-  "Run SBT REPL as inferior of Emacs, parse error messages."
-  :group 'tools
-  :group 'processes)
-
-(defgroup ensime-sbt nil
   "Support for sbt build REPL."
-  :group 'ensime-sbt
+  :group 'ensime
   :prefix "ensime-sbt-")
 
 (defcustom ensime-sbt-program-name "sbt"
@@ -59,7 +54,8 @@
 
 (defcustom ensime-sbt-build-buffer-name "*ensime-sbt*"
   "Buffer name for sbt"
-  :type 'string :group 'ensime-sbt)
+  :type 'string 
+  :group 'ensime-sbt)
 
 (defcustom ensime-sbt-comint-ansi-support t
   "Use comint ansi support"

@@ -57,10 +57,12 @@
   (require 'apropos)
   (require 'compile))
 
+ (defgroup ensime nil
+  "Interaction with the ENhanced Scala Environment."
+  :group 'tools)
 
 (defgroup ensime-ui nil
-  "Interaction with the ENhanced Scala Environment."
-  :prefix "ensime-"
+  "Interaction with the ENhanced Scala Environment UI."
   :group 'ensime)
 
 (defcustom ensime-truncate-lines t
