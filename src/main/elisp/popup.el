@@ -176,25 +176,25 @@ SQUEEZE nil means leave whitespaces other than line breaks untouched."
 
 ;; Popup common
 
-(defgroup popup nil
+(defgroup ensime-popup nil
   "Visual popup interface"
-  :group 'lisp
+  :group 'ensime
   :prefix "popup-")
 
 (defface popup-face
   '((t (:background "lightgray" :foreground "black")))
   "Face for popup."
-  :group 'popup)
+  :group 'ensime-popup)
 
 (defface popup-scroll-bar-foreground-face
   '((t (:background "black")))
   "Foreground face for scroll-bar."
-  :group 'popup)
+  :group 'ensime-popup)
 
 (defface popup-scroll-bar-background-face
   '((t (:background "gray")))
   "Background face for scroll-bar."
-  :group 'popup)
+  :group 'ensime-popup)
 
 (defvar popup-instances nil
   "Popup instances.")
@@ -681,7 +681,7 @@ See also `popup-item-propertize'."
 (defface popup-isearch-match
   '((t (:background "sky blue")))
   "Popup isearch match face."
-  :group 'popup)
+  :group 'ensime-popup)
 
 (defvar popup-isearch-cursor-color "blue")
 
@@ -783,7 +783,7 @@ See also `popup-item-propertize'."
 (defface popup-tip-face
   '((t (:background "khaki1" :foreground "black")))
   "Face for popup tip."
-  :group 'popup)
+  :group 'ensime-popup)
 
 (defvar popup-tip-max-width 80)
 
@@ -852,12 +852,12 @@ See also `popup-item-propertize'."
 (defface popup-menu-face
   '((t (:background "lightgray" :foreground "black")))
   "Face for popup menu."
-  :group 'popup)
+  :group 'ensime-popup)
 
 (defface popup-menu-selection-face
   '((t (:background "steelblue" :foreground "white")))
   "Face for popup menu selection."
-  :group 'popup)
+  :group 'ensime-popup)
 
 (defvar popup-menu-show-tip-function 'popup-tip
   "Function used for showing tooltip by `popup-menu-show-quick-help'.")

@@ -20,6 +20,11 @@
 ;;     MA 02111-1307, USA.
 
 
+(defgroup ensime-db nil
+  "Customization of ensime debugger support."
+  :group 'ensime
+  :prefix 'ensime-db)
+
 (defcustom ensime-db-cmd-template 
   '("jdb" "-classpath" :classpath "-sourcepath" :sourcepath :debug-class :debug-args)
   "The command to launch the debugger. Keywords will be replaced

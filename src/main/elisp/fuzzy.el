@@ -28,14 +28,14 @@
   (require 'cl))
 (require 'regexp-opt)
 
-(defgroup fuzzy nil
+(defgroup ensime-fuzzy nil
   "Fuzzy matching utilities."
-  :group 'convenience
+  :group 'ensime
   :prefix "fuzzy-")
 
 (defcustom fuzzy-accept-error-rate 0.10
   "Error threshold."
-  :group 'fuzzy)
+  :group 'ensime-fuzzy)
 
 (defvar fuzzy-accept-length-difference 2)
 

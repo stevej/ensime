@@ -61,62 +61,62 @@
 
 ;;;; Customization
 
-(defgroup auto-complete nil
+(defgroup ensime-auto-complete nil
   "Auto completion."
-  :group 'completion
+  :group 'ensime
   :prefix "ac-")
 
 (defcustom ac-delay 0.1
   "Delay to completions will be available."
   :type 'float
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-auto-show-menu 0.8
   "Non-nil means completion menu will be automatically shown."
   :type '(choice (const :tag "Yes" t)
                  (const :tag "Never" nil)
                  (float :tag "Timer"))
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-show-menu-immediately-on-auto-complete t
   "Non-nil means menu will be showed immediately on `auto-complete'."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-expand-on-auto-complete t
   "Non-nil means expand whole common part on first time `auto-complete'."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-disable-faces '(font-lock-comment-face font-lock-string-face font-lock-doc-face)
   "Non-nil means disable automatic completion on specified faces."
   :type '(repeat symbol)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-stop-flymake-on-completing t
   "Non-nil means disble flymake temporarily on completing."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-use-fuzzy t
   "Non-nil means use fuzzy matching."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-fuzzy-cursor-color "red"
   "Cursor color in fuzzy mode."
   :type 'string
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-use-comphist t
   "Non-nil means use intelligent completion history."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-comphist-threshold 0.7
   "Percentage of ignoring low scored candidates."
   :type 'float
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-comphist-file
   (expand-file-name (concat (if (boundp 'user-emacs-directory)
@@ -125,38 +125,38 @@
                             "/ac-comphist.dat"))
   "Completion history file name."
   :type 'string
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-use-quick-help t
   "Non-nil means use quick help."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-quick-help-delay 1.5
   "Delay to show quick help."
   :type 'float
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-menu-height 10
   "Max height of candidate menu."
   :type 'integer
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 (defvaralias 'ac-candidate-menu-height 'ac-menu-height)
 
 (defcustom ac-quick-help-height 20
   "Max height of quick help."
   :type 'integer
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-quick-help-prefer-x t
   "Prefer X tooltip than overlay popup for displaying quick help."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-candidate-limit nil
   "Limit number of candidates. Non-integer means no limit."
   :type 'integer
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 (defvaralias 'ac-candidate-max 'ac-candidate-limit)
 
 (defcustom ac-modes
@@ -172,19 +172,19 @@
     xml-mode sgml-mode)
   "Major modes `auto-complete-mode' can run on."
   :type '(repeat symbol)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-compatible-packages-regexp
   "^ac-"
   "Regexp to indicate what packages can work with auto-complete."
   :type 'string
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-trigger-commands
   '(self-insert-command)
   "Trigger commands that specify whether `auto-complete' should start or not."
   :type '(repeat symbol)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-trigger-commands-on-completing
   '(delete-backward-char
@@ -192,14 +192,14 @@
     backward-delete-char-untabify)
   "Trigger commands that specify whether `auto-complete' should continue or not."
   :type '(repeat symbol)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-trigger-key nil
   "Non-nil means `auto-complete' will start by typing this key.
 If you specify this TAB, for example, `auto-complete' will start by typing TAB,
 and if there is no completions, an original command will be fallbacked."
   :type 'string
-  :group 'auto-complete
+  :group 'ensime-auto-complete
   :set (lambda (symbol value)
          (set-default symbol value)
          (when (and value
@@ -214,18 +214,18 @@ If you specify `nil', never be started automatically."
   :type '(choice (const :tag "Yes" t)
                  (const :tag "Never" nil)
                  (integer :tag "Require"))
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-ignores nil
   "List of string to ignore completion."
   :type '(repeat string)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-delete-dups t
   "Non-nil means that duplicate candidates will be automatically
 removed."
   :type '(repeat string)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-ignore-case 'smart
   "Non-nil means auto-complete ignores case.
@@ -234,37 +234,37 @@ a prefix doen't contain any upper case letters."
   :type '(choice (const :tag "Yes" t)
                  (const :tag "Smart" smart)
                  (const :tag "No" nil))
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-dwim t
   "Non-nil means `auto-complete' works based on Do What I Mean."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-use-menu-map nil
   "Non-nil means a special keymap `ac-menu-map' on completing menu will be used."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-use-overriding-local-map nil
   "Non-nil means `overriding-local-map' will be used to hack for overriding key events on auto-copletion."
   :type 'boolean
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defface ac-completion-face
   '((t (:foreground "darkgray" :underline t)))
   "Face for inline completion"
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defface ac-candidate-face
   '((t (:background "lightgray" :foreground "black")))
   "Face for candidate."
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defface ac-selection-face
   '((t (:background "steelblue" :foreground "white")))
   "Face for selected candidate."
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defvar auto-complete-mode-hook nil
   "Hook for `auto-complete-mode'.")
@@ -1518,7 +1518,7 @@ that have been made before in this function."
   "AutoComplete mode"
   :lighter " AC"
   :keymap ac-mode-map
-  :group 'auto-complete
+  :group 'ensime-auto-complete
   (if auto-complete-mode
       (progn
         (ac-setup)
@@ -1539,7 +1539,7 @@ that have been made before in this function."
 
 (define-global-minor-mode global-auto-complete-mode
   auto-complete-mode auto-complete-mode-maybe
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 
 
@@ -1848,17 +1848,17 @@ This workaround avoid flyspell processes when auto completion is being started."
 (defcustom ac-user-dictionary nil
   "User dictionary"
   :type '(repeat string)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-user-dictionary-files '("~/.dict")
   "User dictionary files."
   :type '(repeat string)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defcustom ac-dictionary-directories nil
   "Dictionary directories."
   :type '(repeat string)
-  :group 'auto-complete)
+  :group 'ensime-auto-complete)
 
 (defvar ac-dictionary nil)
 (defvar ac-dictionary-cache (make-hash-table :test 'equal))
