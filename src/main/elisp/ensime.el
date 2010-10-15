@@ -57,7 +57,7 @@
   (require 'apropos)
   (require 'compile))
 
- (defgroup ensime nil
+(defgroup ensime nil
   "Interaction with the ENhanced Scala Environment."
   :group 'tools)
 
@@ -2319,6 +2319,14 @@ with the current project's dependencies loaded. Returns a property list."
      ,(ensime-computed-point)
      ,(or prefix "")
      ,is-constructor)))
+
+(defun ensime-rpc-import-suggestions-at-point (names)
+  (ensime-eval
+   `(swank:import-suggestions
+     ,buffer-file-name
+     ,(ensime-computed-point)
+     ,names
+     )))
 
 (defun ensime-rpc-members-for-type-at-point (&optional prefix)
   (ensime-eval
