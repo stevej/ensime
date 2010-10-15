@@ -234,9 +234,11 @@ Do not show 'Writing..' message."
 
       (define-key map [C-down-mouse-1] 'ignore)
       (define-key map [C-up-mouse-1] 'ignore)
-      (define-key map [C-mouse-1] 'ignore)
-      (define-key map [double-mouse-1] 'ensime-mouse-1-double-click)
-      (define-key map [C-mouse-1] 'ensime-control-mouse-1-single-click))
+      (define-key map [C-down-mouse-3] 'ignore)
+      (define-key map [C-up-mouse-3] 'ignore)
+      (define-key map [C-mouse-1] 'ensime-control-mouse-1-single-click)
+      (define-key map [C-mouse-3] 'ensime-control-mouse-3-single-click)
+      )
 
     map)
   "Keymap for ENSIME mode."
@@ -332,13 +334,14 @@ Do not show 'Writing..' message."
   (mouse-set-point event)
   (ensime-edit-definition))
 
-(defun ensime-mouse-1-double-click (event)
+(defun ensime-control-mouse-3-single-click (event)
   "Command handler for double clicks of mouse button 1.
    If the user clicks on a package declaration or import,
    inspect that package. Otherwise, try to inspect the type
    of the thing at point."
   (interactive "e")
   (ensime-inspect-type-at-point))
+
 
 (defun ensime-mouse-motion (event)
   "Command handler for mouse movement events in `ensime-mode-map'."
