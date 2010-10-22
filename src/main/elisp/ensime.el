@@ -1286,11 +1286,11 @@ This is more compatible with the CL reader."
 ;;; One connection is "current" at any given time. This is:
 ;;;   `ensime-dispatching-connection' if dynamically bound, or
 ;;;   `ensime-buffer-connection' if this is set buffer-local,
-;;;   or the value of `(ensime-connection-for-source-file buffer-file-name)'
+;;;   or the value of `(ensime-owning-connection-for-source-file buffer-file-name)'
 ;;;   otherwise.
 ;;;
 ;;; When you're invoking commands in your source files you'll be using
-;;; `(ensime-connection-for-source-file buffer-file-name)'.
+;;; `(ensime-owning-connection-for-source-file)'.
 ;;;
 ;;; When a command creates a new buffer it will set
 ;;; `ensime-buffer-connection' so that commands in the new buffer will
@@ -1403,19 +1403,21 @@ overrides `ensime-buffer-connection'.")
 
 (defun ensime-current-connection ()
   "Return the connection to use for Lisp interaction.
-Return nil if there's no connection."
+ Return nil if there's no connection. Note, there is some loss of
+ precision here, as ensime-connections-for-source-file might return
+ more than one connection. "
   (or ensime-dispatching-connection
       ensime-buffer-connection
-      (ensime-connection-for-source-file buffer-file-name)))
+      (ensime-owning-connection-for-source-file buffer-file-name)))
 
 (defun ensime-connected-p ()
   "Return t if ensime-current-connection would return non-nil.
-Return nil otherwise."
+ Return nil otherwise."
   (not (null (ensime-current-connection))))
 
 (defun ensime-connection ()
   "Return the connection to use for Lisp interaction.
-   Signal an error if there's no connection."
+ Signal an error if there's no connection."
   (let ((conn (ensime-current-connection)))
     (cond ((not conn)
            (or (ensime-auto-connect)
@@ -1425,18 +1427,31 @@ Return nil otherwise."
           (t conn))))
 
 
-(defun ensime-connection-for-source-file (file)
-  "Return the connection to use for a given file name.
-   Find the first connection with a project root directory that contains
-   file-name (directly or indirectly)."
+(defun ensime-connections-for-source-file (file)
+  "Return the connections corresponding to projects that contain
+   the given file in their source trees."
+  (when file
+    (let ((result '()))
+      (dolist (p ensime-net-processes)
+        (let* ((config (ensime-config p))
+               (source-roots (plist-get config :source-roots)))
+	  (dolist (dir source-roots)
+	    (when (ensime-file-in-directory-p file dir)
+	      (setq result (cons p result))))))
+      result)))
+
+
+(defun ensime-owning-connection-for-source-file (file)
+  "Return the connection corresponding to the single
+ that owns the given file. "
   (when file
     (catch 'return
       (dolist (p ensime-net-processes)
         (let* ((config (ensime-config p))
-               (root-dir-name (plist-get config :root-dir)))
-          (when (ensime-file-in-directory-p file root-dir-name)
-            (throw 'return p))
-          )))))
+               (dir (plist-get config :root-dir)))
+	  (when (ensime-file-in-directory-p file dir)
+	    (throw 'return p)))))
+    ))
 
 
 (defun ensime-prompt-for-connection ()
@@ -1578,6 +1593,8 @@ computed on server into the local config structure."
                              (plist-get config :project-name)
                              (plist-get info :project-name)
                              )))
+    (setf config (plist-put config :source-roots
+			    (plist-get info :source-roots)))
     (ensime-set-config conn config)
     (force-mode-line-update t)))
 
@@ -2230,11 +2247,16 @@ and visible already."
 ;; Compilation on request
 
 (defun ensime-typecheck-current-file ()
-  "Send a request for re-typecheck of current file to the ENSIME server.
-   Current file is saved if it has unwritten modifications."
+  "Send a request for re-typecheck of current file to all ENSIME servers
+ managing projects that contains the current file. File is saved
+ first if it has unwritten modifications."
   (interactive)
   (if (buffer-modified-p) (ensime-write-buffer nil t))
-  (ensime-rpc-async-typecheck-file buffer-file-name))
+
+  ;; Send the reload requist to all servers that might be interested.
+  (dolist (con (ensime-connections-for-source-file buffer-file-name))
+    (let ((ensime-dispatching-connection con))
+      (ensime-rpc-async-typecheck-file buffer-file-name))))
 
 (defun ensime-typecheck-all ()
   "Send a request for re-typecheck of whole project to the ENSIME server.
