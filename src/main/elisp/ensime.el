@@ -234,6 +234,9 @@ Do not show 'Writing..' message."
       (define-key map (kbd "M-.") 'ensime-edit-definition)
       (define-key map (kbd "M-,") 'ensime-pop-find-definition-stack)
 
+      (define-key map (kbd "M-n") 'ensime-forward-note)
+      (define-key map (kbd "M-p") 'ensime-backward-note)
+
       (define-key map [C-down-mouse-1] 'ignore)
       (define-key map [C-up-mouse-1] 'ignore)
       (define-key map [C-down-mouse-3] 'ignore)
@@ -273,6 +276,8 @@ Do not show 'Writing..' message."
      ["Lookup definition in other window" ensime-edit-definition-other-window]
      ["Lookup definition in other frame" ensime-edit-definition-other-frame]
      ["Pop definition stack" ensime-pop-find-definition-stack]
+     ["Forward compilation note" ensime-forward-note]
+     ["Backward compilation note" ensime-backward-note]
      )
     ("Debugger"
      ["Start" ensime-db-start]
@@ -2009,6 +2014,55 @@ any buffer visiting the given file."
   (mapc #'delete-overlay ensime-note-overlays)
   (setq ensime-note-overlays '()))
 
+(defun ensime-next-note-in-current-buffer (notes forward)
+  (let ((best-note nil)
+	(best-dist most-positive-fixnum))
+    (dolist (note notes)
+      (if (and (ensime-files-equal-p (ensime-note-file note)
+				     buffer-file-name)
+	       (/= (ensime-note-beg note) (point)))
+	  (let ((dist (cond
+		       (forward
+			(if (< (ensime-note-beg note) (point))
+			    (+ (ensime-note-beg note)
+			       (- (point-max) (point)))
+			  (- (ensime-note-beg note) (point))))
+
+		       (t (if (> (ensime-note-beg note) (point))
+			      (+ (point) (- (point-max)
+					    (ensime-note-beg note)))
+			    (- (point) (ensime-note-beg note)))))))
+
+	    (when (< dist best-dist)
+	      (setq best-dist dist)
+	      (setq best-note note))
+	    )))
+    best-note))
+
+(defun ensime-goto-next-note (forward)
+  "Helper to move point to next note. Go forward if forward is non-nil."
+  (let* ((conn (ensime-current-connection))
+	 (notes (append (ensime-java-compiler-notes conn)
+			(ensime-scala-compiler-notes conn)))
+	 (next-note (ensime-next-note-in-current-buffer notes forward)))
+    (if next-note
+	(progn
+	  (goto-char (ensime-note-beg next-note))
+	  (message (ensime-note-message next-note)))
+      (message (concat
+		"No more compilation issues in this buffer. "
+		"Use ensime-typecheck-all[C-c C-v a] to find"
+		" all issues, project-wide.")))))
+
+(defun ensime-forward-note ()
+  "Goto the next compilation note in this buffer"
+  (interactive)
+  (ensime-goto-next-note t))
+
+(defun ensime-backward-note ()
+  "Goto the prev compilation note in this buffer"
+  (interactive)
+  (ensime-goto-next-note nil))
 
 ;; Displaying proposed changes
 
@@ -2217,8 +2271,8 @@ any buffer visiting the given file."
 
 
 (defun ensime-goto-source-location (pos &optional where)
-  "Move to the source location POS. Don't open a new window or buffer if file is open
-and visible already."
+  "Move to the source location POS. Don't open
+ a new window or buffer if file is open and visible already."
   (let* ((file (ensime-pos-file pos))
 	 (file-visible-buf
 	  (catch 'result
@@ -2244,6 +2298,99 @@ and visible already."
 	    (goto-char (ensime-pos-offset pos)))))))
 
 
+;; Compilation result interface
+
+(defvar ensime-compile-result-buffer-name "*ENSIME-Compilation-Result*")
+
+(defvar ensime-compile-result-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "q") (lambda()(interactive)
+				(ensime-popup-buffer-quit-function)
+				))
+    (define-key map [?\t] 'forward-button)
+    (define-key map [mouse-1] 'push-button)
+    (define-key map (kbd "M-n") 'forward-button)
+    (define-key map (kbd "M-p") 'backward-button)
+    map)
+  "Key bindings for the build result popup.")
+
+(defface ensime-compile-errline
+  '((((class color) (background dark)) (:foreground "#ff5555"))
+    (((class color) (background light)) (:foreground "Firebrick4"))
+    (t (:bold t)))
+  "Face used for marking the line on which an error occurs."
+  :group 'ensime-ui)
+
+(defface ensime-compile-warnline
+  '((((class color) (background dark)) (:foreground "LightBlue2"))
+    (((class color) (background light)) (:foreground "DarkBlue"))
+    (t (:bold t)))
+  "Face used for marking the line on which an warning occurs."
+  :group 'ensime-ui)
+
+(defun ensime-show-compile-result-buffer (notes-in)
+  "Show a popup listing the results of the last build."
+
+  (ensime-with-popup-buffer
+   (ensime-compile-result-buffer-name t t)
+   (use-local-map ensime-compile-result-map)
+   (ensime-insert-with-face
+    "Result of Compilation (q to quit, TAB to jump to next error)"
+    'font-lock-constant-face)
+   (ensime-insert-with-face
+    "\n----------------------------------------\n\n"
+    'font-lock-comment-face)
+   (if (null notes-in)
+       (insert "Finished with 0 errors, 0 warnings.")
+     (save-excursion
+
+       ;; Group notes by their file and sort by
+       ;; position in the buffer.
+       (let ((notes-by-file (make-hash-table :test 'equal)))
+	 (dolist (note notes-in)
+	   (let* ((f (ensime-note-file note))
+		  (existing (gethash f notes-by-file)))
+	     (puthash f (cons note existing) notes-by-file)))
+	 (maphash (lambda (file-heading notes-set)
+		    (let ((notes (sort (copy-list notes-set)
+				       (lambda (a b) (< (ensime-note-beg a)
+							(ensime-note-beg b)
+							)))))
+
+		      ;; Output file heading
+		      (ensime-insert-with-face
+		       (concat "\n" file-heading
+			       "\n----------------------------------------\n\n")
+		       'font-lock-comment-face)
+
+		      ;; Output the notes
+		      (dolist (note notes)
+			(destructuring-bind
+			    (&key severity msg beg
+				  end line col file &allow-other-keys) note
+			  (let ((face (case severity
+					(error 'ensime-compile-errline)
+					(warn 'ensime-compile-warnline)
+					(info font-lock-string-face)
+					(otherwise font-lock-comment-face)
+					))
+				(header (case severity
+					  (error "ERROR")
+					  (warn "WARNING")
+					  (info "INFO")
+					  (otherwise "MISC")
+					  ))
+				(p (point)))
+			    (insert (format "%s: %s : line %s"
+					    header msg line))
+			    (ensime-make-code-link p (point)
+						   file (+ 1 beg) face)))
+			(insert "\n\n"))))
+		  notes-by-file)))
+     (forward-button 1)
+     )))
+
+
 ;; Compilation on request
 
 (defun ensime-typecheck-current-file ()
@@ -2262,8 +2409,15 @@ and visible already."
   "Send a request for re-typecheck of whole project to the ENSIME server.
    Current file is saved if it has unwritten modifications."
   (interactive)
+  (message "Checking entire project...")
   (if (buffer-modified-p) (ensime-write-buffer nil t))
-  (ensime-rpc-async-typecheck-all))
+  (ensime-rpc-async-typecheck-all '(lambda (result)
+				     (let ((notes (plist-get result :notes)))
+				       (if notes
+					   (ensime-show-compile-result-buffer
+					    notes)
+					 (message "No issues found."))))
+				  ))
 
 ;; Source Formatting
 
@@ -2322,8 +2476,8 @@ with the current project's dependencies loaded. Returns a property list."
 (defun ensime-rpc-async-typecheck-file (file-name)
   (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
 
-(defun ensime-rpc-async-typecheck-all ()
-  (ensime-eval-async `(swank:typecheck-all) #'identity))
+(defun ensime-rpc-async-typecheck-all (continue)
+  (ensime-eval-async `(swank:typecheck-all) continue))
 
 (defun ensime-rpc-async-builder-init (continue)
   (ensime-eval-async `(swank:builder-init) continue))
@@ -3045,6 +3199,21 @@ It should be used for \"background\" messages such as argument lists."
        (file-exists-p (ensime-pos-file pos))
        (integerp (ensime-pos-offset pos))
        (> (ensime-pos-offset pos) 0)))
+
+(defun ensime-note-file (note)
+  (plist-get note :file))
+
+(defun ensime-note-beg (note)
+  (plist-get note :beg))
+
+(defun ensime-note-end (note)
+  (plist-get note :end))
+
+(defun ensime-note-line (note)
+  (plist-get note :line))
+
+(defun ensime-note-message (note)
+  (plist-get note :msg))
 
 ;; Portability
 
