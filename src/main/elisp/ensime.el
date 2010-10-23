@@ -1941,7 +1941,7 @@ any buffer visiting the given file."
                            'ensime-errline))
               (push ov ensime-note-overlays))
             (when-let (ov (ensime-make-overlay-at
-                           file nil (+ 1 beg) (+ 1 end)
+                           file nil beg end
                            msg 'ensime-errline-highlight))
               (push ov ensime-note-overlays))
             ))
@@ -1952,7 +1952,7 @@ any buffer visiting the given file."
                              'ensime-warnline))
                 (push ov ensime-note-overlays))
               (when-let (ov (ensime-make-overlay-at
-                             file nil (+ 1 beg) (+ 1 end)
+                             file nil beg end
                              msg 'ensime-warnline-highlight))
                 (push ov ensime-note-overlays))
               ))
@@ -2051,7 +2051,7 @@ any buffer visiting the given file."
 	  (message (ensime-note-message next-note)))
       (message (concat
 		"No more compilation issues in this buffer. "
-		"Use ensime-typecheck-all[C-c C-v a] to find"
+		"Use ensime-typecheck-all [C-c C-v a] to find"
 		" all issues, project-wide.")))))
 
 (defun ensime-forward-note ()
@@ -2384,7 +2384,7 @@ any buffer visiting the given file."
 			    (insert (format "%s: %s : line %s"
 					    header msg line))
 			    (ensime-make-code-link p (point)
-						   file (+ 1 beg) face)))
+						   file beg face)))
 			(insert "\n\n"))))
 		  notes-by-file)))
      (forward-button 1)
