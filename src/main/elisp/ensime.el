@@ -1690,7 +1690,7 @@ versions cannot deal with that."
             (error "Reply to canceled synchronous eval request tag=%S sexp=%S"
                    tag sexp))
           (throw tag (list #'identity value)))
-         ((:abort reason)
+         ((:abort code reason)
           (throw tag (list #'error
 			   (format
 			    "Synchronous RPC Aborted: %s" reason)))))
@@ -1711,7 +1711,7 @@ versions cannot deal with that."
      (when cont
        (set-buffer buffer)
        (funcall cont result)))
-    ((:abort reason)
+    ((:abort code reason)
      (message "Asynchronous RPC Aborted: %s" reason)))
   ;; Guard against arbitrary return values which once upon a time
   ;; showed up in the minibuffer spuriously (due to a bug in
@@ -1835,9 +1835,9 @@ This idiom is preferred over `lexical-let'."
            (ensime-send `(:emacs-return ,thread ,tag ,value)))
           ((:ed what)
            (ensime-ed what))
-          ((:background-message message)
-           (ensime-background-message "%s" message))
-          ((:reader-error packet condition)
+          ((:background-message code detail)
+           (ensime-background-message "%s" detail))
+          ((:reader-error code detail)
            (ensime-with-popup-buffer
 	    ("*Ensime Error*")
 	    (princ (format "Invalid protocol message:\n%s\n\n%S"
