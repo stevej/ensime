@@ -1383,11 +1383,8 @@ This is automatically synchronized from Lisp.")
 (ensime-def-connection-var ensime-machine-instance nil
   "The name of the (remote) machine running the Lisp process.")
 
-(ensime-def-connection-var ensime-java-compiler-notes nil
-  "Warnings, Errors, and other notes produced by the java analyzer.")
-
-(ensime-def-connection-var ensime-scala-compiler-notes nil
-  "Warnings, Errors, and other notes produced by the scala analyzer.")
+(ensime-def-connection-var ensime-compiler-notes nil
+  "Warnings, Errors, and other notes produced by the analyzer.")
 
 (ensime-def-connection-var ensime-builder-changed-files nil
   "Files that have changed since the last rebuild.")
@@ -1808,9 +1805,7 @@ This idiom is preferred over `lexical-let'."
            (message "ENSIME ready. %s" (ensime-random-words-of-encouragement))
            (ensime-event-sig :compiler-ready status))
           ((:typecheck-result result)
-           (ensime-typecheck-finished result)
-           (when (plist-get result :is-full)
-             (ensime-event-sig :full-typecheck-finished result)))
+           (ensime-handle-typecheck-result result))
           ((:channel-send id msg)
            (ensime-channel-send (or (ensime-find-channel id)
                                     (error "Invalid channel id: %S %S" id msg))
@@ -1886,23 +1881,20 @@ This idiom is preferred over `lexical-let'."
 
 ;; Note: This might better be a connection-local variable, but
 ;; a afraid that might lead to hanging overlays..
+
 (defvar ensime-note-overlays '()
   "The overlay structures created to highlight notes.")
 
-(defun ensime-typecheck-finished (result)
-  (let ((lang (plist-get result :lang))
-        (is-full (plist-get result :is-full))
-        (notes (plist-get result :notes)))
-    (cond
-     ((equal lang :scala)
-      (setf (ensime-scala-compiler-notes (ensime-connection))
-            notes))
-     ((equal lang :java)
-      (setf (ensime-java-compiler-notes (ensime-connection))
-            notes))
-     (t))
+(defun ensime-handle-typecheck-result (result)
 
+  (let ((is-full (plist-get result :is-full))
+        (notes (plist-get result :notes)))
+
+    (setf (ensime-compiler-notes (ensime-connection)) notes)
     (ensime-refresh-note-overlays)
+
+    (when is-full
+      (ensime-event-sig :full-typecheck-finished result))
 
     ))
 
@@ -1925,9 +1917,7 @@ any buffer visiting the given file."
 
 (defun ensime-refresh-note-overlays ()
   (let ((notes (if (ensime-connected-p)
-                   (append
-                    (ensime-scala-compiler-notes (ensime-current-connection))
-                    (ensime-java-compiler-notes (ensime-current-connection)))
+                    (ensime-compiler-notes (ensime-current-connection))
                  )))
     (ensime-clear-note-overlays)
     (dolist (note notes)
@@ -2042,8 +2032,7 @@ any buffer visiting the given file."
 (defun ensime-goto-next-note (forward)
   "Helper to move point to next note. Go forward if forward is non-nil."
   (let* ((conn (ensime-current-connection))
-	 (notes (append (ensime-java-compiler-notes conn)
-			(ensime-scala-compiler-notes conn)))
+	 (notes (ensime-compiler-notes conn))
 	 (next-note (ensime-next-note-in-current-buffer notes forward)))
     (if next-note
 	(progn
@@ -2403,7 +2392,11 @@ any buffer visiting the given file."
   ;; Send the reload requist to all servers that might be interested.
   (dolist (con (ensime-connections-for-source-file buffer-file-name))
     (let ((ensime-dispatching-connection con))
-      (ensime-rpc-async-typecheck-file buffer-file-name))))
+      (ensime-rpc-async-typecheck-file
+       buffer-file-name
+       '(lambda (result)
+	  (ensime-handle-typecheck-result result))
+       ))))
 
 (defun ensime-typecheck-all ()
   "Send a request for re-typecheck of whole project to the ENSIME server.
@@ -2411,13 +2404,15 @@ any buffer visiting the given file."
   (interactive)
   (message "Checking entire project...")
   (if (buffer-modified-p) (ensime-write-buffer nil t))
-  (ensime-rpc-async-typecheck-all '(lambda (result)
-				     (let ((notes (plist-get result :notes)))
-				       (if notes
-					   (ensime-show-compile-result-buffer
-					    notes)
-					 (message "No issues found."))))
-				  ))
+  (ensime-rpc-async-typecheck-all
+   '(lambda (result)
+      (ensime-handle-typecheck-result result)
+      (let ((notes (plist-get result :notes)))
+	(if notes
+	    (ensime-show-compile-result-buffer
+	     notes)
+	  (message "No issues found."))))
+   ))
 
 ;; Source Formatting
 
@@ -2473,8 +2468,8 @@ with the current project's dependencies loaded. Returns a property list."
   (ensime-eval
    `(swank:debug-class-locs-to-source-locs ,locs)))
 
-(defun ensime-rpc-async-typecheck-file (file-name)
-  (ensime-eval-async `(swank:typecheck-file ,file-name) #'identity))
+(defun ensime-rpc-async-typecheck-file (file-name continue)
+  (ensime-eval-async `(swank:typecheck-file ,file-name) continue))
 
 (defun ensime-rpc-async-typecheck-all (continue)
   (ensime-eval-async `(swank:typecheck-all) continue))
