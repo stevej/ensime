@@ -11,7 +11,7 @@
 ;;     This file includes code from slime.el of the SLIME project
 ;;     (also licensend under the GNU General Public License.) The
 ;;     following copyrights therefore apply:
-;;     
+;;
 ;;     Copyright (C) 2003  Eric Marsden, Luke Gorrie, Helmut Eller
 ;;     Copyright (C) 2004,2005,2006  Luke Gorrie, Helmut Eller
 ;;     Copyright (C) 2007,2008,2009  Helmut Eller, Tobias C. Rittweiler
@@ -52,32 +52,37 @@
   :type 'string
   :group 'ensime-sbt)
 
-(defcustom ensime-sbt-build-buffer-name "*ensime-sbt*"
+(defcustom ensime-sbt-build-buffer-name-base "*ensime-sbt*"
   "Buffer name for sbt"
-  :type 'string 
+  :type 'string
   :group 'ensime-sbt)
+
+(defun ensime-sbt-build-buffer-name ()
+  (concat ensime-sbt-build-buffer-name-base
+	  "<" (plist-get (ensime-config) :project-name) ">"))
 
 (defcustom ensime-sbt-comint-ansi-support t
   "Use comint ansi support"
   :group 'ensime-sbt
   :type 'boolean)
 
-
 (defun ensime-sbt ()
   "Setup and launch sbt."
   (interactive)
+  (when (null (ensime-connected-p))
+    (error "Not Connected."))
+  (let ((root-path (ensime-sbt-find-path-to-parent-project))
+	(proj-name (plist-get (ensime-config) :project-name)))
 
-  (let ((root-path (ensime-sbt-find-path-to-parent-project)))
-
-    (switch-to-buffer-other-window 
-     (get-buffer-create ensime-sbt-build-buffer-name))
+    (switch-to-buffer-other-window
+     (get-buffer-create (ensime-sbt-build-buffer-name)))
 
     (add-hook 'ensime-source-buffer-saved-hook 'ensime-sbt-maybe-auto-compile)
 
-    (add-hook 'kill-buffer-hook 
+    (add-hook 'kill-buffer-hook
 	      '(lambda ()
-		 (remove-hook 
-		  'ensime-source-buffer-saved-hook 
+		 (remove-hook
+		  'ensime-source-buffer-saved-hook
 		  'ensime-sbt-maybe-auto-compile)) nil t)
 
     (comint-mode)
@@ -104,32 +109,31 @@
     (if ensime-sbt-comint-ansi-support
 	(set (make-local-variable 'ansi-color-for-comint-mode) t)
       (set (make-local-variable 'ansi-color-for-comint-mode) 'filter))
-    
+
     (compilation-shell-minor-mode t)
     (cd root-path)
-    (comint-exec (current-buffer) 
-		 "sbt" 
-		 ensime-sbt-program-name 
+    (comint-exec (current-buffer)
+		 "sbt"
+		 ensime-sbt-program-name
 		 nil nil)
 
     (let ((proc (get-buffer-process (current-buffer))))
       (ensime-set-query-on-exit-flag proc))))
 
-
 (defun ensime-sbt-switch ()
   "Switch to the sbt shell (create if necessary) if or if already there, back."
   (interactive)
-  (if (equal ensime-sbt-build-buffer-name (buffer-name))
+  (if (equal (ensime-sbt-build-buffer-name) (buffer-name))
       (switch-to-buffer-other-window (other-buffer))
-    (if (get-buffer ensime-sbt-build-buffer-name)
-	(switch-to-buffer-other-window ensime-sbt-build-buffer-name)
+    (if (get-buffer (ensime-sbt-build-buffer-name))
+	(switch-to-buffer-other-window (ensime-sbt-build-buffer-name))
       (ensime-sbt)))
   (goto-char (point-max)))
 
 (defun ensime-sbt-clear ()
   "Clear (erase) the SBT buffer."
   (interactive)
-  (with-current-buffer ensime-sbt-build-buffer-name
+  (with-current-buffer (ensime-sbt-build-buffer-name)
     (let ((inhibit-read-only t))
       (erase-buffer)
       (comint-send-input t))))
@@ -137,10 +141,10 @@
 (defun ensime-sbt-maybe-auto-compile ()
   "Compile the code."
   (interactive)
-  (when (and 
+  (when (and
 	 (ensime-connected-p)
-	 (plist-get (ensime-config 
-		     (ensime-connection)) 
+	 (plist-get (ensime-config
+		     (ensime-connection))
 		    :sbt-compile-on-save))
     (ensime-sbt-action "compile")))
 
@@ -149,7 +153,7 @@
    SBT actions names, e.g. 'compile', 'run'"
   (interactive)
   (ensime-sbt-clear)
-  (comint-send-string (get-buffer ensime-sbt-build-buffer-name) (concat action "\n")))
+  (comint-send-string (get-buffer (ensime-sbt-build-buffer-name)) (concat action "\n")))
 
 (defun ensime-sbt-project-dir-p (path)
   "Does a project/build.properties exists in the given path."
