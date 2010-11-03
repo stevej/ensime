@@ -58,8 +58,9 @@
   :group 'ensime-sbt)
 
 (defun ensime-sbt-build-buffer-name ()
-  (concat ensime-sbt-build-buffer-name-base
-	  "<" (plist-get (ensime-config) :project-name) ">"))
+  (format "%s<%s>"
+	  ensime-sbt-build-buffer-name-base
+	  (plist-get (ensime-config) :project-name)))
 
 (defcustom ensime-sbt-comint-ansi-support t
   "Use comint ansi support"
