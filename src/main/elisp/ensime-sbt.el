@@ -58,9 +58,13 @@
   :group 'ensime-sbt)
 
 (defun ensime-sbt-build-buffer-name ()
-  (format "%s<%s>"
-	  ensime-sbt-build-buffer-name-base
-	  (plist-get (ensime-config) :project-name)))
+  "If no connection return the default base name. Otherwise,
+ return name of project-specific sbt buffer."
+  (if (ensime-connected-p)
+      (format "%s<%s>"
+	      ensime-sbt-build-buffer-name-base
+	      (plist-get (ensime-config) :project-name))
+    ensime-sbt-build-buffer-name-base))
 
 (defcustom ensime-sbt-comint-ansi-support t
   "Use comint ansi support"
@@ -70,10 +74,7 @@
 (defun ensime-sbt ()
   "Setup and launch sbt."
   (interactive)
-  (when (null (ensime-connected-p))
-    (error "Not Connected."))
-  (let ((root-path (ensime-sbt-find-path-to-parent-project))
-	(proj-name (plist-get (ensime-config) :project-name)))
+  (let ((root-path (ensime-sbt-find-path-to-parent-project)))
 
     (switch-to-buffer-other-window
      (get-buffer-create (ensime-sbt-build-buffer-name)))
@@ -89,7 +90,8 @@
     (comint-mode)
 
     (set (make-local-variable 'compilation-error-regexp-alist)
-	 '(("^\\[error\\] \\([_.a-zA-Z0-9/-]+[.]scala\\):\\([0-9]+\\):" 1 2 nil 2 nil)))
+	 '(("^\\[error\\] \\([_.a-zA-Z0-9/-]+[.]scala\\):\\([0-9]+\\):"
+	    1 2 nil 2 nil)))
     (set (make-local-variable 'compilation-mode-font-lock-keywords)
 	 '(("^\\[error\\] Error running compile:"
 	    (0 compilation-error-face))
@@ -154,7 +156,9 @@
    SBT actions names, e.g. 'compile', 'run'"
   (interactive)
   (ensime-sbt-clear)
-  (comint-send-string (get-buffer (ensime-sbt-build-buffer-name)) (concat action "\n")))
+  (comint-send-string
+   (get-buffer (ensime-sbt-build-buffer-name))
+   (concat action "\n")))
 
 (defun ensime-sbt-project-dir-p (path)
   "Does a project/build.properties exists in the given path."
@@ -169,7 +173,9 @@
   (file-truename (concat path "/..")))
 
 (defun ensime-sbt-find-path-to-project ()
-  "Move up the directory tree for the current buffer until root or a directory with a project/build.properties is found."
+  "Move up the directory tree for the current buffer
+ until root or a directory with a project/build.properties
+ is found."
   (interactive)
   (let ((fn (buffer-file-name)))
     (let ((path (file-name-directory fn)))
@@ -179,7 +185,8 @@
       path)))
 
 (defun ensime-sbt-find-path-to-parent-project ()
-  "Search up the directory tree find an SBT project dir, then see if it has a parent above it."
+  "Search up the directory tree find an SBT project
+ dir, then see if it has a parent above it."
   (interactive)
   (let ((path (ensime-sbt-find-path-to-project)))
     (let ((parent-path (file-truename (concat path "/.."))))
