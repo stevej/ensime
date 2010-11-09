@@ -1917,7 +1917,7 @@ any buffer visiting the given file."
 
 (defun ensime-refresh-note-overlays ()
   (let ((notes (if (ensime-connected-p)
-                    (ensime-compiler-notes (ensime-current-connection))
+		   (ensime-compiler-notes (ensime-current-connection))
                  )))
     (ensime-clear-note-overlays)
     (dolist (note notes)
@@ -2666,20 +2666,22 @@ with the current project's dependencies loaded. Returns a property list."
 
       )))
 
-(defun ensime-inspector-insert-linked-arrow-type 
+(defun ensime-inspector-insert-linked-arrow-type
   (type  &optional with-doc-link qualified)
   "Helper utility to output a link to a type.
    Should only be invoked by ensime-inspect-type-at-point"
   (let*  ((param-sections (ensime-type-param-sections type))
 	  (result-type (ensime-type-result-type type)))
     (dolist (sect param-sections)
-      (insert "(")
-      (let ((last-pt (car (last sect))))
-	(dolist (tpe sect)
-	  (ensime-inspector-insert-linked-type tpe nil qualified)
-	  (if (not (eq tpe last-pt))
-	      (insert ", "))))
-      (insert ") => "))
+      (let ((params (plist-get sect :params)))
+	(insert "(")
+	(let ((last-param (car (last params))))
+	  (dolist (p params)
+	    (let ((tpe (cadr p)))
+	      (ensime-inspector-insert-linked-type tpe nil qualified)
+	      (if (not (eq p last-param))
+		  (insert ", "))))
+	  (insert ") => "))))
     (ensime-inspector-insert-linked-type result-type nil qualified)
     ))
 
@@ -3163,7 +3165,12 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-type-param-types (type)
   "Return types of params in first section."
-  (car (plist-get type :param-sections)))
+  (let ((section (car (plist-get type :param-sections))))
+    (mapcar
+     (lambda (p)
+       (cadr p))
+     (plist-get section :params)
+     )))
 
 (defun ensime-type-result-type (type)
   (plist-get type :result-type))
