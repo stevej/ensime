@@ -58,7 +58,7 @@
 
 (defgroup ensime-inf nil
   "Support for running scala as an inferior process."
-  :group 'ensime-inf
+  :group 'ensime
   :prefix "ensime-inf-")
 
 (defcustom ensime-inf-cmd-template '("scala" "-classpath" :classpath)
