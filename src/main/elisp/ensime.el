@@ -451,18 +451,20 @@ Do not show 'Writing..' message."
   (interactive)
   (when (and (ensime-is-source-file-p) (not ensime-mode))
     (ensime-mode 1))
-  (let* ((config (ensime-config-find-and-load))
-         (cmd (or (plist-get config :server-cmd)
-                  ensime-default-server-cmd))
-         (env (plist-get config :server-env))
-         (dir (or (plist-get config :server-root)
-                  ensime-default-server-root))
-         (buffer ensime-server-buffer-name)
-         (args (list (ensime-swank-port-file))))
+  (let* ((config (ensime-config-find-and-load)))
 
-    (ensime-delete-swank-port-file 'quiet)
-    (let ((server-proc (ensime-maybe-start-server cmd args env dir buffer)))
-      (ensime-inferior-connect config server-proc))))
+    (when (not (null config))
+      (let* ((cmd (or (plist-get config :server-cmd)
+		      ensime-default-server-cmd))
+	     (env (plist-get config :server-env))
+	     (dir (or (plist-get config :server-root)
+		      ensime-default-server-root))
+	     (buffer ensime-server-buffer-name)
+	     (args (list (ensime-swank-port-file))))
+
+	(ensime-delete-swank-port-file 'quiet)
+	(let ((server-proc (ensime-maybe-start-server cmd args env dir buffer)))
+	  (ensime-inferior-connect config server-proc))))))
 
 
 (defun ensime-reload ()
@@ -474,8 +476,10 @@ Analyzer will be restarted. All source will be recompiled."
           (current-conf (ensime-config conn))
           (config (ensime-config-find-and-load
                    (plist-get current-conf :root-dir))))
-     (ensime-set-config (ensime-current-connection) config)
-     (ensime-eval-async `(swank:init-project ,config) #'identity))))
+
+     (when (not (null config))
+       (ensime-set-config (ensime-current-connection) config)
+       (ensime-eval-async `(swank:init-project ,config) #'identity)))))
 
 
 (defun ensime-maybe-start-server (program program-args env directory buffer)
