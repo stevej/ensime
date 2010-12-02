@@ -951,6 +951,10 @@ buffer is saved."
      (progn
        ,@body)))
 
+(defun ensime-assert-executable-on-path (name)
+  (when (null (executable-find name))
+    (error (concat name " not found on your emacs exec-path. "
+		   "See Troubleshooting section of the ENSIME manual."))))
 
 (defun ensime-kill-txt-props (str)
   "Remove all text-properties from str and return str."
