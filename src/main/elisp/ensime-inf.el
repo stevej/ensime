@@ -88,7 +88,7 @@ server."
   (define-key ensime-inf-mode-map (kbd "TAB") 'ensime-inf-send-tab)
 
   ;; Comint configuration
-  (set (make-local-variable 'comint-input-sender) 
+  (set (make-local-variable 'comint-input-sender)
        'ensime-inf-input-sender)
 
   (set (make-local-variable 'comint-output-filter-functions)
@@ -120,16 +120,17 @@ server."
 	(root-path (or (ensime-configured-project-root) "."))
 	(cmd-and-args (ensime-inf-get-repl-cmd-line)))
 
-    (switch-to-buffer-other-window 
+    (switch-to-buffer-other-window
      (get-buffer-create ensime-inf-buffer-name))
 
     (ensime-inf-mode)
 
     (cd root-path)
-    (comint-exec (current-buffer) 
-		 "ensime-inferior-scala" 
+    (ensime-assert-executable-on-path (car cmd-and-args))
+    (comint-exec (current-buffer)
+		 "ensime-inferior-scala"
 		 (car cmd-and-args)
-		 nil 
+		 nil
 		 (cdr cmd-and-args))
 
     (setq ensime-buffer-connection conn)
@@ -148,7 +149,7 @@ server."
   "Get the command needed to launch a repl, including all
 the current project's dependencies. Returns list of form (cmd [arg]*)"
   (if (ensime-connected-p)
-      (ensime-replace-keywords 
+      (ensime-replace-keywords
        ensime-inf-cmd-template
        (ensime-rpc-repl-config))
     ensime-inf-default-cmd-line))

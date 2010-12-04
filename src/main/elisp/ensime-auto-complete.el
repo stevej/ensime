@@ -59,7 +59,7 @@ target of the call. Point should be be over last character of call target."
 		;; Save the type for later display
 		(propertize candidate
 			    'symbol-name name
-			    'type-sig type-sig 
+			    'type-sig type-sig
 			    'type-id type-id
 			    'is-callable is-callable
 			    'summary (ensime-ac-trunc-summary type-sig)
@@ -69,10 +69,10 @@ target of the call. Point should be be over last character of call target."
 
 
 (defmacro* ensime-ac-with-buffer-copy (&rest body)
-  "Create a duplicate of the current buffer, copying all contents. 
+  "Create a duplicate of the current buffer, copying all contents.
 Bind ensime-buffer-connection and buffer-file-name to the given values.
 Execute forms in body in the context of this new buffer. The idea is that
-We can abuse this buffer, even saving its contents to disk, and all the 
+We can abuse this buffer, even saving its contents to disk, and all the
 changes will be forgotten."
   `(let ((buf (current-buffer))
 	 (file-name buffer-file-name)
@@ -103,8 +103,8 @@ changes will be forgotten."
 (defun ensime-ac-name-candidates (prefix)
   "Return candidate list."
   (let ((is-constructor (ensime-ac-completing-constructor-p prefix)))
-    (let ((names 
-	   (ensime-ac-with-buffer-copy 
+    (let ((names
+	   (ensime-ac-with-buffer-copy
 	    (backward-delete-char (length prefix))
 	    (insert ";{")
 	    (save-excursion
@@ -126,7 +126,7 @@ changes will be forgotten."
 		  ;; Save the type for later display
 		  (propertize candidate
 			      'symbol-name name
-			      'type-sig type-sig 
+			      'type-sig type-sig
 			      'type-id type-id
 			      'is-callable is-callable
 			      'summary (ensime-ac-trunc-summary type-sig)
@@ -187,7 +187,7 @@ changes will be forgotten."
 
 
 (defun ensime-ac-member-prefix ()
-  "Starting at current point. Find the point of completion for a member access. 
+  "Starting at current point. Find the point of completion for a member access.
    Return nil if we are not currently looking at a member access."
   (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" (point-at-bol) t)))
     (if point (1+ point))))
@@ -195,7 +195,7 @@ changes will be forgotten."
 
 (defvar ensime-ac-name-following-keyword-re
   (concat
-   "\\(?:\\W\\|\\s-\\)\\(?:else\\|case\\|new\\|with\\|extends\\)"
+   "\\(?:\\W\\|\\s-\\)\\(?:else\\|case\\|new\\|with\\|extends\\|yield\\)"
    "\\s-+\\(\\w*\\)"))
 
 (defvar ensime-ac-name-following-syntax-re
@@ -205,7 +205,8 @@ changes will be forgotten."
 
 (defun ensime-ac-name-prefix ()
   "Starting at current point - find the point of completion for a symbol.
-Return nil if we're looking at a context where symbol completion is inappropriate."
+ Return nil if we're looking at a context where symbol completion is
+ inappropriate."
   (let ((left-bound (ensime-pt-at-end-of-prev-line)))
     (when (or (looking-back  ensime-ac-name-following-keyword-re left-bound)
 	      (looking-back ensime-ac-name-following-syntax-re left-bound))
@@ -214,10 +215,10 @@ Return nil if we're looking at a context where symbol completion is inappropriat
 	point
 	))))
 
-(defvar ensime-ac-package-decl-prefix-re 
+(defvar ensime-ac-package-decl-prefix-re
   "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9]+\\.\\)*\\)\\([A-z0-9]*\\)")
 (defun ensime-ac-package-decl-prefix ()
-  "Starting at current point. Find the point of completion for a member access. 
+  "Starting at current point. Find the point of completion for a member access.
    Return nil if we are not currently looking at a member access."
   (let ((left-bound (ensime-pt-at-end-of-prev-line)))
     (when (looking-back ensime-ac-package-decl-prefix-re left-bound)
