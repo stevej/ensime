@@ -563,7 +563,7 @@ if there is no active connection, or if the project root was not
 defined."
   (when (ensime-connected-p)
     (let ((config (ensime-config (ensime-connection))))
-      (plist-get config :root-dir) ".")))
+      (plist-get config :root-dir))))
 
 (defmacro ensime-assert-connected (&rest body)
   "Surround body forms with a check to see if we're connected.
