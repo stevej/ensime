@@ -74,7 +74,7 @@
 (defun ensime-sbt ()
   "Setup and launch sbt."
   (interactive)
-  (let ((root-path (ensime-sbt-find-path-to-parent-project)))
+  (let ((root-path (ensime-sbt-find-path-to-project)))
 
     (switch-to-buffer-other-window
      (get-buffer-create (ensime-sbt-build-buffer-name)))
