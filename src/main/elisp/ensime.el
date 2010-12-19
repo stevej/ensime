@@ -478,9 +478,8 @@ Analyzer will be restarted. All source will be recompiled."
                    (plist-get current-conf :root-dir))))
 
      (when (not (null config))
-       (ensime-set-config (ensime-current-connection) config)
-       (ensime-eval-async `(swank:init-project ,config) #'identity)))))
-
+       (ensime-set-config conn config)
+       (ensime-init-project conn config)))))
 
 (defun ensime-maybe-start-server (program program-args env directory buffer)
   "Return a new or existing inferior server process."
@@ -1588,10 +1587,16 @@ If PROCESS is not specified, `ensime-connection' is used.
 
     ;; Send the project initialization..
     (let ((config (ensime-config connection)))
-      (ensime-eval-async `(swank:init-project ,config)
-                         (ensime-curry #'ensime-handle-project-info
-                                       connection)))
+      (ensime-init-project connection config))
     ))
+
+
+(defun ensime-init-project (conn config)
+  "Send configuration to the server process. Setup handler for
+ project info that the server will return."
+  (ensime-eval-async `(swank:init-project ,config)
+		     (ensime-curry #'ensime-handle-project-info
+				   conn)))
 
 
 (defun ensime-handle-project-info (conn info)
