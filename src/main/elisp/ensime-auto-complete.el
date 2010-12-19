@@ -183,8 +183,10 @@ changes will be forgotten."
   (get-text-property 0 'type-sig item))
 
 (defun ensime-pt-at-end-of-prev-line ()
-  (save-excursion (forward-line -1)(point-at-eol)))
-
+  (save-excursion (forward-line -1)
+		  (min
+		   (- (point) 1)
+		   (point-at-eol))))
 
 (defun ensime-ac-member-prefix ()
   "Starting at current point. Find the point of completion for a member access.
@@ -327,25 +329,25 @@ be used later to give contextual help when entering arguments."
 	(let ((params (plist-get sect :params))
 	      (is-implicit (plist-get sect :is-implicit)))
 	  (propertize (concat "("
-		  (mapconcat
-		   (lambda (nm-and-tp)
-		     (format
-		      "%s:%s"
-		      (propertize (car nm-and-tp)
-				  'face font-lock-variable-name-face)
-		      (propertize (ensime-type-name-with-args
-				   (cadr nm-and-tp))
-				  'face font-lock-type-face)
-		      ))
-		   params ", ") ")")
-		   'face (when is-implicit font-lock-comment-face)
-		   )))
-	param-sections " => ")
-      " => "
-      (propertize
-       (ensime-type-name-with-args result-type)
-       'face font-lock-type-face)
-      )))
+			      (mapconcat
+			       (lambda (nm-and-tp)
+				 (format
+				  "%s:%s"
+				  (propertize (car nm-and-tp)
+					      'face font-lock-variable-name-face)
+				  (propertize (ensime-type-name-with-args
+					       (cadr nm-and-tp))
+					      'face font-lock-type-face)
+				  ))
+			       params ", ") ")")
+		      'face (when is-implicit font-lock-comment-face)
+		      )))
+      param-sections " => ")
+     " => "
+     (propertize
+      (ensime-type-name-with-args result-type)
+      'face font-lock-type-face)
+     )))
 
 
 (ac-define-source ensime-members
