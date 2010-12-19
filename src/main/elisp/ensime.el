@@ -142,6 +142,10 @@
 
 (defvar ensime-popup-in-other-frame nil)
 
+(defvar ensime-ch-fix 1
+  "Single character offset to convert between emacs and
+ 0-based character indexing.")
+
 ;;;;; ensime-mode
 
 (defgroup ensime-mode nil
@@ -1944,7 +1948,9 @@ any buffer visiting the given file."
                            'ensime-errline))
               (push ov ensime-note-overlays))
             (when-let (ov (ensime-make-overlay-at
-                           file nil beg end
+                           file nil
+			   (+ beg ensime-ch-fix)
+			   (+ end ensime-ch-fix)
                            msg 'ensime-errline-highlight))
               (push ov ensime-note-overlays))
             ))
@@ -1955,7 +1961,9 @@ any buffer visiting the given file."
                              'ensime-warnline))
                 (push ov ensime-note-overlays))
               (when-let (ov (ensime-make-overlay-at
-                             file nil beg end
+                             file nil
+			     (+ beg ensime-ch-fix)
+			     (+ end ensime-ch-fix)
                              msg 'ensime-warnline-highlight))
                 (push ov ensime-note-overlays))
               ))
@@ -2116,8 +2124,8 @@ any buffer visiting the given file."
 
 	      (dolist (ed edits)
 		(let* ((text (plist-get ed :text))
-		       (from (plist-get ed :from))
-		       (to (plist-get ed :to))
+		       (from (+ (plist-get ed :from) ensime-ch-fix))
+		       (to (+ (plist-get ed :to) ensime-ch-fix))
 		       (len (- to from)))
 
 		  (goto-char (+ p (- from chunk-start)))
@@ -2297,7 +2305,7 @@ any buffer visiting the given file."
       (if (> (ensime-pos-line pos) 0)
 	  (goto-line (ensime-pos-line pos))
 	(if (> (ensime-pos-offset pos) 0)
-	    (goto-char (ensime-pos-offset pos)))))))
+	    (goto-char (+ (ensime-pos-offset pos) ensime-ch-fix)))))))
 
 
 ;; Compilation result interface
@@ -2386,7 +2394,9 @@ any buffer visiting the given file."
 			    (insert (format "%s: %s : line %s"
 					    header msg line))
 			    (ensime-make-code-link p (point)
-						   file beg face)))
+						   file
+						   (+ beg ensime-ch-fix)
+						   face)))
 			(insert "\n\n"))))
 		  notes-by-file)))
      (forward-button 1)
@@ -2675,7 +2685,9 @@ with the current project's dependencies loaded. Returns a property list."
 	       (url (or (ensime-pos-file pos)
 			(ensime-make-doc-url type)
 			)))
-	  (ensime-insert-link " doc" url (ensime-pos-offset pos))))
+	  (ensime-insert-link " doc" url
+			      (+ (ensime-pos-offset pos)
+				 ensime-ch-fix))))
 
       )))
 
@@ -2713,7 +2725,8 @@ with the current project's dependencies loaded. Returns a property list."
 	    (equal 'field (ensime-declared-as m)))
 	(progn
 	  (ensime-insert-link
-	   (format "%s" member-name) url (ensime-pos-offset pos)
+	   (format "%s" member-name) url
+	   (+ (ensime-pos-offset pos) ensime-ch-fix)
 	   font-lock-function-name-face)
 	  (tab-to-tab-stop)
 	  (ensime-inspector-insert-linked-type type nil nil))
@@ -3233,12 +3246,11 @@ It should be used for \"background\" messages such as argument lists."
 ;; Portability
 
 (defun ensime-computed-point ()
-  "In buffers with windows-encoded line-endings,
-   add with the appropriate number of CRs. This is
-   necessary whenever we export a position out of emacs,
-   to a system that just counts chars.
-   "
-  (+ (point)
+  "Subtract one to convert to 0-indexed buffer offsets.
+ Additionally, in buffers with windows-encoded line-endings,
+ add the appropriate number of CRs to compensate for characters
+ that are hidden by Emacs."
+  (+ (point) (- ensime-ch-fix)
      (if (eq 1 (coding-system-eol-type buffer-file-coding-system))
 	 (- (line-number-at-pos) 1)
        0)

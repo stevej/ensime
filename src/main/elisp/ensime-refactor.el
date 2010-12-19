@@ -83,7 +83,10 @@
 	       (name (read-string (format "Rename '%s' to: " old-name))))
 	  (ensime-refactor-perform
 	   'rename
-	   `(file ,buffer-file-name start ,start end ,end newName ,name)))
+	   `(file ,buffer-file-name
+		  start ,(- start ensime-ch-fix)
+		  end ,(- end ensime-ch-fix)
+		  newName ,name)))
       (message "Please place cursor on a symbol."))))
 
 
@@ -96,7 +99,9 @@
 	       (end (plist-get sym :end)))
 	  (ensime-refactor-perform
 	   'inlineLocal
-	   `(file ,buffer-file-name start ,start end ,end)))
+	   `(file ,buffer-file-name
+		  start ,(- start ensime-ch-fix)
+		  end ,(- end ensime-ch-fix))))
       (message "Please place cursor on a local value."))))
 
 
@@ -106,7 +111,10 @@
   (let* ((name (read-string "Name of method: ")))
     (ensime-refactor-perform
      'extractMethod
-     `(file ,buffer-file-name start ,(mark) end ,(point) methodName ,name))))
+     `(file ,buffer-file-name
+	    start ,(- (mark) ensime-ch-fix)
+	    end ,(- (point) ensime-ch-fix)
+	    methodName ,name))))
 
 
 (defun ensime-refactor-extract-local ()
@@ -115,7 +123,10 @@
   (let* ((name (read-string "Name of local value: ")))
     (ensime-refactor-perform
      'extractLocal
-     `(file ,buffer-file-name start ,(mark) end ,(point) name ,name))))
+     `(file ,buffer-file-name
+	    start ,(- (mark) ensime-ch-fix)
+	    end ,(- (point) ensime-ch-fix)
+	    name ,name))))
 
 
 (defun ensime-refactor-perform (refactor-type params)

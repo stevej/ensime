@@ -136,12 +136,12 @@ changes will be forgotten."
 
 (defun ensime-ac-package-decl-candidates (prefix)
   "Return candidate list."
-  (when (looking-back ensime-ac-package-decl-prefix-re 
+  (when (looking-back ensime-ac-package-decl-prefix-re
 		      (ensime-pt-at-end-of-prev-line))
     (let* ((full-match (match-string 0))
 	   (path (ensime-kill-txt-props (match-string 1)))
 
-	   (names (ensime-ac-with-buffer-copy 
+	   (names (ensime-ac-with-buffer-copy
 		   (backward-delete-char (length full-match))
 		   (insert "object ensimesynthetic${")
 
@@ -162,7 +162,7 @@ changes will be forgotten."
 		       (ensime-rpc-members-for-type-at-point prefix))))))
 
       (delete-dups
-       (mapcar (lambda (m) (plist-get m :name)) 
+       (mapcar (lambda (m) (plist-get m :name))
 	       names)))))
 
 
