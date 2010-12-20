@@ -78,18 +78,18 @@ changes will be forgotten."
 	 (file-name buffer-file-name)
 	 (p (point))
 	 (conn (ensime-current-connection)))
-     (let ((val (unwind-protect
-		    (with-temp-buffer
-		      (let ((ensime-buffer-connection conn)
-			    (buffer-file-name file-name))
-			(insert-buffer-substring buf)
-			(goto-char p)
-			,@body
-			)))))
+
+     (unwind-protect
+	 (with-temp-buffer
+	   (let ((ensime-buffer-connection conn)
+		 (buffer-file-name file-name))
+	     (insert-buffer-substring buf)
+	     (goto-char p)
+	     ,@body
+	     ))
        ;; Make sure we overwrite any changes
        ;; written from temp buffer.
        (ensime-write-buffer nil t)
-       val
        )))
 
 
