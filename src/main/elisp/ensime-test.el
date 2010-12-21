@@ -774,7 +774,7 @@
        (let* ((info (ensime-rpc-symbol-at-point))
               (pos (ensime-symbol-decl-pos info)))
          ;; New position should be at formal parameter...
-         (ensime-assert-equal (ensime-pos-offset pos) 141)
+         (ensime-assert-equal (ensime-pos-offset pos) 140)
          )
        (ensime-cleanup-tmp-project proj)
        (ensime-kill-all-ensime-servers)

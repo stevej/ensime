@@ -39,12 +39,13 @@ target of the call. Point should be be over last character of call target."
 	  ;; Make some space so trailing characters don't interfere.
 	  (save-excursion (insert " "))
 
-	  ;; Delete the member prefix - not necessary
+	  ;; Delete the member prefix
 	  (ensime-ac-delete-text-back-to-call-target)
 
-	  ;; Add a trailing '.' so object accesses parse correctly
+	  ;; Add a trailing '.' so singleton object accesses parse correctly
+	  ;; Move cursor forward so it will be on '.'
+	  (forward-char)
 	  (save-excursion
-	    (forward-char)
 	    (insert ". ()"))
 
 	  (ensime-write-buffer)
