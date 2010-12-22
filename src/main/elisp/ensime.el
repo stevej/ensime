@@ -3542,7 +3542,7 @@ PROP is the name of a text property."
 
 ;; Testing helpers
 
-(defun ensime-event-sig (event value)
+(defun ensime-event-sig (event &optional value)
   "Signal an event. Send to testing harness if it exists.
    Used to drive asynchronous regression tests."
   (if (fboundp 'ensime-test-sig)

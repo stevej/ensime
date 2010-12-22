@@ -72,7 +72,7 @@
    `(file ,buffer-file-name)))
 
 
-(defun ensime-refactor-rename ()
+(defun ensime-refactor-rename (&optional new-name)
   "Rename a symbol, project-wide."
   (interactive)
   (let ((sym (ensime-refactor-sym-at-point)))
@@ -80,7 +80,8 @@
 	(let* ((start (plist-get sym :start))
 	       (end (plist-get sym :end))
 	       (old-name (plist-get sym :name))
-	       (name (read-string (format "Rename '%s' to: " old-name))))
+	       (name (or new-name
+			 (read-string (format "Rename '%s' to: " old-name)))))
 	  (ensime-refactor-perform
 	   'rename
 	   `(file ,buffer-file-name
@@ -158,8 +159,9 @@
 	   (set (make-local-variable 'continue-refactor) cont)
 	   (ensime-refactor-populate-confirmation-buffer
 	    refactor-type changes)
-	   (goto-char (point-min))
-	   ))
+	   (goto-char (point-min)))
+
+	  (ensime-event-sig :refactor-at-confirm-buffer))
 
       (ensime-refactor-notify-failure result)
       )))
@@ -167,7 +169,9 @@
 
 (defun ensime-refactor-handle-result (result)
   (let ((touched (plist-get result :touched-files)))
-    (ensime-revert-visited-files touched t)))
+    (ensime-revert-visited-files touched t)
+    (ensime-event-sig :refactor-done touched)
+    ))
 
 (defun ensime-refactor-populate-confirmation-buffer (refactor-type changes)
   (let ((header
