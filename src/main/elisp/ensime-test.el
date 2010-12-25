@@ -126,10 +126,20 @@
    source files in the project."
   (let ((src-files (plist-get proj :src-files))
         (root-dir (plist-get proj :root-dir)))
+    (message "deleting %s" src-files)
     (dolist (f src-files)
-      (find-file f)
-      (set-buffer-modified-p nil)
-      (kill-buffer nil))
+      (cond ((file-exists-p f)
+	     (progn
+	       (message "deleting existing %s" f)
+	       (find-file f)
+	       (set-buffer-modified-p nil)
+	       (kill-buffer nil)))
+	    ((get-buffer f)
+	     (progn
+	       (message "deleting buffer of %s" f)
+	       (switch-to-buffer (get-buffer f))
+	       (kill-buffer nil)))
+	    (t)))
     ;; a bit of paranoia..
     (if (and root-dir (integerp (string-match "^/tmp/" root-dir)))
         ;; ..before we wipe away the project dir
@@ -170,7 +180,8 @@
 		  (condition-case signal
 		      (funcall handler-func value)
 		    (ensime-test-interrupted
-		     (message "Error executing test, moving to next.")
+		     (message
+		      "Error executing test: %s, moving to next." signal)
 		     (setq is-last t))))
 		(when is-last
 		  (setq ensime-async-handler-stack nil)
@@ -224,7 +235,9 @@
        (ensime-test-assert-failed
         (ensime-test-output-result
          (format "Assertion failed at '%s': %s" ,context signal))
-        (signal 'ensime-test-interrupted (format "Test interrupted."))
+        (signal
+	 'ensime-test-interrupted
+	 (format "Test interrupted: %s." signal))
         ))))
 
 
@@ -329,8 +342,10 @@
  to proj-name, the src-files of the project are bound to src-files-name,
  and the active buffer is visiting the first file in src-files."
   `(let* ((,proj-name (ensime-test-var-get :proj))
-	  (,src-files-name (plist-get ,proj-name :src-files)))
-     (find-file (car ,src-files-name))
+	  (,src-files-name (plist-get ,proj-name :src-files))
+	  (existing (remove-if-not #'file-exists-p ,src-files-name)))
+     (when existing
+       (find-file (car existing)))
      ,@body
      ))
 
@@ -773,6 +788,53 @@
       (ensime-test-cleanup proj)
       ))
     )
+
+
+   (ensime-async-test
+    "Test deleting file and reloading."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name
+		     "pack/a.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package pack"
+				 "class A(value:String){"
+				 "}"
+				 )
+		     )
+		    (:name
+		     "pack/b.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package pack"
+				 "class B(value:String) extends A(value){"
+				 "}"
+				 )
+		     )
+		    ))))
+      (ensime-test-init-proj proj))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (ensime-test-with-proj
+      (proj src-files)
+      (let* ((notes (plist-get val :notes)))
+	(ensime-assert-equal (length notes) 0))
+      (kill-buffer nil)
+      (delete-file (car src-files))
+      (find-file (cadr src-files))
+      (ensime-rpc-async-typecheck-all #'identity)
+      ))
+
+    ((:return-value val)
+     (ensime-test-with-proj
+      (proj src-files)
+      (let* ((notes (plist-get (cadr val) :notes)))
+	(ensime-assert (> (length notes) 0)))
+      (ensime-test-cleanup proj)
+      ))
+
+    )
+
 
 
    (ensime-async-test
