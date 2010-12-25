@@ -182,6 +182,16 @@ argument is supplied) is a .scala or .java file."
         (before-save-hook nil))
     (save-buffer)))
 
+(defun ensime-delete-buffer-and-file ()
+  "Kill the current buffer and delete the corresponding file!"
+  (interactive)
+  (ensime-assert-buffer-saved-interactive
+   (let ((f buffer-file-name))
+     (ensime-rpc-remove-file f)
+     (delete-file f)
+     (kill-buffer nil)
+     )))
+
 (defun ensime-write-buffer (&optional filename clear-modtime set-unmodified)
   "Write the contents of buffer to its buffer-file-name.
 Do not show 'Writing..' message."
@@ -2490,6 +2500,9 @@ with the current project's dependencies loaded. Returns a property list."
   "Get source locations corresponding to class,line pairs."
   (ensime-eval
    `(swank:debug-class-locs-to-source-locs ,locs)))
+
+(defun ensime-rpc-remove-file (file-name)
+  (ensime-eval `(swank:remove-file ,file-name)))
 
 (defun ensime-rpc-async-typecheck-file (file-name continue)
   (ensime-eval-async `(swank:typecheck-file ,file-name) continue))
