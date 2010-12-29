@@ -429,8 +429,10 @@ the current project's dependencies. Returns list of form (cmd [arg]*)"
 	(setq ensime-db-default-main-class debug-class)
 	(setq ensime-db-default-main-args debug-args)
 	(plist-put conf :debug-class debug-class)
-	(plist-put conf :debug-args debug-args)
-	(ensime-replace-keywords ensime-db-cmd-template conf))
+	(plist-put conf :debug-args
+		   (ensime-tokenize-cmd-line debug-args))
+	(ensime-flatten-list
+	 (ensime-replace-keywords ensime-db-cmd-template conf)))
     ensime-db-default-cmd-line))
 
 (defun ensime-db-start ()

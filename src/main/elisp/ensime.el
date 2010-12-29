@@ -918,6 +918,64 @@ browsing the documentation for those objects."
     (insert text)
     (set-text-properties start (point) `(face ,face))))
 
+(defun ensime-flatten-list (list)
+  ;;(ensime-flatten-list '((a) b c (d e (q) f g)))
+  (mapcan (lambda (x)
+	    (if (listp x)
+		(ensime-flatten-list x)
+	      (list x))) list))
+
+(defun ensime-tokenize-cmd-line (str &optional delim)
+  "Interpret a string as a sequence of command-line arguments.
+ Break the string at space and tab boundaries, except for double-quoted
+ arguments. Returns a list of string tokens.
+ "
+  ;;(ensime-tokenize-cmd-line "")
+  ;;(ensime-tokenize-cmd-line "abc")
+  ;;(ensime-tokenize-cmd-line "abc def")
+  ;;(ensime-tokenize-cmd-line "abc   def")
+  ;;(ensime-tokenize-cmd-line "abc def -sd")
+  ;;(ensime-tokenize-cmd-line "abc def -sd \"apple pie\"")
+  ;;(ensime-tokenize-cmd-line "abc def -sd \"ap'p'le\"")
+  ;;(ensime-tokenize-cmd-line "abc def -sd 'ap\"pl\"e'")
+  ;;(ensime-tokenize-cmd-line "'ap\"pl\"e'")
+  ;;(ensime-tokenize-cmd-line "'ap\"pl\"e")
+  ;;(ensime-tokenize-cmd-line "abc \"sd")
+
+  (let ((ch)
+	(cur "")
+	(tokens '()))
+
+    (catch 'return
+      (while (> (length str) 0)
+	(setq ch (substring str 0 1))
+	(setq str (substring str 1))
+
+	(cond
+	 ((and delim (equal ch delim))
+	  (throw 'return (list tokens str)))
+
+	 ((or (equal ch "\"")
+	      (equal ch "'"))
+	  (if delim
+	      (setq cur (concat cur ch))
+	    (let ((tmp (ensime-tokenize-cmd-line str ch)))
+	      (setq tokens (append tokens (car tmp)))
+	      (setq str (cadr tmp)))))
+
+	 ((and (null delim)
+	       (integerp (string-match "[ \t]" ch)))
+	  (when (> (length cur) 0)
+	    (setq tokens (append tokens (list cur)))
+	    (setq cur "")))
+
+	 (t (setq cur (concat cur ch))))))
+
+    (when (> (length cur) 0)
+      (setq tokens (append tokens (list cur))))
+    (list tokens str)
+    ))
+
 (defvar ensime-qualified-type-regexp
   "^\\(?:object \\)?\\(\\(?:[a-z0-9_]+\\.\\)*\\)\\(?:\\([^\\.]+\\)\\$\\)?\\([^\\.]+\\$?\\)$"
   "Match strings of form pack.pack1.pack2.Types$Type or pack.pack1.pack2.Type")
@@ -1048,7 +1106,7 @@ corresponding values in the CDR of VALUE."
 
 (defun ensime-replace-keywords (template proplist)
   "Replace keywords in the template list with the associated
-values in the provided proplist."
+ values in the provided proplist."
   (let* ((result '()))
     (dolist (ea template)
       (cond
