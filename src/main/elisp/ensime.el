@@ -218,6 +218,7 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-v o") 'ensime-inspect-project-package)
       (define-key prefix-map (kbd "C-v c") 'ensime-typecheck-current-file)
       (define-key prefix-map (kbd "C-v a") 'ensime-typecheck-all)
+      (define-key prefix-map (kbd "C-v r") 'ensime-show-uses-of-symbol-at-point)
       (define-key prefix-map (kbd "C-v s") 'ensime-sbt-switch)
       (define-key prefix-map (kbd "C-v z") 'ensime-inf-switch)
       (define-key prefix-map (kbd "C-v f") 'ensime-format-source)
@@ -269,9 +270,12 @@ Do not show 'Writing..' message."
     ("Build"
      ["Build project" ensime-builder-build]
      ["Rebuild project" ensime-builder-rebuild])
+
     ("Test")
+
     ("Source"
      ["Format source" ensime-format-source]
+     ["Find all references" ensime-show-uses-of-symbol-at-point]
      ["Inspect type" ensime-inspect-type-at-point]
      ["Inspect type in another frame" ensime-inspect-type-at-point-other-frame]
      ["Inspect enclosing package" ensime-inspect-package-at-point]
@@ -279,20 +283,22 @@ Do not show 'Writing..' message."
      ["Typecheck file" ensime-typecheck-current-file]
      ["Typecheck project" ensime-typecheck-all]
      ["Undo source change" ensime-undo-peek])
+
     ("Refactor"
      ["Organize imports" ensime-refactor-organize-imports]
      ["Rename" ensime-refactor-rename]
      ["Extract local val" ensime-refactor-extract-local]
      ["Extract method" ensime-refactor-extract-method]
      ["Inline local val" ensime-refactor-inline-local])
+
     ("Navigation"
      ["Lookup definition" ensime-edit-definition]
      ["Lookup definition in other window" ensime-edit-definition-other-window]
      ["Lookup definition in other frame" ensime-edit-definition-other-frame]
      ["Pop definition stack" ensime-pop-find-definition-stack]
-     ["Forward compilation note" ensime-forward-note]
      ["Backward compilation note" ensime-backward-note]
-     )
+     ["Forward compilation note" ensime-forward-note])
+
     ("Debugger"
      ["Start" ensime-db-start]
      ["Set break point" ensime-db-set-break]
