@@ -2593,6 +2593,13 @@ with the current project's dependencies loaded. Returns a property list."
      ,names
      )))
 
+(defun ensime-rpc-uses-of-symbol-at-point ()
+  (ensime-eval
+   `(swank:uses-of-symbol-at-point
+     ,buffer-file-name
+     ,(ensime-computed-point)
+     )))
+
 (defun ensime-rpc-members-for-type-at-point (&optional prefix)
   (ensime-eval
    `(swank:type-completion
@@ -2659,6 +2666,72 @@ with the current project's dependencies loaded. Returns a property list."
   (ensime-eval-async `(swank:cancel-refactor ,proc-id) #'identity))
 
 
+
+;; Uses UI
+
+(defvar ensime-uses-buffer-name "*Uses*")
+
+(defvar ensime-uses-buffer-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [?\t] 'forward-button)
+    (define-key map [mouse-1] 'push-button)
+    (define-key map (kbd "q") 'ensime-popup-buffer-quit-function)
+    (define-key map (kbd "M-n") 'forward-button)
+    (define-key map (kbd "M-p") 'backward-button)
+    map)
+  "Key bindings for the uses popup.")
+
+(defun ensime-show-uses-of-symbol-at-point ()
+  "Display a hyperlinked list of the source locations
+ where the symbol under point is referenced."
+  (interactive)
+  (let ((uses (ensime-rpc-uses-of-symbol-at-point)))
+    (ensime-with-popup-buffer
+     (ensime-uses-buffer-name t t)
+     (use-local-map ensime-uses-buffer-map)
+
+
+     (ensime-insert-with-face
+      "TAB to advance to next use, q to quit"
+      'font-lock-constant-face)
+     (insert "\n\n\n")
+
+     (dolist (pos uses)
+       (let* ((file (ensime-pos-file pos))
+
+	      (range-start (- (ensime-pos-offset pos) 50))
+	      (range-end (+ (ensime-pos-offset pos) 50))
+	      (result (ensime-extract-file-chunk
+		       file range-start range-end))
+	      (chunk-text (plist-get result :text))
+	      (chunk-start (plist-get result :chunk-start))
+	      (chunk-start-line (plist-get result :chunk-start-line)))
+
+	 (ensime-insert-with-face file 'font-lock-comment-face)
+	 (ensime-insert-with-face
+	  (format "\n------------------- @line %s -----------------------\n"
+		  chunk-start-line)
+	  'font-lock-comment-face)
+
+	 (let ((p (point)))
+
+	   ;; Insert the summary chunk
+	   (insert chunk-text)
+
+	   ;; Highlight the occurances
+	   (let* ((from (+ (plist-get pos :start) ensime-ch-fix))
+		  (to (+ (plist-get pos :end) ensime-ch-fix))
+		  (len (- to from))
+		  (buffer-from (+ p (- from chunk-start)))
+		  (buffer-to (+ p (- to chunk-start))))
+	     (ensime-make-code-link
+	      buffer-from buffer-to file from)))
+
+	 (insert "\n\n\n")
+	 ))
+       (goto-char (point-min))
+       (when uses (forward-button 1))
+       )))
 
 ;; Type Inspector UI
 
