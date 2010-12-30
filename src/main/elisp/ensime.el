@@ -2705,8 +2705,8 @@ with the current project's dependencies loaded. Returns a property list."
      (dolist (pos uses)
        (let* ((file (ensime-pos-file pos))
 
-	      (range-start (- (ensime-pos-offset pos) 50))
-	      (range-end (+ (ensime-pos-offset pos) 50))
+	      (range-start (- (ensime-pos-offset pos) 80))
+	      (range-end (+ (ensime-pos-offset pos) 80))
 	      (result (ensime-extract-file-chunk
 		       file range-start range-end))
 	      (chunk-text (plist-get result :text))
