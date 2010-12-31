@@ -2737,7 +2737,9 @@ with the current project's dependencies loaded. Returns a property list."
 	 ))
        (goto-char (point-min))
        (when uses (forward-button 1))
-       )))
+       )
+    (ensime-event-sig :references-buffer-shown)
+  ))
 
 ;; Type Inspector UI
 

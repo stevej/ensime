@@ -739,6 +739,7 @@
       (proj src-files)
       (ensime-test-eat-mark "1")
       (forward-char)
+      (ensime-save-buffer-no-hooks)
       (save-buffer)
       (ensime-refactor-rename "DudeFace")))
 
@@ -753,6 +754,49 @@
       (goto-char (point-min))
       (ensime-assert (search-forward "class DudeFace" nil t))
       (ensime-test-cleanup proj)))
+    )
+
+
+   (ensime-async-test
+    "Test find-references."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name
+		     "pack/a.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package pack"
+				 "class /*1*/A(value:String){"
+				 "}"
+				 )
+		     )
+		    (:name
+		     "pack/b.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package pack"
+				 "class B(value:String) extends A(value){"
+				 "}"
+				 )
+		     )
+		    ))))
+      (ensime-test-init-proj proj))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (ensime-test-with-proj
+      (proj src-files)
+      (ensime-test-eat-mark "1")
+      (ensime-save-buffer-no-hooks)
+      (ensime-show-uses-of-symbol-at-point)))
+
+    ((:references-buffer-shown val)
+     (progn
+       (switch-to-buffer ensime-uses-buffer-name)
+       (goto-char (point-min))
+       (ensime-assert (search-forward "class B(value:String) extends A" nil t))
+       (funcall (key-binding (kbd "q")))
+       (ensime-test-cleanup proj)
+       ))
+
     )
 
 
