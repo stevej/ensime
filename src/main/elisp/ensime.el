@@ -2591,13 +2591,13 @@ with the current project's dependencies loaded. Returns a property list."
      ,(or prefix "")
      ,is-constructor)))
 
-(defun ensime-rpc-import-suggestions-at-point (names)
-  (ensime-eval
+(defun ensime-rpc-async-import-suggestions-at-point (names continue)
+  (ensime-eval-async
    `(swank:import-suggestions
      ,buffer-file-name
      ,(ensime-computed-point)
      ,names
-     )))
+     ) continue))
 
 (defun ensime-rpc-uses-of-symbol-at-point ()
   (ensime-eval
