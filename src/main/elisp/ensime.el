@@ -220,10 +220,11 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-v c") 'ensime-typecheck-current-file)
       (define-key prefix-map (kbd "C-v a") 'ensime-typecheck-all)
       (define-key prefix-map (kbd "C-v r") 'ensime-show-uses-of-symbol-at-point)
-      (define-key prefix-map (kbd "C-v s") 'ensime-sbt-switch)
+      (define-key prefix-map (kbd "C-v b") 'ensime-sbt-switch)
       (define-key prefix-map (kbd "C-v z") 'ensime-inf-switch)
       (define-key prefix-map (kbd "C-v f") 'ensime-format-source)
       (define-key prefix-map (kbd "C-v u") 'ensime-undo-peek)
+      (define-key prefix-map (kbd "C-v s") 'ensime-search)
 
       (define-key prefix-map (kbd "C-d d") 'ensime-db-start)
       (define-key prefix-map (kbd "C-d b") 'ensime-db-set-break)
@@ -298,7 +299,8 @@ Do not show 'Writing..' message."
      ["Lookup definition in other frame" ensime-edit-definition-other-frame]
      ["Pop definition stack" ensime-pop-find-definition-stack]
      ["Backward compilation note" ensime-backward-note]
-     ["Forward compilation note" ensime-forward-note])
+     ["Forward compilation note" ensime-forward-note]
+     ["Search" ensime-search])
 
     ("Debugger"
      ["Start" ensime-db-start]

@@ -173,17 +173,18 @@
   (when (and (ensime-search-result-p ensime-search-current-selected-result)
 	     (get-buffer ensime-search-buffer-name))
     (switch-to-buffer ensime-search-buffer-name)
-    (kill-buffer-and-window)
-    (let* ((r ensime-search-current-selected-result)
-	   (path (ensime-search-result-summary r))
-	   (file-name (ensime-search-result-match-file-name r))
-	   (offset (ensime-search-result-match-start r)))
-      (if file-name
-	  (progn
-	    (find-file file-name)
-	    (goto-char offset))
-	(ensime-inspect-by-path path))
-      )))
+    (let ((ensime-dispatching-connection ensime-buffer-connection))
+      (kill-buffer-and-window)
+      (let* ((r ensime-search-current-selected-result)
+	     (path (ensime-search-result-summary r))
+	     (file-name (ensime-search-result-match-file-name r))
+	     (offset (ensime-search-result-match-start r)))
+	(if file-name
+	    (progn
+	      (find-file file-name)
+	      (goto-char offset))
+	  (ensime-inspect-by-path path))
+	))))
 
 
 (defun ensime-search-choose-by-number (num)
@@ -322,7 +323,7 @@
 
 	:match-start
 	(when-let (pos (ensime-symbol-decl-pos item))
-	  (ensime-pos-offset pos))
+	  (+ (ensime-pos-offset pos) ensime-ch-fix))
 
 	:match-end nil
 
