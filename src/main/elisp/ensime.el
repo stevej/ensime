@@ -53,6 +53,7 @@
 (require 'ensime-builder)
 (require 'ensime-refactor)
 (require 'ensime-undo)
+(require 'ensime-search)
 (eval-when (compile)
   (require 'apropos)
   (require 'compile))
@@ -2599,6 +2600,15 @@ with the current project's dependencies loaded. Returns a property list."
      ,names
      ) continue))
 
+(defun ensime-rpc-async-public-symbol-search
+  (names max-results case-sens continue)
+  (ensime-eval-async
+   `(swank:public-symbol-search
+     ,names
+     ,max-results
+     ,case-sens
+     ) continue))
+
 (defun ensime-rpc-uses-of-symbol-at-point ()
   (ensime-eval
    `(swank:uses-of-symbol-at-point
@@ -3262,6 +3272,9 @@ It should be used for \"background\" messages such as argument lists."
 
 
 ;; Data-structure accessors
+
+(defun ensime-symbol-name (sym)
+  (plist-get sym :name))
 
 (defun ensime-symbol-decl-pos (sym)
   (plist-get sym :decl-pos))
