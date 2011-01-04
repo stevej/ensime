@@ -123,6 +123,7 @@
    conn
    (if (and (string= (buffer-name) ensime-search-buffer-name)
 	    (memq major-mode '(ensime-search-mode)))
+
        (message "Already in ensime-search buffer")
 
      (setq ensime-search-target-buffer
@@ -136,7 +137,9 @@
      (switch-to-buffer (get-buffer-create ensime-search-buffer-name))
      (setq ensime-buffer-connection conn)
      (erase-buffer)
-     (ensime-search-mode))))
+     (ensime-search-mode)
+     (ensime-search-update-target-buffer)
+     )))
 
 
 
@@ -377,7 +380,7 @@
     (ensime-insert-with-face
      (concat "Enter a type or method name. "
 	     "Use C-n and C-p to navigate results. "
-	     "Enter to select.")
+	     "RETURN to select.")
      'font-lock-constant-face)
     (insert "\n\n")
 
