@@ -49,10 +49,10 @@
 (defvar ensime-search-current-selected-result '()
   "The currently selected ensime-search result.")
 
-(defvar ensime-search-regexp ""
+(defvar ensime-search-text ""
   "The active filter text.")
 
-(defvar ensime-search-min-re-length 2
+(defvar ensime-search-min-length 2
   "The minimum length a search must be
  before rpc call is placed..")
 
@@ -66,10 +66,6 @@
     (define-key map "\C-n" 'ensime-search-next-match)
     (define-key map "\C-p" 'ensime-search-prev-match)
     (define-key map [(return)] 'ensime-search-choose-current-result)
-    (mapc (lambda (num)
-	    (define-key map (concat "\C-c" (number-to-string num))
-	      `(lambda () (interactive) (ensime-search-choose-by-number ,num))))
-	  '(0 1 2 3 4 5 6 7 8 9))
     map)
   "Keymap used by ensime-search.")
 
@@ -80,6 +76,8 @@
   * summary
      The full body of text presented in the results list,
      may contain leading and trailing text, in addition to the match.
+
+  * metadata
 
   * match-file-name
     The filename of the buffer containing the match
@@ -101,8 +99,11 @@
 
   * summary-start
     The offset at which summary begins in the results buffer.
+
+  * data
   "
   (summary nil)
+  (metadata nil)
   (match-file-name nil)
   (match-start nil)
   (match-end nil)
@@ -110,6 +111,7 @@
   (match-summary-offset nil)
   (match-length nil)
   (summary-start 0)
+  (data nil)
   )
 
 
@@ -124,7 +126,7 @@
        (message "Already in ensime-search buffer")
 
      (setq ensime-search-target-buffer
-	   (switch-to-buffer
+	   (switch-to-buffer-other-window
 	    (get-buffer-create ensime-search-target-buffer-name)))
      (setq ensime-search-target-window (selected-window))
      (setq ensime-search-window-config (current-window-configuration))
@@ -176,26 +178,32 @@
     (let ((ensime-dispatching-connection ensime-buffer-connection))
       (kill-buffer-and-window)
       (let* ((r ensime-search-current-selected-result)
-	     (path (ensime-search-result-summary r))
-	     (file-name (ensime-search-result-match-file-name r))
-	     (offset (ensime-search-result-match-start r)))
-	(if file-name
-	    (progn
-	      (find-file file-name)
-	      (goto-char offset))
-	  (ensime-inspect-by-path path))
-	))))
+	     (item (ensime-search-result-data r)))
 
+	;; If the chosen item has a source location,
+	;; jump there..
+	(let ((pos (ensime-search-sym-pos item)))
+	  (let* ((file-name (ensime-pos-file pos))
+		 (offset (+ (ensime-pos-offset pos) ensime-ch-fix)))
+	    (if (and file-name
+		     (integerp (string-match
+				"\\.scala$\\|\\.java$"
+				file-name)))
+		(progn
+		  (find-file file-name)
+		  (goto-char offset))
 
-(defun ensime-search-choose-by-number (num)
-  "Select result by number."
-  (if (and ensime-search-current-results
-	   (< num (length ensime-search-current-results)))
-      (let ((next (nth num ensime-search-current-results)))
-	(setq ensime-search-current-selected-result next)
-	(ensime-search-update-result-selection)
-	(ensime-search-choose-current-result)
-	)))
+	      ;; Otherwise, open the inspector
+	      (let ((decl-as (ensime-search-sym-decl-as item)))
+		(cond
+		 ((or (equal decl-as 'method)
+		      (equal decl-as 'field))
+		  (ensime-inspect-by-path
+		   (ensime-search-sym-owner-name item)))
+
+		 (t (ensime-inspect-by-path
+		     (ensime-search-sym-name item)))))
+	      )))))))
 
 
 (defun ensime-search-next-match ()
@@ -248,8 +256,8 @@
 (defun ensime-search-is-case-sensitive ()
   "Is the active search case-sensitive?"
   (let ((case-fold-search nil))
-    (and ensime-search-regexp
-	 (integerp (string-match "[A-Z]" ensime-search-regexp)))))
+    (and ensime-search-text
+	 (integerp (string-match "[A-Z]" ensime-search-text)))))
 
 
 (defun ensime-search-auto-update (beg end lenold &optional force)
@@ -257,18 +265,24 @@
  BEG, END and LENOLD are passed in from the hook.
  An actual update is only done if the regexp has changed or if the
  optional fourth argument FORCE is non-nil."
-  (let ((cur-re (ensime-search-read-regexp)))
-    (when (not (equal cur-re ensime-search-regexp))
-      (setq ensime-search-regexp cur-re)
-      (when (>= (length cur-re) ensime-search-min-re-length)
-	(ensime-rpc-async-public-symbol-search
-	 (list cur-re)
-	 ensime-search-max-results
-	 (ensime-search-is-case-sensitive)
-	 (lambda (info)
-	   (when (buffer-live-p ensime-search-target-buffer)
-	     (ensime-search-update-target-buffer
-	      (ensime-search-make-results info)))))))
+  (let ((new-query (buffer-string)))
+    (when (not (equal new-query ensime-search-text))
+      (setq ensime-search-text new-query)
+      (if (>= (length new-query) ensime-search-min-length)
+	  (ensime-rpc-async-public-symbol-search
+	   (list new-query)
+	   ensime-search-max-results
+	   (ensime-search-is-case-sensitive)
+	   (lambda (info)
+	     (when (buffer-live-p ensime-search-target-buffer)
+	       (let ((results (ensime-search-make-results info)))
+		 (setq ensime-search-current-results results)
+		 (ensime-search-update-target-buffer)
+		 ))))
+	(with-current-buffer ensime-search-target-buffer
+	  (setq ensime-search-current-results nil)
+	  (ensime-search-update-target-buffer))
+	))
     (force-mode-line-update)))
 
 
@@ -289,10 +303,6 @@
   (remove-hook 'kill-buffer-hook 'ensime-search-kill-buffer)
   (if (buffer-live-p ensime-search-target-buffer)
       (kill-buffer ensime-search-target-buffer)))
-
-(defun ensime-search-read-regexp ()
-  "Read current RE."
-  (buffer-string))
 
 (defun ensime-search-buffers-to-search ()
   "Return the list of buffers that are suitable for searching."
@@ -315,77 +325,96 @@
      (lambda (item)
        (make-ensime-search-result
 	:summary
-	(ensime-symbol-name item)
+	(ensime-search-sym-name item)
+
+	:metadata
+	(let ((decl-as (ensime-search-sym-decl-as item)))
+	  (cond
+	   ((or (equal decl-as 'method)
+		(equal decl-as 'field))
+	    (format "%s of %s" decl-as
+		    (ensime-search-sym-owner-name item)))
+	   (t
+	    (format "%s" decl-as))))
 
 	:match-file-name
-	(when-let (pos (ensime-symbol-decl-pos item))
+	(when-let (pos (ensime-search-sym-pos item))
 	  (ensime-pos-file pos))
 
 	:match-start
-	(when-let (pos (ensime-symbol-decl-pos item))
+	(when-let (pos (ensime-search-sym-pos item))
 	  (+ (ensime-pos-offset pos) ensime-ch-fix))
 
 	:match-end nil
 
-	:match-line (when-let (pos (ensime-symbol-decl-pos item))
+	:match-line (when-let (pos (ensime-search-sym-pos item))
 		      (ensime-pos-line pos))
 
 	:match-summary-offset
 	(let ((case-fold-search (not (ensime-search-is-case-sensitive))))
-	  (or (string-match ensime-search-regexp (ensime-symbol-name item)) 0))
+	  (or (string-match (replace-regexp-in-string
+			     "\\$" "\\$"
+			     ensime-search-text nil t)
+			    (ensime-search-sym-name item)) 0))
 
 	:match-length
-	(length ensime-search-regexp)
+	(length ensime-search-text)
+
+	:data
+	item
 
 	)) items)))
 
 
-(defun ensime-search-update-target-buffer (results)
+(defun ensime-search-update-target-buffer ()
   "This is where the magic happens. Update the result list."
   (save-excursion
     (set-buffer ensime-search-target-buffer)
     (setq buffer-read-only nil)
     (goto-char (point-min))
     (erase-buffer)
-    (setq ensime-search-current-results results)
+
+    (ensime-insert-with-face
+     (concat "Enter a type or method name. "
+	     "Use C-n and C-p to navigate results. "
+	     "Enter to select.")
+     'font-lock-constant-face)
+    (insert "\n\n")
 
     (when ensime-search-current-results
       (setq ensime-search-current-selected-result
 	    (first ensime-search-current-results)))
 
-    (let ((counter 0))
-      (dolist (r ensime-search-current-results)
+    (dolist (r ensime-search-current-results)
 
-	;; Save this for later use, for next/prev actions
-	(setf (ensime-search-result-summary-start r) (point))
+      ;; Save this for later use, for next/prev actions
+      (setf (ensime-search-result-summary-start r) (point))
 
-	;; Insert item number
-	(when (< counter 10)
-	  (ensime-insert-with-face
-	   (format "%s) " counter)
-	   'font-lock-comment-face))
+      (let ((p (point)))
+	;; Insert the actual text, highlighting the matched substring
+	(insert (format "%s  \n" (ensime-search-result-summary r)))
+	(add-text-properties
+	 (+ p (ensime-search-result-match-summary-offset r))
+	 (+ p (ensime-search-result-match-summary-offset r)
+	    (ensime-search-result-match-length r))
+	 '(comment nil face font-lock-keyword-face)))
 
-	(let ((p (point)))
-	  ;; Insert the actual text, highlighting the matched substring
-	  (insert (format "%s  \n" (ensime-search-result-summary r)))
-	  (add-text-properties
-	   (+ p (ensime-search-result-match-summary-offset r))
-	   (+ p (ensime-search-result-match-summary-offset r)
-	      (ensime-search-result-match-length r))
-	   '(comment nil face font-lock-keyword-face)))
+      ;; Insert metadata
+      (when-let (m (ensime-search-result-metadata r))
+	(ensime-insert-with-face
+	 (format " %s\n" m)
+	 'font-lock-comment-face))
 
-	;; Insert metadata, filename, line number
-	(when (ensime-search-result-match-file-name r)
-	  (ensime-insert-with-face
-	   (format "%s" (ensime-search-result-match-file-name r))
-	   'font-lock-comment-face))
+      ;; Insert filename
+      (when-let (f (ensime-search-result-match-file-name r))
+	(ensime-insert-with-face (format " %s" f)
+				 'font-lock-comment-face))
 
-	(insert "\n\n")
-
-	(incf counter)
-	))
+      (insert "\n\n")
+      )
 
     (setq buffer-read-only t)
+    (ensime-search-update-result-selection)
     ))
 
 

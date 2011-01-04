@@ -220,11 +220,11 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-v c") 'ensime-typecheck-current-file)
       (define-key prefix-map (kbd "C-v a") 'ensime-typecheck-all)
       (define-key prefix-map (kbd "C-v r") 'ensime-show-uses-of-symbol-at-point)
-      (define-key prefix-map (kbd "C-v b") 'ensime-sbt-switch)
+      (define-key prefix-map (kbd "C-v s") 'ensime-sbt-switch)
       (define-key prefix-map (kbd "C-v z") 'ensime-inf-switch)
       (define-key prefix-map (kbd "C-v f") 'ensime-format-source)
       (define-key prefix-map (kbd "C-v u") 'ensime-undo-peek)
-      (define-key prefix-map (kbd "C-v s") 'ensime-search)
+      (define-key prefix-map (kbd "C-v v") 'ensime-search)
 
       (define-key prefix-map (kbd "C-d d") 'ensime-db-start)
       (define-key prefix-map (kbd "C-d b") 'ensime-db-set-break)
@@ -3274,6 +3274,18 @@ It should be used for \"background\" messages such as argument lists."
 
 
 ;; Data-structure accessors
+
+(defun ensime-search-sym-name (sym)
+  (plist-get sym :name))
+
+(defun ensime-search-sym-pos (sym)
+  (plist-get sym :pos))
+
+(defun ensime-search-sym-owner-name (sym)
+  (plist-get sym :owner-name))
+
+(defun ensime-search-sym-decl-as (sym)
+  (plist-get sym :decl-as))
 
 (defun ensime-symbol-name (sym)
   (plist-get sym :name))
