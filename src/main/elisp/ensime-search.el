@@ -91,12 +91,6 @@
   * match-line
     The line number in buffer match started
 
-  * match-summary-offset
-    Within summary, the offset at which the match begins
-
-  * match-length
-    The length of the match
-
   * summary-start
     The offset at which summary begins in the results buffer.
 
@@ -108,8 +102,6 @@
   (match-start nil)
   (match-end nil)
   (match-line nil)
-  (match-summary-offset nil)
-  (match-length nil)
   (summary-start 0)
   (data nil)
   )
@@ -273,7 +265,7 @@
       (setq ensime-search-text new-query)
       (if (>= (length new-query) ensime-search-min-length)
 	  (ensime-rpc-async-public-symbol-search
-	   (list new-query)
+	   (split-string new-query " ")
 	   ensime-search-max-results
 	   (ensime-search-is-case-sensitive)
 	   (lambda (info)
@@ -323,7 +315,7 @@
 (defun ensime-search-make-results (info)
   "Map the results of the rpc call into search result
  structures."
-  (let ((items (car info)))
+  (let ((items info))
     (mapcar
      (lambda (item)
        (make-ensime-search-result
@@ -332,13 +324,7 @@
 
 	:metadata
 	(let ((decl-as (ensime-search-sym-decl-as item)))
-	  (cond
-	   ((or (equal decl-as 'method)
-		(equal decl-as 'field))
-	    (format "%s of %s" decl-as
-		    (ensime-search-sym-owner-name item)))
-	   (t
-	    (format "%s" decl-as))))
+	  (format "%s" decl-as))
 
 	:match-file-name
 	(when-let (pos (ensime-search-sym-pos item))
@@ -352,16 +338,6 @@
 
 	:match-line (when-let (pos (ensime-search-sym-pos item))
 		      (ensime-pos-line pos))
-
-	:match-summary-offset
-	(let ((case-fold-search (not (ensime-search-is-case-sensitive))))
-	  (or (string-match (replace-regexp-in-string
-			     "\\$" "\\$"
-			     ensime-search-text nil t)
-			    (ensime-search-sym-name item)) 0))
-
-	:match-length
-	(length ensime-search-text)
 
 	:data
 	item
@@ -396,17 +372,18 @@
       (let ((p (point)))
 	;; Insert the actual text, highlighting the matched substring
 	(insert (format "%s  \n" (ensime-search-result-summary r)))
-	(add-text-properties
-	 (+ p (ensime-search-result-match-summary-offset r))
-	 (+ p (ensime-search-result-match-summary-offset r)
-	    (ensime-search-result-match-length r))
-	 '(comment nil face font-lock-keyword-face)))
+;;	(add-text-properties
+;;	 (+ p (ensime-search-result-match-summary-offset r))
+;;	 (+ p (ensime-search-result-match-summary-offset r)
+;;	    (ensime-search-result-match-length r))
+;;	 '(comment nil face font-lock-keyword-face))
+	)
 
       ;; Insert metadata
-      (when-let (m (ensime-search-result-metadata r))
-	(ensime-insert-with-face
-	 (format " %s\n" m)
-	 'font-lock-comment-face))
+;;      (when-let (m (ensime-search-result-metadata r))
+;;	(ensime-insert-with-face
+;;	 (format " %s\n" m)
+;;	 'font-lock-comment-face))
 
       ;; Insert filename
       (when-let (f (ensime-search-result-match-file-name r))
