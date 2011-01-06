@@ -194,7 +194,9 @@
 		 ((or (equal decl-as 'method)
 		      (equal decl-as 'field))
 		  (ensime-inspect-by-path
-		   (ensime-search-sym-owner-name item)))
+		   (ensime-search-sym-owner-name item)
+		   (ensime-search-sym-local-name item)
+		   ))
 
 		 (t (ensime-inspect-by-path
 		     (ensime-search-sym-name item)))))
@@ -372,18 +374,18 @@
       (let ((p (point)))
 	;; Insert the actual text, highlighting the matched substring
 	(insert (format "%s  \n" (ensime-search-result-summary r)))
-;;	(add-text-properties
-;;	 (+ p (ensime-search-result-match-summary-offset r))
-;;	 (+ p (ensime-search-result-match-summary-offset r)
-;;	    (ensime-search-result-match-length r))
-;;	 '(comment nil face font-lock-keyword-face))
+	;;	(add-text-properties
+	;;	 (+ p (ensime-search-result-match-summary-offset r))
+	;;	 (+ p (ensime-search-result-match-summary-offset r)
+	;;	    (ensime-search-result-match-length r))
+	;;	 '(comment nil face font-lock-keyword-face))
 	)
 
       ;; Insert metadata
-;;      (when-let (m (ensime-search-result-metadata r))
-;;	(ensime-insert-with-face
-;;	 (format " %s\n" m)
-;;	 'font-lock-comment-face))
+      ;;      (when-let (m (ensime-search-result-metadata r))
+      ;;	(ensime-insert-with-face
+      ;;	 (format " %s\n" m)
+      ;;	 'font-lock-comment-face))
 
       ;; Insert filename
       (when-let (f (ensime-search-result-match-file-name r))

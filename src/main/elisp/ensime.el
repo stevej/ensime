@@ -2747,11 +2747,11 @@ with the current project's dependencies loaded. Returns a property list."
 
 	 (insert "\n\n\n")
 	 ))
-       (goto-char (point-min))
-       (when uses (forward-button 1))
-       )
+     (goto-char (point-min))
+     (when uses (forward-button 1))
+     )
     (ensime-event-sig :references-buffer-shown)
-  ))
+    ))
 
 ;; Type Inspector UI
 
@@ -2934,7 +2934,7 @@ with the current project's dependencies loaded. Returns a property list."
 			     (ensime-rpc-inspect-type-at-point))))
 	(ensime-type-inspector-show inspect-info)))))
 
-(defun ensime-type-inspector-show (info)
+(defun ensime-type-inspector-show (info &optional focus-on-member)
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (if (null info)
@@ -2943,7 +2943,8 @@ with the current project's dependencies loaded. Returns a property list."
 	   (type (plist-get info :type))
 	   (companion-id (plist-get info :companion-id))
 	   (buffer-name ensime-inspector-buffer-name)
-	   (ensime-indent-level 0))
+	   (ensime-indent-level 0)
+	   (focus-point nil))
       (ensime-with-inspector-buffer
        (buffer-name info t)
 
@@ -2970,22 +2971,29 @@ with the current project's dependencies loaded. Returns a property list."
 	     (let* ((owner-type (plist-get interface :type))
 		    (implicit (plist-get interface :via-view))
 		    (members (plist-get owner-type :members)))
-
 	       (ensime-insert-with-face
 		(format "\n\n%s%s\n"
 			(ensime-declared-as-str owner-type)
-			(if implicit (concat " (via implicit, " implicit ")") ""))
+			(if implicit
+			    (concat " (via implicit, " implicit ")") ""))
 		font-lock-comment-face)
 	       (ensime-inspector-insert-linked-type owner-type t t)
 	       (insert "\n")
 	       (insert "---------------------------\n")
 	       (dolist (m members)
+		 (when (and focus-on-member
+			    (equal (ensime-member-name m)
+				   focus-on-member))
+		   (setq focus-point (point)))
 		 (ensime-inspector-insert-linked-member owner-type m)
 		 (insert "\n")
 		 )
 	       ))
 
-	   (goto-char (point-min))
+	   (if (integerp focus-point)
+	       (progn (goto-char focus-point)
+		      (recenter-top-bottom))
+	     (goto-char (point-min)))
 	   ))
        ))))
 
@@ -3027,7 +3035,7 @@ interface we are implementing."
   (ensime-package-inspector-show
    (ensime-rpc-inspect-package-by-path path)))
 
-(defun ensime-inspect-by-path (&optional path)
+(defun ensime-inspect-by-path (&optional path focus-on-member)
   "Open the Inspector on the type or package denoted by path. If path is nil,
 read a fully qualified path from the minibuffer."
   (interactive)
@@ -3043,7 +3051,7 @@ read a fully qualified path from the minibuffer."
 	   (if type
 	       (let ((info (ensime-rpc-inspect-type-by-id
 			    (ensime-type-id type))))
-		 (ensime-type-inspector-show info))
+		 (ensime-type-inspector-show info focus-on-member))
 	     (message "Could not locate type named '%s'." p))
 	   ))))))
 
@@ -3277,6 +3285,9 @@ It should be used for \"background\" messages such as argument lists."
 
 (defun ensime-search-sym-name (sym)
   (plist-get sym :name))
+
+(defun ensime-search-sym-local-name (sym)
+  (plist-get sym :local-name))
 
 (defun ensime-search-sym-pos (sym)
   (plist-get sym :pos))
