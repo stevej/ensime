@@ -86,6 +86,7 @@
                      (format "%S" (list :sources '("src")
                                         :project-package "com.test"
                                         :compile-jars ensime-test-env-classpath
+					:disable-index-on-startup t
                                         ))))
          (src-dir (file-name-as-directory (concat root-dir "src"))))
     (mkdir src-dir)
