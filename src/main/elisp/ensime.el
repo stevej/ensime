@@ -3045,7 +3045,7 @@ read a fully qualified path from the minibuffer."
 		  "Qualified type or package name: "))))
       (ensime-with-path-and-name
        p (pack name)
-       (if (integerp (string-match "^[a-z_0-9]+$" name))
+       (if (and name (integerp (string-match "^[a-z_0-9]+$" name)))
 	   (ensime-inspect-package-by-path p)
 	 (let ((type (ensime-rpc-get-type-by-name p)))
 	   (if type
