@@ -75,28 +75,31 @@
 
 
 
-(defun ensime-create-tmp-project (src-files)
+(defun ensime-create-tmp-project (src-files &optional extra-config)
   "Create a temporary project directory. Populate with config, source files.
  Return a plist describing the project. Note: Delete such projects with
  ensime-cleanup-tmp-project."
   (let* ((root-dir (file-name-as-directory
 		    (make-temp-file "ensime_test_proj_" t)))
+	 (config (append
+		  (list :sources '("src")
+			:project-package "com.test"
+			:compile-jars ensime-test-env-classpath
+			:disable-index-on-startup t)
+		  extra-config))
          (conf-file (ensime-create-file
                      (concat root-dir ".ensime")
-                     (format "%S" (list :sources '("src")
-                                        :project-package "com.test"
-                                        :compile-jars ensime-test-env-classpath
-					:disable-index-on-startup t
-                                        ))))
+                     (format "%S" config)))
          (src-dir (file-name-as-directory (concat root-dir "src"))))
+
     (mkdir src-dir)
     (let* ((proj '())
-           (src-file-names
-            (mapcar
-             (lambda (f) (ensime-create-file
-                          (concat src-dir (plist-get f :name))
-                          (plist-get f :contents)))
-             src-files)))
+	   (src-file-names
+	    (mapcar
+	     (lambda (f) (ensime-create-file
+			  (concat src-dir (plist-get f :name))
+			  (plist-get f :contents)))
+	     src-files)))
       (setq proj (plist-put proj :src-files src-file-names))
       (setq proj (plist-put proj :root-dir root-dir))
       (setq proj (plist-put proj :conf-file conf-file))
@@ -108,25 +111,25 @@
   `((:name
      "hello_world.scala"
      :contents ,(ensime-test-concat-lines
-                 "package com.helloworld"
-                 "class HelloWorld{"
-                 "}"
-                 "object HelloWorld {"
-                 "def main(args: Array[String]) = {"
-                 "Console.println(\"Hello, world!\")"
-                 "}"
-                 "def foo(a:Int, b:Int):Int = {"
-                 "a + b"
-                 "}"
-                 "}"
-                 )
+		 "package com.helloworld"
+		 "class HelloWorld{"
+		 "}"
+		 "object HelloWorld {"
+		 "def main(args: Array[String]) = {"
+		 "Console.println(\"Hello, world!\")"
+		 "}"
+		 "def foo(a:Int, b:Int):Int = {"
+		 "a + b"
+		 "}"
+		 "}"
+		 )
      )))
 
 (defun ensime-cleanup-tmp-project (proj)
   "Destroy a temporary project directory, kill all buffers visiting
    source files in the project."
   (let ((src-files (plist-get proj :src-files))
-        (root-dir (plist-get proj :root-dir)))
+	(root-dir (plist-get proj :root-dir)))
     (message "deleting %s" src-files)
     (dolist (f src-files)
       (cond ((file-exists-p f)
@@ -143,20 +146,20 @@
 	    (t)))
     ;; a bit of paranoia..
     (if (and root-dir (integerp (string-match "^/tmp/" root-dir)))
-        ;; ..before we wipe away the project dir
-        (shell-command (format "rm -rf %S" root-dir)))))
+	;; ..before we wipe away the project dir
+	(shell-command (format "rm -rf %S" root-dir)))))
 
 (defun ensime-kill-all-ensime-servers ()
   "Kill all inferior ensime server buffers."
   (dolist (b (buffer-list))
     (if (string-match "^\\*inferior-ensime-server" (buffer-name b))
-        (kill-buffer b))))
+	(kill-buffer b))))
 
 (defmacro ensime-test-var-put (var val)
   "Helper for writing to shared testing state."
   `(with-current-buffer ensime-testing-buffer
      (setq ensime-shared-test-state
-           (plist-put ensime-shared-test-state ,var ,val))))
+	   (plist-put ensime-shared-test-state ,var ,val))))
 
 (defmacro ensime-test-var-get (var)
   "Helper for reading from shared testing state."
@@ -170,10 +173,10 @@
     (message "Processing test event: %s with value %s" event value)
     (with-current-buffer ensime-testing-buffer
       (when (not (null ensime-async-handler-stack))
-        (let* ((ensime-prefer-noninteractive t)
-               (handler (car ensime-async-handler-stack))
-               (handler-event (plist-get handler :event)))
-          (if (equal event handler-event)
+	(let* ((ensime-prefer-noninteractive t)
+	       (handler (car ensime-async-handler-stack))
+	       (handler-event (plist-get handler :event)))
+	  (if (equal event handler-event)
 	      (let ((handler-func (plist-get handler :func))
 		    (is-last (plist-get handler :is-last)))
 		(pop ensime-async-handler-stack)
@@ -219,10 +222,10 @@
 (defmacro ensime-test (title &rest body)
   "Define a synchronous test."
   `(list :title ,title :async nil
-         :func (lambda ()
-                 (ensime-test-run-with-handlers
-                  ,title
-                  ,@body))))
+	 :func (lambda ()
+		 (ensime-test-run-with-handlers
+		  ,title
+		  ,@body))))
 
 
 (defmacro ensime-test-run-with-handlers (context &rest body)
@@ -230,48 +233,48 @@
    writing to the testing output buffer."
   `(save-excursion
      (condition-case signal
-         (progn
-           ,@body
-           (ensime-test-output-result t))
+	 (progn
+	   ,@body
+	   (ensime-test-output-result t))
        (ensime-test-assert-failed
-        (ensime-test-output-result
-         (format "Assertion failed at '%s': %s" ,context signal))
-        (signal
+	(ensime-test-output-result
+	 (format "Assertion failed at '%s': %s" ,context signal))
+	(signal
 	 'ensime-test-interrupted
 	 (format "Test interrupted: %s." signal))
-        ))))
+	))))
 
 
 (defmacro* ensime-async-test (title trigger &rest handlers)
   "Define an asynchronous test."
   (let* ((last-handler (car (last handlers)))
-         (handler-structs
-          (mapcar
-           (lambda (h)
-             (let* ((head (car h))
-                    (evt (car head))
-                    (val-sym (cadr head))
-                    (func-body (cadr h))
-                    (func `(lambda (,val-sym)
-                             (ensime-test-run-with-handlers
-                              ,title
-                              ,func-body))))
-               (list
-                :event evt
-                :val-sym val-sym
-                :func func
-                :is-last (equal h last-handler)
-                )))
-           handlers))
-         (trigger-func
-          `(lambda ()
-             (ensime-test-run-with-handlers
-              ,title
-              ,trigger))))
+	 (handler-structs
+	  (mapcar
+	   (lambda (h)
+	     (let* ((head (car h))
+		    (evt (car head))
+		    (val-sym (cadr head))
+		    (func-body (cadr h))
+		    (func `(lambda (,val-sym)
+			     (ensime-test-run-with-handlers
+			      ,title
+			      ,func-body))))
+	       (list
+		:event evt
+		:val-sym val-sym
+		:func func
+		:is-last (equal h last-handler)
+		)))
+	   handlers))
+	 (trigger-func
+	  `(lambda ()
+	     (ensime-test-run-with-handlers
+	      ,title
+	      ,trigger))))
     `(list :title ,title :async t
-           :trigger ,trigger-func
-           :handlers ',handler-structs
-           )))
+	   :trigger ,trigger-func
+	   :handlers ',handler-structs
+	   )))
 
 ;;(message "%S" (macroexpand '(ensime-async-test "blarg" (do-this-thing) ((:evt-a val) val) ((:evt-b val) val))))
 
@@ -280,30 +283,30 @@
   "Run the next test from the test queue."
   (with-current-buffer ensime-testing-buffer
     (if ensime-test-queue
-        (let ((ensime-prefer-noninteractive t)
-              (test (car ensime-test-queue)))
-          (setq ensime-shared-test-state '())
-          (setq ensime-async-handler-stack '())
+	(let ((ensime-prefer-noninteractive t)
+	      (test (car ensime-test-queue)))
+	  (setq ensime-shared-test-state '())
+	  (setq ensime-async-handler-stack '())
 
-          (ensime-test-output (format "\n%s" (plist-get test :title)))
+	  (ensime-test-output (format "\n%s" (plist-get test :title)))
 
-          (if (plist-get test :async)
+	  (if (plist-get test :async)
 
-              ;; Asynchronous test
-              (let ((handlers (reverse (plist-get test :handlers))))
-                (dolist (h handlers)
-                  (push h ensime-async-handler-stack))
-                (funcall (plist-get test :trigger)))
+	      ;; Asynchronous test
+	      (let ((handlers (reverse (plist-get test :handlers))))
+		(dolist (h handlers)
+		  (push h ensime-async-handler-stack))
+		(funcall (plist-get test :trigger)))
 
-            ;; Synchronous test
-            (progn
-              (pop ensime-test-queue)
-              (save-excursion
-                (condition-case signal
-                    (funcall (plist-get test :func))
-                  (ensime-test-interrupted
-                   (message "Error executing test, moving to next."))))
-              (ensime-run-next-test))))
+	    ;; Synchronous test
+	    (progn
+	      (pop ensime-test-queue)
+	      (save-excursion
+		(condition-case signal
+		    (funcall (plist-get test :func))
+		  (ensime-test-interrupted
+		   (message "Error executing test, moving to next."))))
+	      (ensime-run-next-test))))
       (goto-char (point-max))
       (insert "\n\nFinished.")
       )))
@@ -312,17 +315,17 @@
 (defmacro ensime-assert (pred)
   `(let ((val ,pred))
      (if (not val)
-         (with-current-buffer ensime-testing-buffer
-           (signal 'ensime-test-assert-failed
+	 (with-current-buffer ensime-testing-buffer
+	   (signal 'ensime-test-assert-failed
 		   (format "Expected truth of %s." ',pred))))))
 
 
 (defmacro ensime-assert-equal (a b)
   `(let ((val-a ,a)
-         (val-b ,b))
+	 (val-b ,b))
      (if (equal val-a val-b) t
        (with-current-buffer ensime-testing-buffer
-         (signal 'ensime-test-assert-failed
+	 (signal 'ensime-test-assert-failed
 		 (format "Expected %s to equal %s." ',a ',b))))))
 
 (defun ensime-stop-tests ()
@@ -377,17 +380,17 @@
     "Test loading a simple config."
     (ensime-with-tmp-file
      (file "ensime_test_conf_"
-           (format "%S"
-                   '( :server-cmd
-                      "bin/server.sh"
-                      :dependendency-dirs ("hello" "world")
-                      )))
+	   (format "%S"
+		   '( :server-cmd
+		      "bin/server.sh"
+		      :dependendency-dirs ("hello" "world")
+		      )))
      (let ((conf (ensime-config-load file)))
        (ensime-assert (equal (plist-get conf :server-cmd) "bin/server.sh"))
        (ensime-assert (equal (plist-get conf :dependendency-dirs)
 			     '("hello" "world")))
        (ensime-assert (equal (plist-get conf :root-dir)
-                             (expand-file-name (file-name-directory file)))))))
+			     (expand-file-name (file-name-directory file)))))))
 
 
    (ensime-test
@@ -395,9 +398,9 @@
     (ensime-with-tmp-file
      (file "ensime_test_conf_" "(lkjsdfkjskfjs")
      (let ((conf
-            (condition-case er
-                (ensime-config-load file)
-              (error nil))))
+	    (condition-case er
+		(ensime-config-load file)
+	      (error nil))))
        (ensime-assert (null conf)))))
 
    (ensime-test
@@ -406,17 +409,17 @@
     (ensime-with-name-parts
      "java.util.List" (p o n)
      (ensime-assert-equal (list p o n)
-                          (list "java.util" nil "List")))
+			  (list "java.util" nil "List")))
 
     (ensime-with-name-parts
      "scala.tools.nsc.symtab.Types$Type" (p o n)
      (ensime-assert-equal (list p o n)
-                          (list "scala.tools.nsc.symtab" "Types" "Type")))
+			  (list "scala.tools.nsc.symtab" "Types" "Type")))
 
     (ensime-with-name-parts
      "scala.tools.nsc.symtab.Types" (p o n)
      (ensime-assert-equal (list p o n)
-                          (list "scala.tools.nsc.symtab" nil "Types")))
+			  (list "scala.tools.nsc.symtab" nil "Types")))
 
     (ensime-with-name-parts
      "scala.tools.nsc.symtab.Types$Dude$AbsType" (p o n)
@@ -427,12 +430,12 @@
     (ensime-with-name-parts
      "scala.tools.nsc.symtab.Types$$Type$" (p o n)
      (ensime-assert-equal (list p o n)
-                          (list "scala.tools.nsc.symtab" "Types$" "Type$")))
+			  (list "scala.tools.nsc.symtab" "Types$" "Type$")))
 
     (ensime-with-name-parts
      "Types$$Type$" (p o n)
      (ensime-assert-equal (list p o n)
-                          (list "" "Types$" "Type$")))
+			  (list "" "Types$" "Type$")))
 
     )
 
@@ -442,42 +445,42 @@
     (ensime-with-path-and-name
      "java.util.List" (p n)
      (ensime-assert-equal (list p n)
-                          (list "java.util" "List")))
+			  (list "java.util" "List")))
 
     (ensime-with-path-and-name
      "scala.tools.nsc.symtab.Types$Type" (p n)
      (ensime-assert-equal (list p n)
-                          (list "scala.tools.nsc.symtab" "Types$Type")))
+			  (list "scala.tools.nsc.symtab" "Types$Type")))
 
     (ensime-with-path-and-name
      "scala.tools.nsc.symtab.Types" (p n)
      (ensime-assert-equal (list p n)
-                          (list "scala.tools.nsc.symtab" "Types")))
+			  (list "scala.tools.nsc.symtab" "Types")))
 
     (ensime-with-path-and-name
      "scala.tools.nsc.symtab.Types$Dude$AbsType" (p n)
      (ensime-assert-equal (list p n)
-                          (list "scala.tools.nsc.symtab" "Types$Dude$AbsType")))
+			  (list "scala.tools.nsc.symtab" "Types$Dude$AbsType")))
 
     (ensime-with-path-and-name
      "scala.tools.nsc.symtab.Types$$Type$" (p n)
      (ensime-assert-equal (list p n)
-                          (list "scala.tools.nsc.symtab" "Types$$Type$")))
+			  (list "scala.tools.nsc.symtab" "Types$$Type$")))
 
     (ensime-with-path-and-name
      "Types$$Type$" (p n)
      (ensime-assert-equal (list p n)
-                          (list "" "Types$$Type$")))
+			  (list "" "Types$$Type$")))
 
     (ensime-with-path-and-name
      "java.uti" (p n)
      (ensime-assert-equal (list p n)
-                          (list "java" "uti")))
+			  (list "java" "uti")))
 
     (ensime-with-path-and-name
      "uti" (p n)
      (ensime-assert-equal (list p n)
-                          (list "" "uti")))
+			  (list "" "uti")))
 
     )
 
@@ -515,39 +518,39 @@
    (ensime-async-test
     "Test completing members."
     (let* ((proj (ensime-create-tmp-project
-                  `((:name
-                     "hello_world.scala"
-                     :contents ,(ensime-test-concat-lines
-                                 "package com.helloworld"
+		  `((:name
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package com.helloworld"
 
-                                 "class HelloWorld{"
-                                 "  def foo(a:Int, b:Int):Int = {"
-                                 "    HelloWorld./*1*/"
-                                 "  }"
-                                 "  def bar(a:Int, b:Int):Int = {"
-                                 "    val v = HelloWorld./*2*/"
-                                 "    foo(1,v)"
-                                 "  }"
-                                 "}"
+				 "class HelloWorld{"
+				 "  def foo(a:Int, b:Int):Int = {"
+				 "    HelloWorld./*1*/"
+				 "  }"
+				 "  def bar(a:Int, b:Int):Int = {"
+				 "    val v = HelloWorld./*2*/"
+				 "    foo(1,v)"
+				 "  }"
+				 "}"
 
-                                 "object HelloWorld {"
-                                 "  def blarg = 5"
-                                 "  def add(a:Int, b:Int) = {"
-                                 "    System.out.pri/*3*/"
-                                 "    a + b"
-                                 "  }"
-                                 "  def test() {"
-                                 "    val dude = \"hello\""
-                                 "    System.out.println(dude./*4*/)"
-                                 "  }"
-                                 "  def test2() = {"
-                                 "    val dude = \"hello\""
-                                 "    dude.substring(2,2).hea/*5*/"
-                                 "  }"
-                                 "}"
-                                 )
-                     ))))
-           (src-files (plist-get proj :src-files)))
+				 "object HelloWorld {"
+				 "  def blarg = 5"
+				 "  def add(a:Int, b:Int) = {"
+				 "    System.out.pri/*3*/"
+				 "    a + b"
+				 "  }"
+				 "  def test() {"
+				 "    val dude = \"hello\""
+				 "    System.out.println(dude./*4*/)"
+				 "  }"
+				 "  def test2() = {"
+				 "    val dude = \"hello\""
+				 "    dude.substring(2,2).hea/*5*/"
+				 "  }"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
       (ensime-test-var-put :proj proj)
       (find-file (car src-files))
       (ensime))
@@ -593,28 +596,28 @@
    (ensime-async-test
     "Test completing symbols."
     (let* ((proj (ensime-create-tmp-project
-                  `((:name
-                     "hello_world.scala"
-                     :contents ,(ensime-test-concat-lines
-                                 "package com.helloworld"
-                                 "import java.io.File"
+		  `((:name
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package com.helloworld"
+				 "import java.io.File"
 
-                                 "class HelloWorld{"
+				 "class HelloWorld{"
 
-                                 "  def main {"
-                                 "    val f = new Fi/*1*/"
-                                 "  }"
+				 "  def main {"
+				 "    val f = new Fi/*1*/"
+				 "  }"
 
-                                 "  def blarg:Int = 5"
+				 "  def blarg:Int = 5"
 
-                                 "  def add(a:Int):Int = {"
-                                 "    a + bl/*2*/"
-                                 "  }"
+				 "  def add(a:Int):Int = {"
+				 "    a + bl/*2*/"
+				 "  }"
 
-                                 "}"
-                                 )
-                     ))))
-           (src-files (plist-get proj :src-files)))
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
       (ensime-test-var-put :proj proj)
       (find-file (car src-files))
       (ensime))
@@ -645,17 +648,17 @@
    (ensime-async-test
     "Test completing imports."
     (let* ((proj (ensime-create-tmp-project
-                  `((:name
-                     "hello_world.scala"
-                     :contents ,(ensime-test-concat-lines
-                                 "package com.helloworld"
-                                 "import java.ut/*1*/"
-                                 "class HelloWorld{"
-                                 "import sc/*2*/"
-                                 "}"
-                                 )
-                     ))))
-           (src-files (plist-get proj :src-files)))
+		  `((:name
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package com.helloworld"
+				 "import java.ut/*1*/"
+				 "class HelloWorld{"
+				 "import sc/*2*/"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
       (ensime-test-var-put :proj proj)
       (find-file (car src-files))
       (ensime))
@@ -1061,6 +1064,35 @@
 	(ensime-assert (not (null (plist-get conf :sourcepath))))
 	)
 
+      (ensime-test-cleanup proj)
+      ))
+    )
+
+   (ensime-async-test
+    "Test interactive search."
+    (let* ((proj (ensime-create-tmp-project
+		  ensime-tmp-project-hello-world
+		  )))
+      (ensime-test-init-proj proj))
+
+    ((:connected connection-info))
+
+    ((:compiler-ready status)
+     (ensime-test-with-proj
+      (proj src-files)
+      (ensime-search)
+      (insert "hello world")
+      ))
+
+    ((:search-buffer-populated val)
+     (ensime-test-with-proj
+      (proj src-files)
+      (with-current-buffer ensime-search-target-buffer-name
+	(goto-char 1)
+	(ensime-assert (search-forward "com.helloworld.HelloWorld" nil t))
+	(goto-char 1)
+	(ensime-assert (search-forward "com.helloworld.HelloWorld$.foo" nil t)))
+      (ensime-search-quit)
       (ensime-test-cleanup proj)
       ))
     )

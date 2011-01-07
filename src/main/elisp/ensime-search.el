@@ -287,6 +287,7 @@
 	       (let ((results (ensime-search-make-results info)))
 		 (setq ensime-search-current-results results)
 		 (ensime-search-update-target-buffer)
+		 (ensime-event-sig :search-buffer-populated)
 		 ))))
 	(with-current-buffer ensime-search-target-buffer
 	  (setq ensime-search-current-results nil)
