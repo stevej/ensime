@@ -63,6 +63,16 @@
 (defvar ensime-search-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-c\C-q" 'ensime-search-quit)
+    (define-key map "\C-q" 'ensime-search-quit)
+    (define-key map "\C-n" 'ensime-search-next-match)
+    (define-key map "\C-p" 'ensime-search-prev-match)
+    (define-key map [(return)] 'ensime-search-choose-current-result)
+    map)
+  "Keymap used by ensime-search.")
+
+(defvar ensime-search-target-buffer-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "q" 'ensime-search-quit)
     (define-key map "\C-n" 'ensime-search-next-match)
     (define-key map "\C-p" 'ensime-search-prev-match)
     (define-key map [(return)] 'ensime-search-choose-current-result)
@@ -118,11 +128,13 @@
 
        (message "Already in ensime-search buffer")
 
+     (setq ensime-search-window-config (current-window-configuration))
+
      (setq ensime-search-target-buffer
 	   (switch-to-buffer-other-window
 	    (get-buffer-create ensime-search-target-buffer-name)))
      (setq ensime-search-target-window (selected-window))
-     (setq ensime-search-window-config (current-window-configuration))
+     (use-local-map ensime-search-target-buffer-map)
      (setq ensime-buffer-connection conn)
 
      (select-window (split-window (selected-window) (- (window-height) 4)))
@@ -171,7 +183,7 @@
 	     (get-buffer ensime-search-buffer-name))
     (switch-to-buffer ensime-search-buffer-name)
     (let ((ensime-dispatching-connection ensime-buffer-connection))
-      (kill-buffer-and-window)
+      (ensime-search-quit)
       (let* ((r ensime-search-current-selected-result)
 	     (item (ensime-search-result-data r)))
 
@@ -356,9 +368,9 @@
     (erase-buffer)
 
     (ensime-insert-with-face
-     (concat "Enter a type or method name. "
-	     "Use C-n and C-p to navigate results. "
-	     "RETURN to select.")
+     (concat "Enter space-separated keywords. "
+	     "C-n, C-p to navigate. "
+	     "RETURN to choose. C-q to quit.")
      'font-lock-constant-face)
     (insert "\n\n")
 
@@ -371,21 +383,11 @@
       ;; Save this for later use, for next/prev actions
       (setf (ensime-search-result-summary-start r) (point))
 
-      (let ((p (point)))
+      (let ((p (point))
+	    (text (ensime-search-result-summary r)))
 	;; Insert the actual text, highlighting the matched substring
-	(insert (format "%s  \n" (ensime-search-result-summary r)))
-	;;	(add-text-properties
-	;;	 (+ p (ensime-search-result-match-summary-offset r))
-	;;	 (+ p (ensime-search-result-match-summary-offset r)
-	;;	    (ensime-search-result-match-length r))
-	;;	 '(comment nil face font-lock-keyword-face))
-	)
-
-      ;; Insert metadata
-      ;;      (when-let (m (ensime-search-result-metadata r))
-      ;;	(ensime-insert-with-face
-      ;;	 (format " %s\n" m)
-      ;;	 'font-lock-comment-face))
+	(insert (format "%s  \n" text))
+	(ensime-search-highlight-matches text p))
 
       ;; Insert filename
       (when-let (f (ensime-search-result-match-file-name r))
@@ -398,6 +400,19 @@
     (setq buffer-read-only t)
     (ensime-search-update-result-selection)
     ))
+
+
+(defun ensime-search-highlight-matches (text start-pt)
+  (let ((keywords (split-string ensime-search-text " ")))
+    (dolist (key keywords)
+      (let ((start (string-match key text))
+	    (len (length key)))
+	(when (integerp start)
+	  (add-text-properties
+	   (+ start-pt start)
+	   (+ start-pt start len)
+	   '(comment nil face font-lock-keyword-face))))
+      )))
 
 
 
