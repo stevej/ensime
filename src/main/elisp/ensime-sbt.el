@@ -125,14 +125,23 @@
       (ensime-set-query-on-exit-flag proc))))
 
 (defun ensime-sbt-switch ()
-  "Switch to the sbt shell (create if necessary) if or if already there, back."
+  "Switch to the sbt shell (create if necessary) if or if already there, back.
+   If already there but process is dead, start new process."
   (interactive)
-  (if (equal (ensime-sbt-build-buffer-name) (buffer-name))
+  (let ((sbt-buf (ensime-sbt-build-buffer-name)))
+  (if (equal sbt-buf (buffer-name))
       (switch-to-buffer-other-window (other-buffer))
-    (if (get-buffer (ensime-sbt-build-buffer-name))
-	(switch-to-buffer-other-window (ensime-sbt-build-buffer-name))
+    (if (get-buffer sbt-buf)
+        (cond ((ensime-sbt-process-live-p)
+               (switch-to-buffer-other-window sbt-buf))
+              (t (kill-buffer sbt-buf)
+                 (ensime-sbt)))
       (ensime-sbt)))
-  (goto-char (point-max)))
+  (goto-char (point-max))))
+
+(defun ensime-sbt-process-live-p (buffer-name)
+  "Check if process associated buffer is running."
+  (comint-check-proc buffer-name))
 
 (defun ensime-sbt-clear ()
   "Clear (erase) the SBT buffer."
