@@ -342,6 +342,9 @@
       )))
 
 (defun ensime-config-maybe-set-active-sbt-subproject (config)
+  "If the sbt-subprojects key exists in the config, prompt the
+ user for the desired subproject, and add an sbt-active-subproject
+ value to the config."
   (when-let (sps (plist-get config :sbt-subprojects))
     (let* ((options
 	    (mapcar
