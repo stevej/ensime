@@ -346,22 +346,30 @@
  user for the desired subproject, and add an sbt-active-subproject
  value to the config."
   (when-let (sps (plist-get config :sbt-subprojects))
-    (let* ((options
-	    (mapcar
-	     (lambda (sp)
-	       (let ((nm (plist-get sp :name)))
-		 `(,nm . ,nm)))  sps))
-	   (keys (mapcar (lambda (opt) (car opt)) options)))
-      (let ((key (when keys
-		   (completing-read
-		    (concat "Which sbt subproject? ("
-			    (mapconcat #'identity keys ", ")
-			    "): ")
-		    keys nil t (car keys)))))
-	(when-let (chosen (cdr (assoc key options)))
-	  (ensime-set-key config :sbt-active-subproject chosen)
-	  ))
-      )))
+
+    ;; For testing purposes..
+    (if ensime-prefer-noninteractive
+	(ensime-set-key
+	 config :sbt-active-subproject
+	 (plist-get (car sps) :name))
+
+      ;; Otherwise prompt the user
+      (let* ((options
+	      (mapcar
+	       (lambda (sp)
+		 (let ((nm (plist-get sp :name)))
+		   `(,nm . ,nm)))  sps))
+	     (keys (mapcar (lambda (opt) (car opt)) options)))
+	(let ((key (when keys
+		     (completing-read
+		      (concat "Which sbt subproject? ("
+			      (mapconcat #'identity keys ", ")
+			      "): ")
+		      keys nil t (car keys)))))
+	  (when-let (chosen (cdr (assoc key options)))
+	    (ensime-set-key config :sbt-active-subproject chosen)
+	    ))
+	))))
 
 
 

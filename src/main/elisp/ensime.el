@@ -657,6 +657,7 @@ If not, message the user."
            (ensime-cancel-connect-retry-timer)
            (let ((port (ensime-read-swank-port))
                  (args (ensime-inferior-server-args server-proc)))
+	     (message "Read port %S from %S." port port-file)
              (ensime-delete-swank-port-file 'message)
              (let ((c (ensime-connect host port)))
 
@@ -1216,14 +1217,12 @@ The functions are called with the process as their argument.")
 
 (defun ensime-net-close (process &optional debug)
   (setq ensime-net-processes (remove process ensime-net-processes))
-  (cond (debug
-         (set-process-sentinel process 'ignore)
-         (set-process-filter process 'ignore)
-         (delete-process process))
-        (t
-         (run-hook-with-args 'ensime-net-process-close-hooks process)
-         ;; killing the buffer also closes the socket
-         (kill-buffer (process-buffer process)))))
+  (set-process-sentinel process 'ignore)
+  (set-process-filter process 'ignore)
+  (delete-process process)
+  (run-hook-with-args 'ensime-net-process-close-hooks process)
+  ;; killing the buffer also closes the socket
+  (kill-buffer (process-buffer process)))
 
 (defun ensime-net-sentinel (process message)
   (message "Server connection closed unexpectedly: %s" message)
@@ -1242,16 +1241,19 @@ The functions are called with the process as their argument.")
 (defun ensime-process-available-input (process)
   "Process all complete messages that have arrived from Lisp."
   (with-current-buffer (process-buffer process)
-    (while (ensime-net-have-input-p)
+    (while (and
+	    (buffer-live-p (process-buffer process))
+	    (ensime-net-have-input-p))
       (let ((event (ensime-net-read-or-lose process))
-            (ok nil))
-        (ensime-log-event event)
-        (unwind-protect
-            (save-current-buffer
-              (ensime-dispatch-event event process)
-              (setq ok t))
-          (unless ok
-            (ensime-run-when-idle 'ensime-process-available-input process)))))))
+	    (ok nil))
+	(ensime-log-event event)
+	(unwind-protect
+	    (save-current-buffer
+	      (ensime-dispatch-event event process)
+	      (setq ok t))
+	  (unless ok
+	    (ensime-run-when-idle
+	     'ensime-process-available-input process)))))))
 
 (defun ensime-net-have-input-p ()
   "Return true if a complete message is available."
@@ -1270,7 +1272,7 @@ The functions are called with the process as their argument.")
       (ensime-net-read)
     (error
      (debug 'error error)
-     (ensime-net-close process t)
+     (ensime-net-close process)
      (error "net-read error: %S" error))))
 
 (defun ensime-net-read ()
@@ -1503,7 +1505,10 @@ overrides `ensime-buffer-connection'.")
 (defun ensime-connected-p ()
   "Return t if ensime-current-connection would return non-nil.
  Return nil otherwise."
-  (not (null (ensime-current-connection))))
+  (let ((conn (ensime-current-connection)))
+    (and conn
+	 (buffer-live-p (process-buffer conn)))))
+
 
 (defun ensime-connection ()
   "Return the connection to use for Lisp interaction.
@@ -1800,8 +1805,13 @@ versions cannot deal with that."
       sexp
     ((:ok result)
      (when cont
-       (set-buffer buffer)
-       (funcall cont result)))
+       (if (buffer-live-p buffer)
+	   (progn
+	     (set-buffer buffer)
+	     (funcall cont result))
+	 (message
+	  "ENSIME: Asynchronous return could not find originating buffer.")
+	 )))
     ((:abort code reason)
      (message "Asynchronous RPC Aborted: %s" reason)))
   ;; Guard against arbitrary return values which once upon a time
