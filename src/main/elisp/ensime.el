@@ -113,8 +113,7 @@
   :type 'integer
   :group 'ensime-server)
 
-(defcustom ensime-default-server-cmd
-  (if (eq system-type 'windows-nt)  "bin/server.bat" "bin/server.sh")
+(defcustom ensime-default-server-cmd "bin/server"
   "Command to launch server process."
   :type 'string
   :group 'ensime-server)
