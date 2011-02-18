@@ -2612,12 +2612,11 @@ with the current project's dependencies loaded. Returns a property list."
      ) continue))
 
 (defun ensime-rpc-async-public-symbol-search
-  (names max-results case-sens continue)
+  (names max-results continue)
   (ensime-eval-async
    `(swank:public-symbol-search
      ,names
      ,max-results
-     ,case-sens
      ) continue))
 
 (defun ensime-rpc-uses-of-symbol-at-point ()
