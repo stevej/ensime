@@ -1907,6 +1907,8 @@ This idiom is preferred over `lexical-let'."
           ((:compiler-ready status)
            (message "ENSIME ready. %s" (ensime-random-words-of-encouragement))
            (ensime-event-sig :compiler-ready status))
+          ((:indexer-ready status)
+           (ensime-event-sig :indexer-ready status))
           ((:typecheck-result result)
            (ensime-handle-typecheck-result result))
           ((:channel-send id msg)

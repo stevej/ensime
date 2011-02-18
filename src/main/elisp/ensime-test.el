@@ -1076,12 +1076,15 @@
     "Test interactive search."
     (let* ((proj (ensime-create-tmp-project
 		  ensime-tmp-project-hello-world
+		  '(:disable-index-on-startup nil)
 		  )))
       (ensime-test-init-proj proj))
 
     ((:connected connection-info))
 
-    ((:compiler-ready status)
+    ((:compiler-ready status))
+
+    ((:indexer-ready status)
      (ensime-test-with-proj
       (proj src-files)
       (ensime-search)
@@ -1096,9 +1099,31 @@
 	(ensime-assert (search-forward "com.helloworld.HelloWorld" nil t))
 	(goto-char 1)
 	(ensime-assert (search-forward "com.helloworld.HelloWorld$.foo" nil t)))
+
+      (with-current-buffer ensime-search-buffer-name
+	(erase-buffer)
+	(insert "java util vector")
+	)
+      ))
+
+    ((:search-buffer-populated val)
+     (ensime-test-with-proj
+      (proj src-files)
+
+      (with-current-buffer ensime-search-target-buffer-name
+	(goto-char 1)
+	(ensime-assert (search-forward-regexp "java.util.Vector[^a-Z]" nil t))
+	(goto-char 1)
+	(ensime-assert (search-forward "java.util.Vector.set" nil t))
+	(goto-char 1)
+	(ensime-assert (search-forward "java.util.Vector.addAll" nil t)))
+
       (ensime-search-quit)
       (ensime-test-cleanup proj)
       ))
+
+
+
     )
 
 
