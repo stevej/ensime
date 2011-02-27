@@ -2539,6 +2539,15 @@ formatting library."
        (ensime-revert-visited-files (list ,buffer-file-name) t)
        ))))
 
+;; Expand selection
+
+(defun ensime-expand-selection ()
+  "Expand selection to the next widest syntactic context."
+  (interactive)
+  (let ((region (ensime-rpc-expand-selection buffer-file-name (point) (point))))
+    (set-mark-command (plist-get region :start))
+    (goto-char (+ (plist-get region :end) 1))))
+
 ;; RPC Helpers
 
 (defun ensime-debug-unit-info-at-point ()
@@ -2596,6 +2605,9 @@ with the current project's dependencies loaded. Returns a property list."
 
 (defun ensime-rpc-async-format-files (file-names continue)
   (ensime-eval-async `(swank:format-source ,file-names) continue))
+
+(defun ensime-rpc-expand-selection (file-name start end)
+  (ensime-eval `(swank:expand-selection ,file-name ,start ,end)))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
   (ensime-eval
