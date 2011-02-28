@@ -2565,7 +2565,7 @@ formatting library."
 	     (ensime-selection-stack (list (list (point) (point))))
 	     (expand-again-key 46)
 	     (contract-key 44))
-	(ensime-expand-selection)
+	(ensime-expand-selection (point) (point))
 	(while continue
 	  (message "(Type . to expand again. Type , to contract.)")
 	  (let ((evt (read-event)))
@@ -2574,7 +2574,7 @@ formatting library."
 	     ((equal expand-again-key evt)
 	      (progn
 		(clear-this-command-keys t)
-		(ensime-expand-selection)
+		(ensime-expand-selection (mark) (point))
 		(setq last-input-event nil)))
 
 	     ((equal contract-key evt)
@@ -2590,20 +2590,19 @@ formatting library."
 
     (ensime-clear-selection-overlay)))
 
-(defun ensime-set-selection (start end &optional nopad)
+(defun ensime-set-selection (start end)
   "Helper to set selection state."
-  (let ((end (if nopad end (+ 1 end))))
     (goto-char start)
     (command-execute 'set-mark-command)
     (goto-char end)
-    (ensime-set-selection-overlay start end)))
+    (ensime-set-selection-overlay start end))
 
-(defun ensime-expand-selection ()
+(defun ensime-expand-selection (start end)
   "Expand selection to the next widest syntactic context."
   (let* ((range (ensime-rpc-expand-selection
-		 buffer-file-name (point) (point)))
-	 (start (plist-get range :start))
-	 (end (plist-get range :end)))
+		 buffer-file-name (- start 1) (- end 1)))
+	 (start (+ (plist-get range :start) 1))
+	 (end (+ (plist-get range :end) 1)))
     (ensime-set-selection start end)
     (push (list start end) ensime-selection-stack)
     ))
@@ -2615,11 +2614,7 @@ formatting library."
     (when range
       (let ((start (car range))
 	    (end (cadr range)))
-	(ensime-set-selection start end
-			      (and
-			       (eq 1 (length ensime-selection-stack))
-			       (eq end start))
-			      )))))
+	(ensime-set-selection start end)))))
 
 
 ;; RPC Helpers
