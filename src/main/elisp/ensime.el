@@ -224,6 +224,7 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-v f") 'ensime-format-source)
       (define-key prefix-map (kbd "C-v u") 'ensime-undo-peek)
       (define-key prefix-map (kbd "C-v v") 'ensime-search)
+      (define-key prefix-map (kbd "C-v .") 'ensime-expand-selection-command)
 
       (define-key prefix-map (kbd "C-d d") 'ensime-db-start)
       (define-key prefix-map (kbd "C-d b") 'ensime-db-set-break)
@@ -299,6 +300,7 @@ Do not show 'Writing..' message."
      ["Pop definition stack" ensime-pop-find-definition-stack]
      ["Backward compilation note" ensime-backward-note]
      ["Forward compilation note" ensime-forward-note]
+     ["Expand selection" ensime-expand-selection-command]
      ["Search" ensime-search])
 
     ("Debugger"
@@ -2541,12 +2543,84 @@ formatting library."
 
 ;; Expand selection
 
-(defun ensime-expand-selection ()
+(defvar ensime-selection-overlay nil)
+(defvar ensime-selection-stack nil)
+
+(defun ensime-set-selection-overlay (start end)
+  "Set the current selection overlay, creating if needed."
+  (ensime-clear-selection-overlay)
+  (setq ensime-selection-overlay
+	(ensime-make-overlay start end nil 'region nil)))
+
+(defun ensime-clear-selection-overlay ()
+  (when (and ensime-selection-overlay
+	     (overlayp ensime-selection-overlay))
+    (delete-overlay ensime-selection-overlay)))
+
+(defun ensime-expand-selection-command ()
   "Expand selection to the next widest syntactic context."
   (interactive)
-  (let ((region (ensime-rpc-expand-selection buffer-file-name (point) (point))))
-    (set-mark-command (plist-get region :start))
-    (goto-char (+ (plist-get region :end) 1))))
+  (unwind-protect
+      (let* ((continue t)
+	     (ensime-selection-stack (list (list (point) (point))))
+	     (expand-again-key 46)
+	     (contract-key 44))
+	(ensime-expand-selection)
+	(while continue
+	  (message "(Type . to expand again. Type , to contract.)")
+	  (let ((evt (read-event)))
+	    (cond
+
+	     ((equal expand-again-key evt)
+	      (progn
+		(clear-this-command-keys t)
+		(ensime-expand-selection)
+		(setq last-input-event nil)))
+
+	     ((equal contract-key evt)
+	      (progn
+		(clear-this-command-keys t)
+		(ensime-contract-selection)
+		(setq last-input-event nil)))
+	     (t
+	      (setq continue nil)))))
+	(when last-input-event
+	  (clear-this-command-keys t)
+	  (setq unread-command-events (list last-input-event))))
+
+    (ensime-clear-selection-overlay)))
+
+(defun ensime-set-selection (start end &optional nopad)
+  "Helper to set selection state."
+  (let ((end (if nopad end (+ 1 end))))
+    (goto-char start)
+    (command-execute 'set-mark-command)
+    (goto-char end)
+    (ensime-set-selection-overlay start end)))
+
+(defun ensime-expand-selection ()
+  "Expand selection to the next widest syntactic context."
+  (let* ((range (ensime-rpc-expand-selection
+		 buffer-file-name (point) (point)))
+	 (start (plist-get range :start))
+	 (end (plist-get range :end)))
+    (ensime-set-selection start end)
+    (push (list start end) ensime-selection-stack)
+    ))
+
+(defun ensime-contract-selection ()
+  "Contract to previous syntactic context."
+  (pop ensime-selection-stack)
+  (let ((range (car ensime-selection-stack)))
+    (when range
+      (let ((start (car range))
+	    (end (cadr range)))
+	(ensime-set-selection start end
+			      (and
+			       (eq 1 (length ensime-selection-stack))
+			       (eq end start))
+			      )))))
+
 
 ;; RPC Helpers
 
