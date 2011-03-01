@@ -808,6 +808,7 @@
     )
 
 
+
    (ensime-async-test
     "Test file with package name (this broke when -sourcepath param was used)."
     (let* ((proj (ensime-create-tmp-project
@@ -1151,6 +1152,56 @@
       (ensime-test-cleanup proj t)
       ))
     )
+
+
+   (ensime-async-test
+    "Test expand-selection."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name
+		     "pack/a.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package pack"
+				 "class A(value:String){"
+				 "def hello(){"
+				 "  println(/*1*/\"hello\")"
+				 "}"
+				 "}"
+				 )
+		     )
+		    ))))
+      (ensime-test-init-proj proj))
+
+    ((:connected connection-info))
+
+    ((:compiler-ready status)
+     (ensime-test-with-proj
+      (proj src-files)
+      (ensime-test-eat-mark "1")
+      (ensime-save-buffer-no-hooks)
+
+      ;; Expand once to include entire string
+      (let* ((pt (point))
+	     (range (ensime-rpc-expand-selection
+		     buffer-file-name
+		     pt pt))
+	     (start1 (plist-get range :start))
+	     (end1 (plist-get range :end)))
+	(ensime-assert (= start1 pt))
+	(ensime-assert (> end1 pt))
+
+	;; Expand again to include entire println call
+	(let* ((range (ensime-rpc-expand-selection
+		       buffer-file-name
+		       start1 end1))
+	       (start2 (plist-get range :start))
+	       (end2 (plist-get range :end)))
+	  (ensime-assert (< start2 start1))
+	  (ensime-assert (> end2 end1))))
+
+      (ensime-test-cleanup proj)
+      ))
+    )
+
 
    ))
 
