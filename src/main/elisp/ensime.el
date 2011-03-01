@@ -2531,15 +2531,15 @@ any buffer visiting the given file."
 
 (defun ensime-format-source ()
   "Format the source in the current buffer using the Scalariform
-formatting library."
+ formatting library."
   (interactive)
-  (ensime-assert-buffer-saved-interactive
-   (message "Formatting...")
-   (ensime-rpc-async-format-files
-    (list buffer-file-name)
-    `(lambda (result)
-       (ensime-revert-visited-files (list ,buffer-file-name) t)
-       ))))
+  (if (buffer-modified-p) (ensime-write-buffer nil t))
+  (message "Formatting...")
+  (ensime-rpc-async-format-files
+   (list buffer-file-name)
+   `(lambda (result)
+      (ensime-revert-visited-files (list ,buffer-file-name) t)
+      )))
 
 ;; Expand selection
 
@@ -2560,6 +2560,7 @@ formatting library."
 (defun ensime-expand-selection-command ()
   "Expand selection to the next widest syntactic context."
   (interactive)
+  (if (buffer-modified-p) (ensime-write-buffer nil t))
   (unwind-protect
       (let* ((continue t)
 	     (ensime-selection-stack (list (list (point) (point))))
@@ -2592,17 +2593,17 @@ formatting library."
 
 (defun ensime-set-selection (start end)
   "Helper to set selection state."
-    (goto-char start)
-    (command-execute 'set-mark-command)
-    (goto-char end)
-    (ensime-set-selection-overlay start end))
+  (goto-char start)
+  (command-execute 'set-mark-command)
+  (goto-char end)
+  (ensime-set-selection-overlay start end))
 
 (defun ensime-expand-selection (start end)
   "Expand selection to the next widest syntactic context."
   (let* ((range (ensime-rpc-expand-selection
-		 buffer-file-name (- start 1) (- end 1)))
-	 (start (+ (plist-get range :start) 1))
-	 (end (+ (plist-get range :end) 1)))
+		 buffer-file-name start end))
+	 (start (plist-get range :start))
+	 (end (plist-get range :end)))
     (ensime-set-selection start end)
     (push (list start end) ensime-selection-stack)
     ))
@@ -2676,7 +2677,14 @@ with the current project's dependencies loaded. Returns a property list."
   (ensime-eval-async `(swank:format-source ,file-names) continue))
 
 (defun ensime-rpc-expand-selection (file-name start end)
-  (ensime-eval `(swank:expand-selection ,file-name ,start ,end)))
+  (ensime-internalize-offset-fields
+   (ensime-eval `(swank:expand-selection
+		  ,file-name
+		  ,(ensime-externalize-offset start)
+		  ,(ensime-externalize-offset end)))
+   :start
+   :end
+   ))
 
 (defun ensime-rpc-name-completions-at-point (&optional prefix is-constructor)
   (ensime-eval
@@ -3531,13 +3539,25 @@ It should be used for \"background\" messages such as argument lists."
  Additionally, in buffers with windows-encoded line-endings,
  add the appropriate number of CRs to compensate for characters
  that are hidden by Emacs."
-  (+ (point) (- ensime-ch-fix)
+  (ensime-externalize-offset (point)))
+
+(defun ensime-externalize-offset (offset)
+  (+ offset (- ensime-ch-fix)
      (if (eq 1 (coding-system-eol-type buffer-file-coding-system))
-	 (- (line-number-at-pos) 1)
+	 (- (line-number-at-pos offset) 1)
        0)
      ))
 
+(defun ensime-internalize-offset (offset)
+  (+ offset ensime-ch-fix))
 
+(defun ensime-internalize-offset-fields (plist &rest keys)
+  (dolist (key keys)
+    (setq plist (plist-put
+		 plist key
+		 (ensime-internalize-offset
+		  (plist-get plist key)))))
+  plist)
 
 ;; Popup Buffer
 
