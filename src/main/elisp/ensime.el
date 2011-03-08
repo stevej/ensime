@@ -2417,6 +2417,58 @@ any buffer visiting the given file."
 	  (message "No issues found."))))
    ))
 
+
+(defun ensime-sym-at-point ()
+  "Return information about the symbol at point. If not looking at a
+ symbol, return nil."
+  (let ((start nil)
+	(end nil))
+
+    (when (thing-at-point 'symbol)
+
+      (save-excursion
+	(search-backward-regexp "\\W" nil t)
+	(setq start (+ (point) 1)))
+      (save-excursion
+	(search-forward-regexp "\\W" nil t)
+	(setq end (- (point) 1)))
+      (list :start start
+	    :end end
+	    :name (buffer-substring-no-properties start end)))))
+
+
+;; Insert import
+
+(defun ensime-insert-import (qualified-name)
+  "A simple, hacky import adder."
+  (goto-char (point-min))
+  (search-forward-regexp "^\\s-*package\\s-" nil t)
+  (goto-char (point-at-eol))
+  (newline)
+  (insert (format "import %s" qualified-name)))
+
+
+(defun ensime-fix-import ()
+  "Suggest possible imports of the qualified name at point.
+ If user selects and import, add it to the import list."
+  (interactive)
+  (let* ((sym (ensime-sym-at-point))
+	 (name (plist-get sym :name))
+	 (suggestions (ensime-rpc-import-suggestions-at-point (list name))))
+    (when suggestions
+      (let* ((names (mapcar (lambda (s) (plist-get s :name))
+			    (apply 'append suggestions)))
+	     (selected-name
+	      (popup-menu*
+	       names :point (point))))
+	(when selected-name
+	  (save-excursion
+	    (ensime-insert-import selected-name))
+	  (ensime-typecheck-current-file)
+	  (message "Inserted import at top of file.")
+	  )))
+    ))
+
 ;; Source Formatting
 
 (defun ensime-format-source ()
@@ -2586,13 +2638,13 @@ with the current project's dependencies loaded. Returns a property list."
      ,(or prefix "")
      ,is-constructor)))
 
-(defun ensime-rpc-async-import-suggestions-at-point (names continue)
-  (ensime-eval-async
+(defun ensime-rpc-import-suggestions-at-point (names)
+  (ensime-eval
    `(swank:import-suggestions
      ,buffer-file-name
      ,(ensime-computed-point)
      ,names
-     ) continue))
+     )))
 
 (defun ensime-rpc-async-public-symbol-search
   (names max-results continue)

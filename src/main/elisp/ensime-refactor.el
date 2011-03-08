@@ -43,27 +43,6 @@
   (message "Refactoring failed: %s" (plist-get result :reason)))
 
 
-(defun ensime-refactor-sym-at-point ()
-  "Return information about the symbol at point. If not looking at a
- symbol, return nil."
-  (let ((start nil)
-	(end nil))
-
-    (when (thing-at-point 'symbol)
-
-      (save-excursion
-	(search-backward-regexp "\\W" nil t)
-	(setq start (+ (point) 1)))
-      (save-excursion
-	(search-forward-regexp "\\W" nil t)
-	(setq end (- (point) 1)))
-      (list :start start
-	    :end end
-	    :name (buffer-substring-no-properties start end)))))
-
-
-
-
 (defun ensime-refactor-organize-imports ()
   "Do a syntactic organization of the imports in the current buffer."
   (interactive)
@@ -75,7 +54,7 @@
 (defun ensime-refactor-rename (&optional new-name)
   "Rename a symbol, project-wide."
   (interactive)
-  (let ((sym (ensime-refactor-sym-at-point)))
+  (let ((sym (ensime-sym-at-point)))
     (if sym
 	(let* ((start (plist-get sym :start))
 	       (end (plist-get sym :end))
@@ -94,7 +73,7 @@
 (defun ensime-refactor-inline-local ()
   "Get rid of an intermediate variable."
   (interactive)
-  (let ((sym (ensime-refactor-sym-at-point)))
+  (let ((sym (ensime-sym-at-point)))
     (if sym
 	(let* ((start (plist-get sym :start))
 	       (end (plist-get sym :end)))
