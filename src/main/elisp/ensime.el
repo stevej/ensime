@@ -161,6 +161,12 @@ argument is supplied) is a .scala or .java file."
     (when file
       (integerp (string-match "\\(?:\\.scala$\\|\\.java$\\)" file)))))
 
+(defun ensime-visiting-java-file-p ()
+  (string-match "\\.java$" buffer-file-name))
+
+(defun ensime-visiting-scala-file-p ()
+  (string-match "\\.scala$" buffer-file-name))
+
 (defun ensime-scala-mode-hook ()
   "Conveniance hook function that just starts ensime-mode."
   (ensime-mode 1))
@@ -226,6 +232,7 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-v u") 'ensime-undo-peek)
       (define-key prefix-map (kbd "C-v v") 'ensime-search)
       (define-key prefix-map (kbd "C-v .") 'ensime-expand-selection-command)
+      (define-key prefix-map (kbd "C-v m") 'ensime-import-type-at-point)
 
       (define-key prefix-map (kbd "C-d d") 'ensime-db-start)
       (define-key prefix-map (kbd "C-d b") 'ensime-db-set-break)
@@ -289,6 +296,7 @@ Do not show 'Writing..' message."
 
     ("Refactor"
      ["Organize imports" ensime-refactor-organize-imports]
+     ["Import type at point" ensime-import-type-at-point]
      ["Rename" ensime-refactor-rename]
      ["Extract local val" ensime-refactor-extract-local]
      ["Extract method" ensime-refactor-extract-method]
@@ -2445,24 +2453,37 @@ any buffer visiting the given file."
   (search-forward-regexp "^\\s-*package\\s-" nil t)
   (goto-char (point-at-eol))
   (newline)
-  (insert (format "import %s" qualified-name)))
+  (insert (format (cond ((ensime-visiting-scala-file-p) "import %s")
+			((ensime-visiting-java-file-p) "import %s;"))
+		  qualified-name)))
 
 
-(defun ensime-fix-import ()
+(defun ensime-import-type-at-point ()
   "Suggest possible imports of the qualified name at point.
  If user selects and import, add it to the import list."
   (interactive)
   (let* ((sym (ensime-sym-at-point))
 	 (name (plist-get sym :name))
-	 (suggestions (ensime-rpc-import-suggestions-at-point (list name))))
+	 (name-start (plist-get sym :start))
+	 (name-end (plist-get sym :end))
+	 (suggestions (ensime-rpc-import-suggestions-at-point (list name) 10)))
     (when suggestions
-      (let* ((names (mapcar (lambda (s) (plist-get s :name))
-			    (apply 'append suggestions)))
+      (let* ((names (mapcar
+		     (lambda (s)
+		       (propertize (plist-get s :name)
+				   'local-name
+				   (plist-get s :local-name)))
+		     (apply 'append suggestions)))
 	     (selected-name
 	      (popup-menu*
 	       names :point (point))))
 	(when selected-name
 	  (save-excursion
+	    (when (not (equal selected-name name))
+	      (goto-char name-start)
+	      (delete-char (- name-end name-start))
+	      (insert (get-text-property
+		       0 'local-name selected-name)))
 	    (ensime-insert-import selected-name))
 	  (ensime-typecheck-current-file)
 	  (message "Inserted import at top of file.")
@@ -2638,12 +2659,13 @@ with the current project's dependencies loaded. Returns a property list."
      ,(or prefix "")
      ,is-constructor)))
 
-(defun ensime-rpc-import-suggestions-at-point (names)
+(defun ensime-rpc-import-suggestions-at-point (names max-results)
   (ensime-eval
    `(swank:import-suggestions
      ,buffer-file-name
      ,(ensime-computed-point)
      ,names
+     ,max-results
      )))
 
 (defun ensime-rpc-async-public-symbol-search
