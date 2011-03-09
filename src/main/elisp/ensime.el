@@ -232,7 +232,6 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-v u") 'ensime-undo-peek)
       (define-key prefix-map (kbd "C-v v") 'ensime-search)
       (define-key prefix-map (kbd "C-v .") 'ensime-expand-selection-command)
-      (define-key prefix-map (kbd "C-v m") 'ensime-import-type-at-point)
 
       (define-key prefix-map (kbd "C-d d") 'ensime-db-start)
       (define-key prefix-map (kbd "C-d b") 'ensime-db-set-break)
@@ -249,6 +248,7 @@ Do not show 'Writing..' message."
       (define-key prefix-map (kbd "C-r l") 'ensime-refactor-extract-local)
       (define-key prefix-map (kbd "C-r m") 'ensime-refactor-extract-method)
       (define-key prefix-map (kbd "C-r i") 'ensime-refactor-inline-local)
+      (define-key prefix-map (kbd "C-r t") 'ensime-import-type-at-point)
 
       (define-key prefix-map (kbd "C-b b") 'ensime-builder-build)
       (define-key prefix-map (kbd "C-b r") 'ensime-builder-rebuild)
