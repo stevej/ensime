@@ -2487,11 +2487,13 @@ any buffer visiting the given file."
 	    (let ((qual-name
 		   (ensime-strip-dollar-signs
 		    (ensime-kill-txt-props selected-name))))
-	    (if (ensime-visiting-scala-file-p)
-		(ensime-refactor-add-import qual-name)
-	      (ensime-insert-import
-	       (ensime-kill-txt-props qual-name))
-	      )))
+	      (if (ensime-visiting-scala-file-p)
+		  (ensime-refactor-add-import qual-name)
+		(progn
+		  (ensime-insert-import
+		   (ensime-kill-txt-props qual-name))
+		  (ensime-typecheck-current-file))
+		)))
 	  )))
     ))
 
