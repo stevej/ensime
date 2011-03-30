@@ -1046,7 +1046,7 @@ absolute path to f."
   "files is a list of buffer-file-names to revert or lists of the form
  (visited-file-name disk-file-name) where buffer visiting visited-file-name
  will be reverted to the state of disk-file-name."
-  (let ((line (ensime-current-line)))
+  (let ((pt (point)))
     (save-excursion
       (dolist (f files)
 	(let* ((dest (cond ((stringp f) f)
@@ -1060,7 +1060,7 @@ absolute path to f."
 	      (when typecheck
 		(ensime-typecheck-current-file)))
 	    ))))
-    (goto-line line)
+    (goto-char pt)
     ))
 
 (defvar ensime-net-processes nil
@@ -2045,7 +2045,7 @@ any buffer visiting the given file."
 	 (next-note (ensime-next-note-in-current-buffer notes forward)))
     (if next-note
 	(progn
-	  (goto-char (ensime-note-beg next-note))
+	  (goto-char (+ ensime-ch-fix (ensime-note-beg next-note)))
 	  (message (ensime-note-message next-note)))
       (message (concat
 		"No more compilation issues in this buffer. "
@@ -2484,9 +2484,14 @@ any buffer visiting the given file."
 	      (delete-char (- name-end name-start))
 	      (insert (get-text-property
 		       0 'local-name selected-name)))
-	    (ensime-insert-import selected-name))
-	  (ensime-typecheck-current-file)
-	  (message "Inserted import at top of file.")
+	    (let ((qual-name
+		   (ensime-strip-dollar-signs
+		    (ensime-kill-txt-props selected-name))))
+	    (if (ensime-visiting-scala-file-p)
+		(ensime-refactor-add-import qual-name)
+	      (ensime-insert-import
+	       (ensime-kill-txt-props qual-name))
+	      )))
 	  )))
     ))
 
@@ -2738,9 +2743,15 @@ with the current project's dependencies loaded. Returns a property list."
   (ensime-eval
    `(swank:exec-undo ,id)))
 
-(defun ensime-rpc-refactor-perform (proc-id refactor-type params continue)
-  (ensime-eval-async
-   `(swank:perform-refactor ,proc-id , refactor-type ,params) continue))
+(defun ensime-rpc-refactor-perform
+  (proc-id refactor-type params non-interactive continue blocking)
+  (if blocking
+      (ensime-eval
+       `(swank:perform-refactor
+	 ,proc-id ,refactor-type ,params ,(not non-interactive)))
+    (ensime-eval-async
+     `(swank:perform-refactor
+       ,proc-id ,refactor-type ,params ,(not non-interactive)) continue)))
 
 (defun ensime-rpc-refactor-exec (proc-id refactor-type continue)
   (ensime-eval-async `(swank:exec-refactor ,proc-id , refactor-type) continue))
