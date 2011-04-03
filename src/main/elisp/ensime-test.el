@@ -1122,9 +1122,48 @@
       (ensime-search-quit)
       (ensime-test-cleanup proj)
       ))
+    )
 
 
+   (ensime-async-test
+    "Test add import."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name
+		     "pack/a.scala"
+		     :contents ,(ensime-test-concat-lines
+				 "package pack"
+				 "class A(value:String){"
+				 "def hello(){"
+				 "  println(new /*1*/ArrayList())"
+				 "}"
+				 "}"
+				 )
+		     ))
+		  '(:disable-index-on-startup
+		    nil
+		    :exclude-from-index
+		    ("com\\\\.sun\\\\..\*" "com\\\\.apple\\\\..\*"))
+		  )))
+      (ensime-test-init-proj proj))
 
+    ((:connected connection-info))
+    ((:compiler-ready status))
+
+    ((:indexer-ready status)
+     (ensime-test-with-proj
+      (proj src-files)
+      (goto-char 1)
+      (ensime-assert (null (search-forward "import java.util.ArrayList" nil t)))
+
+      (ensime-test-eat-mark "1")
+      (forward-char 2)
+      (ensime-import-type-at-point t)
+
+      (goto-char 1)
+      (ensime-assert (search-forward "import java.util.ArrayList" nil t))
+
+      (ensime-test-cleanup proj)
+      ))
     )
 
 

@@ -2445,20 +2445,33 @@ any buffer visiting the given file."
 	    :name (buffer-substring-no-properties start end)))))
 
 
-;; Insert import
 
 (defun ensime-insert-import (qualified-name)
-  "A simple, hacky import adder."
-  (goto-char (point-min))
-  (search-forward-regexp "^\\s-*package\\s-" nil t)
-  (goto-char (point-at-eol))
-  (newline)
-  (insert (format (cond ((ensime-visiting-scala-file-p) "import %s")
-			((ensime-visiting-java-file-p) "import %s;"))
-		  qualified-name)))
+  "A simple, hacky import insertion."
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward-regexp "^\\s-*package\\s-" nil t)
+    (goto-char (point-at-eol))
+
+    ;; Advance past all imports that should sort before
+    ;; the new one lexicographically.
+    (while (progn
+	     (if (looking-at "[\n\t ]*import\\s-\\(.+\\)\n")
+		 (let ((imported-name (match-string 1)))
+		   (string< imported-name qualified-name)
+		   )))
+      (search-forward-regexp "import" nil t)
+      (goto-char (point-at-eol)))
+
+    (newline)
+    (insert (format (cond ((ensime-visiting-scala-file-p) "import %s")
+			  ((ensime-visiting-java-file-p) "import %s;"))
+		    qualified-name))
+    (indent-region (point-at-bol) (point-at-eol))))
 
 
-(defun ensime-import-type-at-point ()
+
+(defun ensime-import-type-at-point (&optional non-interactive)
   "Suggest possible imports of the qualified name at point.
  If user selects and import, add it to the import list."
   (interactive)
@@ -2475,8 +2488,9 @@ any buffer visiting the given file."
 				   (plist-get s :local-name)))
 		     (apply 'append suggestions)))
 	     (selected-name
-	      (popup-menu*
-	       names :point (point))))
+	      (if non-interactive (car names)
+		(popup-menu*
+		 names :point (point)))))
 	(when selected-name
 	  (save-excursion
 	    (when (not (equal selected-name name))
@@ -2487,13 +2501,9 @@ any buffer visiting the given file."
 	    (let ((qual-name
 		   (ensime-strip-dollar-signs
 		    (ensime-kill-txt-props selected-name))))
-	      (if (ensime-visiting-scala-file-p)
-		  (ensime-refactor-add-import qual-name)
-		(progn
-		  (ensime-insert-import
-		   (ensime-kill-txt-props qual-name))
-		  (ensime-typecheck-current-file))
-		)))
+	      (ensime-insert-import qual-name)
+	      (ensime-typecheck-current-file)
+	      ))
 	  )))
     ))
 
