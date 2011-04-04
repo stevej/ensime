@@ -46,9 +46,27 @@
 (defun ensime-refactor-organize-imports ()
   "Do a syntactic organization of the imports in the current buffer."
   (interactive)
-  (ensime-refactor-perform
-   'organizeImports
-   `(file ,buffer-file-name)))
+  (cond ((ensime-visiting-java-file-p)
+	 (ensime-refactor-organize-java-imports))
+
+	(t
+	 (ensime-refactor-perform
+	  'organizeImports
+	  `(file ,buffer-file-name)))))
+
+(defun ensime-refactor-organize-java-imports ()
+  "Sort all import statements lexicographically."
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward-regexp "^\\s-*package\\s-" nil t)
+    (goto-char (point-at-eol))
+    (let ((p (point)))
+
+      ;; Advance past all imports
+      (while (looking-at "[\n\t ]*import\\s-\\(.+\\)\n")
+	(search-forward-regexp "import" nil t)
+	(goto-char (point-at-eol)))
+      (sort-lines nil p (point)))))
 
 
 (defun ensime-refactor-rename (&optional new-name)
