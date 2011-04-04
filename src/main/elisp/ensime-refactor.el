@@ -47,7 +47,8 @@
   "Do a syntactic organization of the imports in the current buffer."
   (interactive)
   (cond ((ensime-visiting-java-file-p)
-	 (ensime-refactor-organize-java-imports))
+	 (ensime-refactor-organize-java-imports)
+	 (message "Organized."))
 
 	(t
 	 (ensime-refactor-perform

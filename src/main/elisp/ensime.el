@@ -3013,17 +3013,43 @@ with the current project's dependencies loaded. Returns a property list."
       ;; otherwise do normal type inspection
       (ensime-rpc-inspect-type-at-point))))
 
+(defun ensime-inspect-java-type-at-point ()
+  "Use the global index to search for type at point.
+ Inspect the type selected by user."
+    (let* ((sym (ensime-sym-at-point))
+	 (name (plist-get sym :name))
+	 (name-start (plist-get sym :start))
+	 (name-end (plist-get sym :end))
+	 (suggestions (ensime-rpc-import-suggestions-at-point (list name) 10)))
+    (when suggestions
+      (let* ((names (mapcar
+		     (lambda (s)
+		       (propertize (plist-get s :name)
+				   'local-name
+				   (plist-get s :local-name)))
+		     (apply 'append suggestions)))
+	     (selected-name
+		(popup-menu*
+		 names :point (point))))
+	(when selected-name
+	  (ensime-inspect-by-path
+	   (ensime-kill-txt-props selected-name))
+	  )))))
+
 (defun ensime-inspect-type-at-point ()
   "Display a list of all the members of the type under point, sorted by
    owner type."
   (interactive)
   (let ((pack-path (ensime-package-path-at-point)))
-    ;; inspect package if package under point
-    (if pack-path (ensime-inspect-package-by-path pack-path)
 
-      ;; otherwise, inspect type
-      (let* ((inspect-info (ensime-type-inspect-info-at-point)))
-	(ensime-type-inspector-show inspect-info)))))
+    (cond ((ensime-visiting-java-file-p)
+	   (ensime-inspect-java-type-at-point))
+
+	  (t ;; inspect package if package under point
+	   (if pack-path (ensime-inspect-package-by-path pack-path)
+	     ;; otherwise, inspect type
+	     (let* ((inspect-info (ensime-type-inspect-info-at-point)))
+	       (ensime-type-inspector-show inspect-info)))))))
 
 (defun ensime-type-inspector-show (info &optional focus-on-member)
   "Display a list of all the members of the type under point, sorted by
