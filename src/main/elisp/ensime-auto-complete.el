@@ -39,12 +39,13 @@ target of the call. Point should be be over last character of call target."
 	  ;; Make some space so trailing characters don't interfere.
 	  (save-excursion (insert " "))
 
-	  ;; Delete the member prefix - not necessary
+	  ;; Delete the member prefix
 	  (ensime-ac-delete-text-back-to-call-target)
 
-	  ;; Add a trailing '.' so object accesses parse correctly
+	  ;; Add a trailing '.' so singleton object accesses parse correctly
+	  ;; Move cursor forward so it will be on '.'
+	  (forward-char)
 	  (save-excursion
-	    (forward-char)
 	    (insert ". ()"))
 
 	  (ensime-write-buffer)
@@ -78,18 +79,18 @@ changes will be forgotten."
 	 (file-name buffer-file-name)
 	 (p (point))
 	 (conn (ensime-current-connection)))
-     (let ((val (unwind-protect
-		    (with-temp-buffer
-		      (let ((ensime-buffer-connection conn)
-			    (buffer-file-name file-name))
-			(insert-buffer-substring buf)
-			(goto-char p)
-			,@body
-			)))))
+
+     (unwind-protect
+	 (with-temp-buffer
+	   (let ((ensime-buffer-connection conn)
+		 (buffer-file-name file-name))
+	     (insert-buffer-substring buf)
+	     (goto-char p)
+	     ,@body
+	     ))
        ;; Make sure we overwrite any changes
        ;; written from temp buffer.
        (ensime-write-buffer nil t)
-       val
        )))
 
 
@@ -136,12 +137,12 @@ changes will be forgotten."
 
 (defun ensime-ac-package-decl-candidates (prefix)
   "Return candidate list."
-  (when (looking-back ensime-ac-package-decl-prefix-re 
+  (when (looking-back ensime-ac-package-decl-prefix-re
 		      (ensime-pt-at-end-of-prev-line))
     (let* ((full-match (match-string 0))
 	   (path (ensime-kill-txt-props (match-string 1)))
 
-	   (names (ensime-ac-with-buffer-copy 
+	   (names (ensime-ac-with-buffer-copy
 		   (backward-delete-char (length full-match))
 		   (insert "object ensimesynthetic${")
 
@@ -162,7 +163,7 @@ changes will be forgotten."
 		       (ensime-rpc-members-for-type-at-point prefix))))))
 
       (delete-dups
-       (mapcar (lambda (m) (plist-get m :name)) 
+       (mapcar (lambda (m) (plist-get m :name))
 	       names)))))
 
 
@@ -183,8 +184,10 @@ changes will be forgotten."
   (get-text-property 0 'type-sig item))
 
 (defun ensime-pt-at-end-of-prev-line ()
-  (save-excursion (forward-line -1)(point-at-eol)))
-
+  (save-excursion (forward-line -1)
+		  (min
+		   (- (point) 1)
+		   (point-at-eol))))
 
 (defun ensime-ac-member-prefix ()
   "Starting at current point. Find the point of completion for a member access.
@@ -327,25 +330,25 @@ be used later to give contextual help when entering arguments."
 	(let ((params (plist-get sect :params))
 	      (is-implicit (plist-get sect :is-implicit)))
 	  (propertize (concat "("
-		  (mapconcat
-		   (lambda (nm-and-tp)
-		     (format
-		      "%s:%s"
-		      (propertize (car nm-and-tp)
-				  'face font-lock-variable-name-face)
-		      (propertize (ensime-type-name-with-args
-				   (cadr nm-and-tp))
-				  'face font-lock-type-face)
-		      ))
-		   params ", ") ")")
-		   'face (when is-implicit font-lock-comment-face)
-		   )))
-	param-sections " => ")
-      " => "
-      (propertize
-       (ensime-type-name-with-args result-type)
-       'face font-lock-type-face)
-      )))
+			      (mapconcat
+			       (lambda (nm-and-tp)
+				 (format
+				  "%s:%s"
+				  (propertize (car nm-and-tp)
+					      'face font-lock-variable-name-face)
+				  (propertize (ensime-type-name-with-args
+					       (cadr nm-and-tp))
+					      'face font-lock-type-face)
+				  ))
+			       params ", ") ")")
+		      'face (when is-implicit font-lock-comment-face)
+		      )))
+      param-sections " => ")
+     " => "
+     (propertize
+      (ensime-type-name-with-args result-type)
+      'face font-lock-type-face)
+     )))
 
 
 (ac-define-source ensime-members

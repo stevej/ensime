@@ -1,14 +1,14 @@
 package org.ensime.protocol
 
 import java.io._
-import org.ensime.config.{ ProjectConfig, DebugConfig, ReplConfig }
-import org.ensime.debug.{ DebugUnit, DebugSourceLinePairs }
+import org.ensime.config.{ProjectConfig, DebugConfig, ReplConfig}
+import org.ensime.debug.{DebugUnit, DebugSourceLinePairs}
 import org.ensime.model._
 import org.ensime.server._
 import org.ensime.util._
 import org.ensime.util.SExp._
 import scala.actors._
-import scala.tools.nsc.util.{ Position }
+import scala.tools.nsc.util.{Position, RangePosition}
 import scala.tools.refactoring.common.Change
 import scala.util.parsing.input
 
@@ -97,8 +97,6 @@ trait SwankProtocol extends Protocol {
     }
   }
 
-  val emacsCharOffset = 1
-
   private def handleEmacsRex(form: SExp, callId: Int) {
     form match {
       case SExpList(SymbolAtom(name) :: rest) => {
@@ -107,9 +105,9 @@ trait SwankProtocol extends Protocol {
         } catch {
           case e: Throwable =>
             {
-              e.printStackTrace(System.err)
-              sendRPCError(ErrExceptionInRPC, Some(e.getMessage), callId)
-            }
+            e.printStackTrace(System.err)
+            sendRPCError(ErrExceptionInRPC, Some(e.getMessage), callId)
+          }
         }
       }
       case _ => {
@@ -210,6 +208,14 @@ trait SwankProtocol extends Protocol {
           case _ => oops
         }
       }
+      case "swank:remove-file" => {
+        form match {
+          case SExpList(head :: StringAtom(file) :: body) => {
+            rpcTarget.rpcRemoveFile(file, callId)
+          }
+          case _ => oops
+        }
+      }
       case "swank:typecheck-file" => {
         form match {
           case SExpList(head :: StringAtom(file) :: body) => {
@@ -239,9 +245,26 @@ trait SwankProtocol extends Protocol {
       }
       case "swank:import-suggestions" => {
         form match {
-          case SExpList(head :: StringAtom(file) :: IntAtom(point) :: SExpList(names) :: body) => {
+          case SExpList(head :: StringAtom(file) :: IntAtom(point) :: SExpList(names) :: IntAtom(maxResults) :: body) => {
             rpcTarget.rpcImportSuggestions(file, point,
-              names.map(_.toString).toList, callId)
+              names.map(_.toString).toList, maxResults, callId)
+          }
+          case _ => oops
+        }
+      }
+      case "swank:public-symbol-search" => {
+        form match {
+          case SExpList(head :: SExpList(names) :: IntAtom(maxResults) :: body) => {
+            rpcTarget.rpcPublicSymbolSearch(
+	      names.map(_.toString).toList, maxResults, callId)
+          }
+          case _ => oops
+        }
+      }
+      case "swank:uses-of-symbol-at-point" => {
+        form match {
+          case SExpList(head :: StringAtom(file) :: IntAtom(point) :: body) => {
+            rpcTarget.rpcUsesOfSymAtPoint(file, point, callId)
           }
           case _ => oops
         }
@@ -329,9 +352,9 @@ trait SwankProtocol extends Protocol {
 
       case "swank:perform-refactor" => {
         form match {
-          case SExpList(head :: IntAtom(procId) :: SymbolAtom(tpe) ::(params: SExp) :: body) => {
+          case SExpList(head :: IntAtom(procId) :: SymbolAtom(tpe) ::(params: SExp) :: BooleanAtom(interactive) :: body) => {
             rpcTarget.rpcPerformRefactor(Symbol(tpe), procId,
-              listOrEmpty(params).toSymbolMap, callId)
+              listOrEmpty(params).toSymbolMap, interactive, callId)
           }
           case _ => oops
         }
@@ -365,6 +388,15 @@ trait SwankProtocol extends Protocol {
         }
       }
 
+      case "swank:expand-selection" => {
+        form match {
+          case SExpList(head :: StringAtom(filename) :: IntAtom(start) :: IntAtom(end) :: body) => {
+            rpcTarget.rpcExpandSelection(filename, start, end, callId)
+          }
+          case _ => oops
+        }
+      }
+
       case other => {
         sendRPCError(
           ErrUnrecognizedRPC,
@@ -389,11 +421,11 @@ trait SwankProtocol extends Protocol {
     value match {
       case sexp: SExp =>
         {
-          sendMessage(SExp(
-            key(":return"),
-            SExp(key(":ok"), sexp),
-            callId))
-        }
+        sendMessage(SExp(
+          key(":return"),
+          SExp(key(":ok"), sexp),
+          callId))
+      }
       case _ => throw new IllegalStateException("Not a SExp: " + value)
     }
   }
@@ -432,6 +464,8 @@ trait SwankProtocol extends Protocol {
 
   def sendCompilerReady() = sendMessage(SExp(key(":compiler-ready"), true))
 
+  def sendIndexerReady() = sendMessage(SExp(key(":indexer-ready"), true))
+
   def sendTypeCheckResult(notelist: NoteList) = {
     sendMessage(SExp(key(":typecheck-result"), toWF(notelist)))
   }
@@ -440,8 +474,19 @@ trait SwankProtocol extends Protocol {
 
     implicit def posToSExp(pos: Position): SExp = {
       if (pos.isDefined) {
-        SExp.propList((":file", pos.source.path), (":offset", pos.point +
-          emacsCharOffset))
+        SExp.propList((":file", pos.source.path), (":offset", pos.point))
+      } else {
+        'nil
+      }
+    }
+
+    implicit def posToSExp(pos: RangePosition): SExp = {
+      if (pos.isDefined) {
+        SExp.propList(
+          (":file", pos.source.path),
+          (":offset", pos.point),
+          (":start", pos.start),
+          (":end", pos.end))
       } else {
         'nil
       }
@@ -496,8 +541,8 @@ trait SwankProtocol extends Protocol {
     SExp(
       key(":severity"), note.friendlySeverity,
       key(":msg"), note.msg,
-      key(":beg"), note.beg + emacsCharOffset,
-      key(":end"), note.end + emacsCharOffset,
+      key(":beg"), note.beg,
+      key(":end"), note.end,
       key(":line"), note.line,
       key(":col"), note.col,
       key(":file"), note.file)
@@ -536,6 +581,21 @@ trait SwankProtocol extends Protocol {
       (":is-callable", value.isCallable))
   }
 
+  def toWF(value: FileRange): SExp = {
+    SExp.propList(
+      (":file", value.file),
+      (":start", value.start),
+      (":end", value.end))
+  }
+
+  def toWF(value: Position): SExp = {
+    posToSExp(value)
+  }
+
+  def toWF(value: RangePosition): SExp = {
+    posToSExp(value)
+  }
+
   def toWF(value: NamedTypeMemberInfoLight): SExp = {
     SExp.propList(
       (":name", value.name),
@@ -566,24 +626,24 @@ trait SwankProtocol extends Protocol {
     value match {
       case value: ArrowTypeInfo =>
         {
-          SExp.propList(
-            (":name", value.name),
-            (":type-id", value.id),
-            (":arrow-type", true),
-            (":result-type", toWF(value.resultType)),
-            (":param-sections", SExp(value.paramSections.map(toWF))))
-        }
+        SExp.propList(
+          (":name", value.name),
+          (":type-id", value.id),
+          (":arrow-type", true),
+          (":result-type", toWF(value.resultType)),
+          (":param-sections", SExp(value.paramSections.map(toWF))))
+      }
       case value: TypeInfo =>
         {
-          SExp.propList((":name", value.name),
-            (":type-id", value.id),
-            (":full-name", value.fullName),
-            (":decl-as", value.declaredAs),
-            (":type-args", SExp(value.args.map(toWF))),
-            (":members", SExp(value.members.map(toWF))),
-            (":pos", value.pos),
-            (":outer-type-id", value.outerTypeId.map(intToSExp).getOrElse('nil)))
-        }
+        SExp.propList((":name", value.name),
+          (":type-id", value.id),
+          (":full-name", value.fullName),
+          (":decl-as", value.declaredAs),
+          (":type-args", SExp(value.args.map(toWF))),
+          (":members", SExp(value.members.map(toWF))),
+          (":pos", value.pos),
+          (":outer-type-id", value.outerTypeId.map(intToSExp).getOrElse('nil)))
+      }
       case value => throw new IllegalStateException("Unknown TypeInfo: " + value)
     }
   }
@@ -648,8 +708,41 @@ trait SwankProtocol extends Protocol {
       (":touched-files", SExpList(value.touched.map(f => strToSExp(f.getAbsolutePath)))))
   }
 
+  def toWF(value: SymbolSearchResults): SExp = {
+    SExpList(value.syms.map(toWF))
+  }
+
   def toWF(value: ImportSuggestions): SExp = {
-    SExpList(value.symLists.map { l => SExpList(l.map(toWF)) })
+    SExpList(value.symLists.map { l => SExpList(l.map(toWF)) })    
+  }
+
+  private def toWF(pos: Option[(String, Int)]): SExp = {
+    pos match{
+      case Some((f,o)) => SExp.propList((":file", f), (":offset", o))
+      case _ => 'nil
+    }
+  }
+
+  def toWF(value: SymbolSearchResult): SExp = {
+    value match {
+      case value: TypeSearchResult => {
+        SExp.propList(
+          (":name", value.name),
+	  (":local-name", value.localName),
+	  (":decl-as", value.declaredAs),
+          (":pos", toWF(value.pos)))
+      }
+      case value: MethodSearchResult => {
+        SExp.propList(
+          (":name", value.name),
+	  (":local-name", value.localName),
+	  (":decl-as", value.declaredAs),
+          (":pos", toWF(value.pos)),
+	  (":owner-name", value.owner))
+      }
+      case value => throw new IllegalStateException("Unknown SymbolSearchResult: " + value)
+    }
+
   }
 
   def toWF(value: Undo): SExp = {
@@ -669,8 +762,8 @@ trait SwankProtocol extends Protocol {
     SExp.propList(
       (":file", ch.file.path),
       (":text", ch.text),
-      (":from", ch.from + emacsCharOffset),
-      (":to", ch.to + emacsCharOffset))
+      (":from", ch.from),
+      (":to", ch.to))
   }
 
 }

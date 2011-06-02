@@ -5,11 +5,12 @@
 \usepackage{amsmath}
 
 \newenvironment{mylisting}
-{\begin{list}{}{\setlength{\leftmargin}{1em}}\item\scriptsize\bfseries}
+{\begin{list}{}{\setlength{\leftmargin}{1em}}\item\bfseries}
   {\end{list}}
 
 
-\title{ENSIME: User Manual}
+\title{ENSIME User Manual}
+\author{Aemon Cannon}
 
 \begin{document}
 
@@ -28,7 +29,7 @@
 \section{Introduction}
 
 \subsection{What is ENSIME?}
-ENSIME is an intelligent Scala environment for Emacs. It provides many features that are commonly found only in IDEs, such as live error-checking, symbol inspection, package/type browsing, and basic refactorings. ENSIME's architecture is client/server: a thin Emacs client communicates with an analysis server written in Scala. The client component is based heavily on the SLIME environment for Common Lisp - using the same Swank RPC protocol. The server component services these calls using an instance of the official Scala compiler, so the results should always be consistent with the commandline compiler.
+ENSIME is the ENhanced Scala Interaction Mode for Emacs. It provides many features that are commonly found only in IDEs, such as live error-checking, symbol inspection, package/type browsing, and basic refactorings. ENSIME's architecture is client/server: a thin Emacs client communicates with an analysis server written in Scala. The client component is based heavily on the SLIME environment for Common Lisp - using the same Swank RPC protocol. The server component services these calls using an instance of the official Scala compiler, so the results should always be consistent with the commandline compiler.
 
 \section{Installation}
 
@@ -38,14 +39,15 @@ ENSIME is an intelligent Scala environment for Emacs. It provides many features 
 \item Emacs 22 or later (23 is recommended)
 \item Unix(y) or Windows OS
 \item JVM Version 6
-\item Scala 2.8 compatible source and libraries.
+\item Scala 2.8.1 compatible source and libraries.
 \end{itemize}
 
-\subsubsection{Note on Binary Compatibility}
+\subsubsection{Note on Scala Version Compatibility}
 
-The compiler version that ENSIME uses to analyze sources is the same as that which is used to compile ENSIME itself. This version (as of the writing of this document) is 2.8.0. It may not be possible for the ENSIME compiler to load older Scala jars. We recommend that you use a version of ENSIME that targets the same Scala version as your project.
+The compiler version that ENSIME uses to analyze sources is the same as that which is used to compile ENSIME itself. This version (as of the writing of this document) is 2.8.1. Use of ENSIME for projects that target older versions of Scala is not supported. Sorry!
 
 \subsection{Standard Installation}
+\label{sec:install}
 
 \noindent
 \textbf{scala-mode}:\\
@@ -75,25 +77,8 @@ Download the latest ENSIME distribution from github.com at \begin{verbatim}http:
 Now you need to define a .ensime file for your project. See section \ref{sec:config}.
 
 
-\subsection{Installation from Git Clone}
 
-Note: This section is for people who want to hack on ENSIME itself.\\
-
-\noindent
-After cloning, and before you can run ENSIME, you must create the distribution directory structure. The sbt task 'stage' will create the directory 'dist' underneath the root clone directory. Then, follow the install instructions in section 2.2 above, substituting CLONE\_DIR/dist as the root of your ENSIME distribution.\\
-
-\noindent
-A common work-flow when hacking ENSIME:
-\begin{itemize}
-\item Edit source files
-\item 'sbt dist'
-\item Stop ENSIME server by killing \emph{*inferior-ensime-server*} buffer
-\item Restart ENSIME with M-x ensime
-\end{itemize}
-
-
-
-\section{Defining a Project}
+\section{Creating a Project}
 
 
 \subsection{Generating a Config File}
@@ -115,7 +100,7 @@ If the configuration directive :sbt-compile-on-save is set to 't', ENSIME will i
 
 \noindent
 \textbf{Subprojects}:\\
-Each sbt subproject must have it's own .ensime file. The server is smart enough to notice that the project is a subproject, and will find dependencies that are shared between all subprojects.
+If your project is made up of subprojects, you must declare each subproject along with its dependencies in the configuration file. See the :sbt-subprojects directive in section \ref{sec:configformat} for more information. ENSIME will then prompt you on startup for which subproject you'd like to work on. Note that there will be a separate instance of the ENSIME server process for each subproject you open.
 
 \subsubsection{Maven}
 
@@ -162,123 +147,155 @@ What follows is a description of all available configuration options. Required o
 \vspace{5 mm}
 
 \noindent
-{\bf :project-name "...."}\\
+{\bf :project-name} "...."\\
 The friendly name of your project. Will be displayed in the Emacs mode-line when connected to an ENSIME server. If no name is given, ENSIME will try to use an existing project name (only sbt, currently).
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :server-root "...."}\\
+{\bf :server-root} "...."\\
 The absolute path to the root of your ENSIME distribution. By default this is inferred from the location of the ensime.el E-Lisp library.
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :server-cmd  "...."}\\
+{\bf :server-cmd}  "...."\\
 The command with which to invoke the ENSIME server. By default, this will be set to "bin/server.sh" on Unix systems and "bin/server.bat" on Windows.
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :server-host "...."}\\
+{\bf :server-host} "...."\\
 The host to connect to. Connecting to remote ENSIME servers is not currently supported (though it may work...)
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :use-sbt [t or nil]}\\
+{\bf :use-sbt} [t or nil]\\
 Assume a standard sbt directory structure. Look in default sbt locations for dependencies, sources, target, etc.
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :sbt-compile-on-save [t or nil]}\\
+{\bf :sbt-compile-on-save} [t or nil]\\
 Should ENSIME issue a 'compile' command to sbt whenever you save a file? This is disabled by default as it consumes a lot of CPU.
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :sbt-subproject-dependencies ([directory name]*)}\\
-Declare sbt sub-project dependencies. List the directory names of the dependencies and ENSIME will include their sources and dependencies when analyzing the current project.
+{\bf :sbt-subprojects} ([sbt-subproject]*)\\
+Declare sbt subprojects. Each item in the list should be a property list with the following structure: (:name ``myproj'' :deps (``otherproj'')), where :deps is a possibly empty list of subprojects that this subproject depends on. For example, here's how you'd declare two subprojects - a 'web' subproject which depends on a 'core' subproject:
+\begin{mylisting}
+\begin{verbatim}
+(
+  :use-sbt t
+  :sbt-subprojects (
+     (:name "web" :deps ("core"))
+     (:name "core" :deps ())
+  )
+)
+\end{verbatim}
+\end{mylisting}
+
 \vspace{5 mm}
 
 
 
 \noindent
-{\bf :use-maven t}\\
+{\bf :use-maven} [t or nil]\\
 Use an existing pom.xml to determine the dependencies for the project. A Maven-style directory structure is assumed.
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :use-ivy t}\\
+{\bf :use-ivy} [t or nil]\\
 Use an existing ivy.xml to determine the dependencies for the project. A Maven-style directory structure is assumed.
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :ivy-file filename}\\
+{\bf :ivy-file} filename\\
 Override the default ivy.xml location.
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :ivy-compile-conf "...."}\\
+{\bf :ivy-compile-conf} "...."\\
 \noindent
-{\bf :ivy-runtime-conf "...."}\\
+{\bf :ivy-runtime-conf} "...."\\
 Specify the names of dependency profiles to be used for compilation and runtime scenarios. Only necessary if you have custom configurations!
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :project-package "...."}\\
+{\bf :project-package} "...."\\
 The main scala package for your project. Used by ENSIME to populate the project outline view. 
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :sources ([directory or filename]*)}\\
+{\bf :sources } ([directory or filename]*)\\
 Manually include source files by directory(recursively) or by filename. If directory is given, only .scala and .java files will be considered.
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :compile-jars ([directory or filename]*)}\\
+{\bf :compile-jars} ([directory or filename]*)\\
 Manually include jars by directory(recursively) or by filename, to be included on the compile and runtime classpaths.
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :exclude-compile-jars ([directory or filename]*)}\\
+{\bf :exclude-compile-jars} ([directory or filename]*)\\
 Manually exclude jars by directory(recursively) or by filename. These jars will be excluded from any classpath.
-\vspace{5 mm}
+\vspace{1 cm}
 
 
 \noindent
-{\bf :runtime-jars ([directory or filename]*)}\\
+{\bf :runtime-jars} ([directory or filename]*)\\
 Manually include jars by directory(recursively) or by filename, to be included only on the runtime classpath.
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :exclude-runtime-jars ([directory or filename]*)}\\
+{\bf :exclude-runtime-jars} ([directory or filename]*)\\
 Manually exclude jars by directory(recursively) or by filename. These jars will be excluded from the runtime classpath.
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :class-dirs ([directory]*)}\\
+{\bf :class-dirs} ([directory]*)\\
 Manually include directories of .class files, to be included on the compile and runtime classpaths.
-\vspace{5 mm}
+\vspace{1 cm}
 
 \noindent
-{\bf :target directory}\\
+{\bf :target} directory\\
 Manually specify the target of the project build process. This directory will be included on the runtime classpath when debugging or using the repl, and will be pupulated by the incremental compiler. Will be created if it doesn't exist.
+\vspace{1 cm}
+
+\noindent
+{\bf :disable-index-on-startup} [ t or nil]\\
+Disable the classpath indexing process that happens at startup. This will speed up the loading process significantly, at the cost of breaking some functionality.
+\vspace{1 cm}
+
+\noindent
+{\bf :exclude-from-index } (regex-string*)\\
+Classes that match one of the excluded regular expressions will not be added to the index. This can be used to reduce memory usage and speed up loading. For example:
+\begin{mylisting}
+\begin{verbatim}
+:exclude-from-index ("com\\\\.sun\\\\..\*" "com\\\\.apple\\\\..\*")
+\end{verbatim}
+\end{mylisting}
 \vspace{5 mm}
 
 \noindent
-{\bf :formatting-prefs ([:key value]*)}\\
+{\bf :formatting-prefs} ([:key value]*)\\
 Customize the behavior of the source formatter. All Scalariform preferences are supported:\\
+\vspace{1 cm}
 \begin{tabular}{|l|l|}
   \hline
   {\bf :alignParameters} & t or nil  \\ \hline
+  {\bf :alignSingleLineCaseStatements} & t or nil  \\ \hline
+  {\bf :alignSingleLineCaseStatements\_maxArrowIndent} & 1-100  \\ \hline
   {\bf :compactStringConcatenation} & t or nil  \\ \hline
   {\bf :doubleIndentClassDeclaration} & t or nil  \\ \hline
+  {\bf :indentLocalDefs} & t or nil  \\ \hline
   {\bf :indentPackageBlocks} & t or nil  \\ \hline
   {\bf :indentSpaces} & 1-10  \\ \hline
+  {\bf :preserveDanglingCloseParenthesis} & t or nil \\ \hline
   {\bf :preserveSpaceBeforeArguments} & t or nil  \\ \hline
   {\bf :rewriteArrowSymbols} & t or nil  \\ \hline
   {\bf :spaceBeforeColon} & t or nil  \\ \hline
@@ -367,6 +384,12 @@ Select a region by setting the mark using \emph{C-SPACE} and then placing the po
 \textbf{Inline Local}:\\
 Place your cursor over the local val who's value you'd like to inline. Type \emph{M-x ensime-refactor-inline-local} and follow the minibuffer instructions.\\
 
+\subsection{Global Type and Method Search}
+
+Type \emph{C-c C-v v} to start a global search. Type space separated keywords to filter the results of the search. For example, if I wanted to find java.util.Vector, I might start by typing 'vector', which would list all symbols containing the word 'vector'(case-insensitive), and then I would type 'java' to further refine the search. \emph{C-p} and \emph{C-n} move the selection up and down, respectively, and \emph{ENTER} will jump to the source or definition of the selected symbol.
+
+Note that typing a keyword with a capital letter will automatically enable case-sensitivity.
+
 \subsection{Source Formatting}
 
 ENSIME uses the Scalariform library to format Scala sources. Type \emph{C-c C-v f} to format the current buffer. See section \ref{sec:configformat} for instructions on how to customize the formatting preferences.
@@ -393,7 +416,7 @@ Note that \emph{ensime-make-java-doc-url-helper}, and its Scala equivalent \emph
 
 
 
-\subsection{Quick Command Reference}
+\subsection{Command Reference}
 
 \vspace{5 mm}
 
@@ -418,6 +441,16 @@ Pop back to previously visited position.
 \vspace{5 mm}
 
 \noindent
+{\bf C-c C-v .}\\
+Select the surrounding syntactic context. Subsequent taps of '.' and ',' will grow and shrink the selection, respectively.
+\vspace{5 mm}
+
+\noindent
+{\bf C-c C-v v}\\
+Search globally for methods or types.
+\vspace{5 mm}
+
+\noindent
 {\bf Control+Right-Click(on an imported package)}\\
 Inspect the package under cursor.
 \vspace{5 mm}
@@ -435,6 +468,11 @@ Inspect the package of the current source file.
 \noindent
 {\bf C-c C-v o}\\
 Inspect the package specified in .ensime as :project-package.
+\vspace{5 mm}
+
+\noindent
+{\bf C-c C-v r}\\
+List all references to the symbol under the cursor.
 \vspace{5 mm}
 
 \noindent
@@ -522,6 +560,7 @@ Where \emph{x} is one of:
 \item {\bf l}  Extract local. 
 \item {\bf m}  Extract method. 
 \item {\bf i}  Inline local. 
+\item {\bf t}  Add import for type at point.
 \end{itemize}
 \vspace{5 mm}
 
@@ -563,12 +602,37 @@ When launching the embedded sbt shell, or the Scala repl, ENSIME uses the Emacs 
 
 
 \subsection{Custom JVM Options}
-If you're having problems with the default arguments (max heap, initial heap) that ENSI
-ME uses in its startup script, you can modify the environment variable ENSIME\_JVM\_ARGS to override the arguments that are passed to the ENSIME Server JVM.
+If you're having problems with the default arguments (max heap, initial heap) that ENSIME uses in its startup script, you can modify the environment variable ENSIME\_JVM\_ARGS to override the arguments that are passed to the ENSIME Server JVM.
 
 \newpage
 
 \appendix
+
+\section{Installation from Git Clone}
+
+Note: This section is for people who want to hack on ENSIME itself.\\
+
+\noindent
+After cloning, run 'sbt update'. Then run 'sbt stage' to create the deployment directories underneath the root clone directory. Then follow the install instructions in section \ref{sec:install} above, substituting CLONE\_DIR/dist as the root of your ENSIME distribution.\\
+
+\noindent
+A common work-flow when hacking ENSIME:
+\begin{itemize}
+\item Edit source files
+\item 'sbt stage'
+\item Stop ENSIME server by killing \emph{*inferior-ensime-server*} buffer
+\item Restart ENSIME with M-x ensime
+\end{itemize}
+
+
+\section{Running the End-to-End ENSIME Tests}
+
+\begin{itemize}
+\item 'sbt stage'
+\item 'cd etc'
+\item 'bash run\_emacs\_tests.sh'
+\item Please be patient. These tests take a few mins to run. If all goes well you should see a buffer with a long list of 'ok's.
+\end{itemize}
 
 
 \section{Using the ENSIME Server with Other Editors}

@@ -1,7 +1,6 @@
 package org.ensime.server
 import java.io.File
 import org.ensime.config.ProjectConfig
-import org.ensime.model._
 import org.ensime.protocol.ProtocolConversions
 import org.ensime.protocol.ProtocolConst._
 import org.ensime.util._
@@ -18,14 +17,14 @@ case class FullTypeCheckCompleteEvent()
 case class CompilerFatalError(e: Throwable)
 
 class Analyzer(val project: Project, val protocol: ProtocolConversions, val config: ProjectConfig)
-  extends Actor with RefactoringController {
+  extends Actor with RefactoringHandler {
 
   private val settings = new Settings(Console.println)
   settings.processArguments(config.compilerArgs, false)
   settings.usejavacp.value = false
 
   println("\nPresentation Compiler settings:")
-  System.out.println(settings.toString)
+  println(settings.toString)
   println("")
 
   private val reporter = new PresentationReporter(new UserMessages {
@@ -35,9 +34,11 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
     }
   })
 
+  protected val indexer: Actor = new Indexer(project, protocol, config)
+
   protected val scalaCompiler: RichCompilerControl = new RichPresentationCompiler(
-    settings, reporter, this, config)
-  protected val javaCompiler: JavaCompiler = new JavaCompiler(config)
+    settings, reporter, this, indexer, config)
+  protected val javaCompiler: JavaCompiler = new JavaCompiler(config, indexer)
   protected var awaitingInitialCompile = true
 
   import protocol._
@@ -46,6 +47,12 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
   def act() {
     project ! SendBackgroundMessageEvent(
       MsgInitializingAnalyzer, Some("Initializing Analyzer. Please wait..."))
+
+    println("Initing Indexer...")
+    indexer.start
+    if (!config.disableIndexOnStartup) {
+      indexer ! RebuildStaticIndexReq()
+    }
 
     println("Building Java sources...")
     javaCompiler.compileAll()
@@ -60,19 +67,13 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
             javaCompiler.shutdown()
             scalaCompiler.askClearTypeCache()
             scalaCompiler.askShutdown()
+            indexer ! IndexerShutdownReq()
             exit('stop)
           }
 
           case FullTypeCheckCompleteEvent() => {
 
-            // Block requests while compiler is booting
-            if (awaitingInitialCompile) {
-              project ! AnalyzerReadyEvent()
-              awaitingInitialCompile = false
-            }
-
             val notes = reporter.allNotes
-
             pendingTypeCheckRequest match {
 
               // If this compilation was explicitely requested by client...
@@ -88,6 +89,12 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
               }
             }
 
+            if (awaitingInitialCompile) {
+              // Initial compile is finished.
+              // Analyzer is now ready for RPC commands
+              awaitingInitialCompile = false
+              project ! AnalyzerReadyEvent()
+            }
           }
 
           case rpcReq@RPCRequestEvent(req: Any, callId: Int) => {
@@ -97,6 +104,10 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
                   Some("Analyzer is not ready! Please wait."), callId)
               } else {
                 req match {
+
+                  case RemoveFileReq(file: File) => {
+                    askRemoveDeleted(file)
+                  }
 
                   case ReloadAllReq() => {
                     javaCompiler.reset()
@@ -108,11 +119,17 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
                     }, { () =>
                       project ! RPCResultEvent(toWF(null), callId)
                     })
+                    scalaCompiler.askRemoveAllDeleted()
                     scalaCompiler.askReloadAllFiles()
                   }
 
                   case ReloadFileReq(file: File) => {
                     val allNotes = new ListBuffer[Note]
+
+                    if (!file.exists()) {
+                      project ! RPCErrorEvent(ErrFileDoesNotExist,
+                        Some(file.getPath()), callId)
+                    }
 
                     if (file.getAbsolutePath().endsWith(".java")) {
                       javaCompiler.compileFile(file)
@@ -143,11 +160,6 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
                     handleRefactorCancel(req, callId)
                   }
 
-                  case RemoveFileReq(file: File) => {
-                    val f = scalaCompiler.sourceFileForPath(file.getAbsolutePath())
-                    scalaCompiler.removeUnitOf(f)
-                  }
-
                   case ScopeCompletionReq(file: File, point: Int,
                     prefix: String, constructor: Boolean) => {
                     val p = pos(file, point)
@@ -161,10 +173,18 @@ class Analyzer(val project: Project, val protocol: ProtocolConversions, val conf
                     project ! RPCResultEvent(toWF(members.map(toWF)), callId)
                   }
 
-                  case ImportSuggestionsReq(file: File, point: Int, names: List[String]) => {
+                  case ImportSuggestionsReq(_, _, _, _) => {
+                    indexer ! rpcReq
+                  }
+
+                  case PublicSymbolSearchReq(_, _) => {
+                    indexer ! rpcReq
+                  }
+
+                  case UsesOfSymAtPointReq(file: File, point: Int) => {
                     val p = pos(file, point)
-                    val suggestions = scalaCompiler.askImportSuggestions(p, names)
-                    project ! RPCResultEvent(toWF(suggestions), callId)
+                    val uses = scalaCompiler.askUsesOfSymAtPoint(p)
+                    project ! RPCResultEvent(toWF(uses.map(toWF)), callId)
                   }
 
                   case PackageMemberCompletionReq(path: String, prefix: String) => {

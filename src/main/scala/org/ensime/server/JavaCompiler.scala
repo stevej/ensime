@@ -1,4 +1,5 @@
 package org.ensime.server
+import scala.collection.mutable.ArrayBuffer
 import java.io.{ ByteArrayOutputStream, File }
 import java.util.Locale
 import org.eclipse.jdt.core.compiler.{ IProblem, CharOperation }
@@ -18,7 +19,7 @@ import scala.collection.{ mutable, Iterable }
 import scala.collection.JavaConversions._
 import scala.tools.nsc.ast._
 
-class JavaCompiler(config: ProjectConfig) {
+class JavaCompiler(config: ProjectConfig, var indexer: Actor) {
 
   private val javaUnitForFile = new mutable.HashMap[String, ICompilationUnit]()
 
@@ -35,22 +36,39 @@ class JavaCompiler(config: ProjectConfig) {
     private val knownPackages = new mutable.HashSet[String]()
 
     def addClassFiles(classFiles: Iterable[ClassFile]) {
+      val infos = new ArrayBuffer[SymbolSearchResult]
       for (cf <- classFiles) {
         val byteStream = new ByteArrayOutputStream()
         byteStream.write(cf.header, 0, cf.headerOffset)
         byteStream.write(cf.contents, 0, cf.contentsOffset)
         val bytes = byteStream.toByteArray
         val reader = new ClassFileReader(bytes, cf.fileName)
-        val key = CharOperation.toString(cf.getCompoundName)
+        val cn = cf.getCompoundName
+        val key = CharOperation.toString(cn)
         compiledClasses(key) = reader
 
-        // Remember package name
-        val i = key.lastIndexOf(".")
-        if (i > -1) {
-          val packName = key.substring(0, i)
-          knownPackages += packName
+        // Add type to the indexer
+        if (org.ensime.server.Indexer.isValidType(key)) {
+          val localName = if (cn.length > 0) {
+            CharOperation.charToString(cn(cn.length - 1))
+          } else "NA"
+          val pos = Some((CharOperation.charToString(reader.getFileName()), 0))
+          infos += new TypeSearchResult(
+            key,
+            localName,
+            'class,
+            pos)
         }
+
+        // Remember package names
+        var i = key.indexOf(".")
+	while(i > -1){
+	  val packName = key.substring(0, i)
+	  knownPackages += packName
+	  i = key.indexOf(".", i + 1);
+	}
       }
+      indexer ! AddSymbolsReq(infos)
     }
 
     override def findType(tpe: Array[Char], pkg: Array[Array[Char]]) = {
@@ -87,10 +105,9 @@ class JavaCompiler(config: ProjectConfig) {
   private val errorPolicy = DefaultErrorHandlingPolicies.proceedWithAllProblems()
 
   private val options = new CompilerOptions(Map(
-      CompilerOptions.OPTION_Compliance -> "1.6",
-      CompilerOptions.OPTION_Source -> "1.6",
-      CompilerOptions.OPTION_TargetPlatform -> "1.6"
-    ))
+    CompilerOptions.OPTION_Compliance -> "1.6",
+    CompilerOptions.OPTION_Source -> "1.6",
+    CompilerOptions.OPTION_TargetPlatform -> "1.6"))
 
   class Requester(nameProvider: NameProvider) extends ICompilerRequestor {
     def allNotes(): Iterable[Note] = {
@@ -124,22 +141,36 @@ class JavaCompiler(config: ProjectConfig) {
   def compileAll() = {
     val units = javaUnitForFile.values
     if (!(units.isEmpty)) {
-      compiler.compile(units.toArray)
+      try {
+        compiler.compile(units.toArray)
+      } catch {
+        case e: Exception => {
+          System.err.println("Java compilation failed.")
+          e.printStackTrace(System.err)
+        }
+      }
     }
   }
 
   def addFile(f: File) = {
     val path = f.getCanonicalPath()
-    if(path.endsWith(".java") && 
-      !javaUnitForFile.contains(path)){
+    if (path.endsWith(".java") &&
+      !javaUnitForFile.contains(path)) {
       javaUnitForFile(path) = new CompilationUnit(null, path, defaultEncoding)
     }
   }
 
   def compileFile(f: File) = {
     addFile(f)
-    for (u <- javaUnitForFile.get(f.getCanonicalPath)) {
-      compiler.compile(Array(u))
+    try {
+      for (u <- javaUnitForFile.get(f.getCanonicalPath)) {
+        compiler.compile(Array(u))
+      }
+    } catch {
+      case e: Exception => {
+        System.err.println("Java compilation failed.")
+        e.printStackTrace(System.err)
+      }
     }
   }
 
@@ -152,6 +183,7 @@ class JavaCompiler(config: ProjectConfig) {
   }
 
   def shutdown() {
+    indexer = null
     compiler.reset
     javaUnitForFile.clear
   }

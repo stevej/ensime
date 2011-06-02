@@ -10,8 +10,11 @@ import scala.actors.Actor._
 import scala.collection.immutable
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.refactoring.common.Change
+import scalariform.astselect.AstSelector
 import scalariform.formatter.ScalaFormatter
 import scalariform.parser.ScalaParserException
+import scalariform.utils.Range
+
 
 trait RPCTarget { self: Project =>
 
@@ -37,12 +40,12 @@ trait RPCTarget { self: Project =>
   }
 
   def rpcReplConfig(callId: Int) {
-    sendRPCReturn(toWF(this.config.replConfig), callId)
+    sendRPCReturn(toWF(config.replConfig), callId)
   }
 
   def rpcDebugConfig(callId: Int) {
     debugInfo = Some(new ProjectDebugInfo(config))
-    sendRPCReturn(toWF(this.config.debugConfig), callId)
+    sendRPCReturn(toWF(config.debugConfig), callId)
   }
 
   def rpcBuilderInit(callId: Int) {
@@ -95,6 +98,12 @@ trait RPCTarget { self: Project =>
     analyzer ! RPCRequestEvent(ReloadFileReq(file), callId)
   }
 
+  def rpcRemoveFile(f: String, callId: Int) {
+    val file: File = new File(f)
+    analyzer ! RPCRequestEvent(RemoveFileReq(file), callId)
+    sendRPCAckOK(callId)
+  }
+
   def rpcTypecheckAll(callId: Int) {
     analyzer ! RPCRequestEvent(ReloadAllReq(), callId)
   }
@@ -139,8 +148,16 @@ trait RPCTarget { self: Project =>
     analyzer ! RPCRequestEvent(CallCompletionReq(id), callId)
   }
 
-  def rpcImportSuggestions(f: String, point: Int, names: List[String], callId: Int) {
-    analyzer ! RPCRequestEvent(ImportSuggestionsReq(new File(f), point, names), callId)
+  def rpcImportSuggestions(f: String, point: Int, names: List[String], maxResults: Int, callId: Int) {
+    analyzer ! RPCRequestEvent(ImportSuggestionsReq(new File(f), point, names, maxResults), callId)
+  }
+
+  def rpcPublicSymbolSearch(names: List[String], maxResults: Int, callId: Int) {
+    analyzer ! RPCRequestEvent(PublicSymbolSearchReq(names, maxResults), callId)
+  }
+
+  def rpcUsesOfSymAtPoint(f: String, point: Int, callId: Int) {
+    analyzer ! RPCRequestEvent(UsesOfSymAtPointReq(new File(f), point), callId)
   }
 
   def rpcTypeAtPoint(f: String, point: Int, callId: Int) {
@@ -151,8 +168,9 @@ trait RPCTarget { self: Project =>
     analyzer ! RPCRequestEvent(InspectPackageByPathReq(path), callId)
   }
 
-  def rpcPerformRefactor(refactorType: Symbol, procId: Int, params: immutable.Map[Symbol, Any], callId: Int) {
-    analyzer ! RPCRequestEvent(RefactorPerformReq(procId, refactorType, params), callId)
+  def rpcPerformRefactor(refactorType: Symbol, procId: Int, params: immutable.Map[Symbol, Any], interactive: Boolean, callId: Int) {
+    analyzer ! RPCRequestEvent(RefactorPerformReq(
+	procId, refactorType, params, interactive), callId)
   }
 
   def rpcExecRefactor(refactorType: Symbol, procId: Int, callId: Int) {
@@ -161,6 +179,27 @@ trait RPCTarget { self: Project =>
 
   def rpcCancelRefactor(procId: Int, callId: Int) {
     analyzer ! RPCRequestEvent(RefactorCancelReq(procId), callId)
+  }
+
+  def rpcExpandSelection(filename: String, start: Int, stop: Int, callId: Int) {
+    try {
+      FileUtils.readFile(new File(filename)) match {
+        case Right(contents) => {
+          val selectionRange = Range(start, stop - start)
+          AstSelector.expandSelection(contents, selectionRange) match {
+            case Some(range) => sendRPCReturn(
+              toWF(FileRange(filename, range.offset, range.offset + range.length)), callId)
+            case _ => sendRPCReturn(
+              toWF(FileRange(filename, start, stop)), callId)
+          }
+        }
+        case Left(e) => throw e
+      }
+    } catch {
+      case e: ScalaParserException =>
+      sendRPCError(ErrFormatFailed,
+        Some("Could not parse broken syntax: " + e), callId)
+    }
   }
 
   def rpcFormatFiles(filenames: Iterable[String], callId: Int) {
@@ -175,20 +214,19 @@ trait RPCTarget { self: Project =>
           case Left(e) => throw e
         }
       }
-      addUndo("Formatted source of " + filenames.mkString(", ") + ".", 
-	FileUtils.inverseChanges(changeList))
+      addUndo("Formatted source of " + filenames.mkString(", ") + ".",
+        FileUtils.inverseChanges(changeList))
       FileUtils.writeChanges(changeList) match {
         case Right(_) => sendRPCAckOK(callId)
         case Left(e) =>
-          sendRPCError(ErrFormatFailed, 
-	    Some("Could not write any formatting changes: " + e), callId)
+        sendRPCError(ErrFormatFailed,
+          Some("Could not write any formatting changes: " + e), callId)
       }
     } catch {
       case e: ScalaParserException =>
-        sendRPCError(ErrFormatFailed, 
-	  Some("Cannot format broken syntax: " + e), callId)
+      sendRPCError(ErrFormatFailed,
+        Some("Cannot format broken syntax: " + e), callId)
     }
-
   }
 
 }
